@@ -3,6 +3,7 @@
 import { Download, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { formatMegabytes, formatSpeed } from "@/lib/format";
 
 type DownloadProgressProps = {
 	progress: number;
@@ -11,17 +12,6 @@ type DownloadProgressProps = {
 	downloaded: number;
 	onCancel?: () => void;
 };
-
-function formatBytes(mb: number): string {
-	if (mb < 1) return `${(mb * 1024).toFixed(0)} KB`;
-	if (mb < 1024) return `${mb.toFixed(1)} MB`;
-	return `${(mb / 1024).toFixed(2)} GB`;
-}
-
-function formatSpeed(mbPerSec: number): string {
-	if (mbPerSec < 1) return `${(mbPerSec * 1024).toFixed(0)} KB/s`;
-	return `${mbPerSec.toFixed(1)} MB/s`;
-}
 
 export function DownloadProgress({
 	progress,
@@ -46,7 +36,7 @@ export function DownloadProgress({
 				</div>
 				<div className="flex items-center gap-3 text-xs text-muted-foreground">
 					<span>
-						{formatBytes(downloaded)} / {formatBytes(total)}
+						{formatMegabytes(downloaded)} / {formatMegabytes(total)}
 					</span>
 					<span>{formatSpeed(speed)}</span>
 					{speed > 0 && <span>ETA {etaDisplay}</span>}

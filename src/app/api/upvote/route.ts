@@ -1,7 +1,9 @@
-import { and, count, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { models, upvotes } from "@/lib/db/schema";
+import {
+	getModelBySlug,
+	getUpvoteStatus,
+	recordUpvote,
+} from "@/lib/db/queries";
 
 const FINGERPRINT_REGEX = /^[a-f0-9]{64}$/;
 
@@ -18,34 +20,15 @@ export async function GET(request: Request) {
 			);
 		}
 
-		const model = await db
-			.select()
-			.from(models)
-			.where(eq(models.slug, modelSlug))
-			.limit(1);
+		const model = await getModelBySlug(modelSlug);
 
-		if (model.length === 0) {
+		if (!model) {
 			return NextResponse.json({ error: "Model not found" }, { status: 404 });
 		}
 
-		const modelId = model[0].id;
+		const status = await getUpvoteStatus(model.id, fingerprint);
 
-		const [countResult] = await db
-			.select({ value: count() })
-			.from(upvotes)
-			.where(eq(upvotes.modelId, modelId));
-
-		const [userVoteResult] = await db
-			.select({ value: count() })
-			.from(upvotes)
-			.where(
-				and(eq(upvotes.modelId, modelId), eq(upvotes.fingerprint, fingerprint)),
-			);
-
-		return NextResponse.json({
-			count: Number(countResult.value),
-			userVoted: Number(userVoteResult.value) > 0,
-		});
+		return NextResponse.json(status);
 	} catch (error) {
 		console.error("Failed to get upvote status:", error);
 		return NextResponse.json(
@@ -77,32 +60,16 @@ export async function POST(request: Request) {
 			);
 		}
 
-		const model = await db
-			.select()
-			.from(models)
-			.where(eq(models.slug, modelSlug))
-			.limit(1);
+		const model = await getModelBySlug(modelSlug);
 
-		if (model.length === 0) {
+		if (!model) {
 			return NextResponse.json({ error: "Model not found" }, { status: 404 });
 		}
 
-		const modelId = model[0].id;
-
-		await db
-			.insert(upvotes)
-			.values({ modelId, fingerprint })
-			.onConflictDoNothing({
-				target: [upvotes.modelId, upvotes.fingerprint],
-			});
-
-		const [countResult] = await db
-			.select({ value: count() })
-			.from(upvotes)
-			.where(eq(upvotes.modelId, modelId));
+		const count = await recordUpvote(model.id, fingerprint);
 
 		return NextResponse.json({
-			count: Number(countResult.value),
+			count,
 			userVoted: true,
 		});
 	} catch (error) {

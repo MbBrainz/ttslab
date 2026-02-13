@@ -1,11 +1,9 @@
-import { eq, or, sql } from "drizzle-orm";
 import { ArrowRight, ExternalLink } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackendBadge } from "@/components/backend-badge";
 import { GenerationHistory } from "@/components/generation-history";
-import { ModelStatus } from "@/components/model-status";
 import { SttDemo } from "@/components/stt-demo";
 import { SubscribeForm } from "@/components/subscribe-form";
 import { TtsDemo } from "@/components/tts-demo";
@@ -21,15 +19,20 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { UpvoteButton } from "@/components/upvote-button";
 import { APP_NAME, APP_URL } from "@/lib/constants";
-import { db } from "@/lib/db";
-import { comparisons, models } from "@/lib/db/schema";
+import {
+	getAllModelSlugs,
+	getComparisonsForModel,
+	getModelBySlug,
+	getModelBySlugWithUpvotes,
+	getSimilarSupportedModels,
+} from "@/lib/db/queries";
 
 type PageProps = {
 	params: Promise<{ slug: string }>;
 };
 
 export async function generateStaticParams() {
-	const allModels = await db.select({ slug: models.slug }).from(models);
+	const allModels = await getAllModelSlugs();
 	return allModels.map((m) => ({ slug: m.slug }));
 }
 
@@ -37,11 +40,7 @@ export async function generateMetadata({
 	params,
 }: PageProps): Promise<Metadata> {
 	const { slug } = await params;
-	const [model] = await db
-		.select()
-		.from(models)
-		.where(eq(models.slug, slug))
-		.limit(1);
+	const model = await getModelBySlug(slug);
 
 	if (!model) {
 		return { title: "Model Not Found" };
@@ -67,17 +66,7 @@ export async function generateMetadata({
 export default async function ModelPage({ params }: PageProps) {
 	const { slug } = await params;
 
-	const [result] = await db
-		.select({
-			model: models,
-			upvoteCount:
-				sql<number>`(SELECT count(*) FROM upvotes WHERE model_id = models.id)`.as(
-					"upvote_count",
-				),
-		})
-		.from(models)
-		.where(eq(models.slug, slug))
-		.limit(1);
+	const result = await getModelBySlugWithUpvotes(slug);
 
 	if (!result) {
 		notFound();
@@ -85,44 +74,13 @@ export default async function ModelPage({ params }: PageProps) {
 
 	const { model, upvoteCount } = result;
 
-	// Fetch comparisons that include this model
-	const modelComparisons = await db
-		.select()
-		.from(comparisons)
-		.where(
-			or(
-				eq(comparisons.modelAId, model.id),
-				eq(comparisons.modelBId, model.id),
-			),
-		);
-
-	// Fetch the "other" model for each comparison
-	const comparisonModels = await Promise.all(
-		modelComparisons.map(async (c) => {
-			const otherId = c.modelAId === model.id ? c.modelBId : c.modelAId;
-			const [other] = await db
-				.select()
-				.from(models)
-				.where(eq(models.id, otherId))
-				.limit(1);
-			return { comparison: c, otherModel: other };
-		}),
-	);
-
-	// For unsupported models, find similar supported models
-	const similarModels =
+	// Fetch comparisons and similar models in parallel
+	const [comparisonModels, similarModels] = await Promise.all([
+		getComparisonsForModel(model.id),
 		model.status !== "supported"
-			? await db
-					.select()
-					.from(models)
-					.where(eq(models.type, model.type))
-					.limit(3)
-					.then((results) =>
-						results.filter(
-							(m) => m.status === "supported" && m.id !== model.id,
-						),
-					)
-			: [];
+			? getSimilarSupportedModels(model.type, model.id)
+			: Promise.resolve([]),
+	]);
 
 	const isSupported = model.status === "supported";
 
@@ -152,11 +110,6 @@ export default async function ModelPage({ params }: PageProps) {
 				<div className="flex flex-wrap items-center gap-3">
 					<h1 className="text-3xl font-bold tracking-tight">{model.name}</h1>
 					<Badge variant="outline">{model.type.toUpperCase()}</Badge>
-					<ModelStatus
-						state={{ status: "not_loaded" }}
-						modelName={model.name}
-						sizeMb={model.sizeMb}
-					/>
 				</div>
 				{model.description && (
 					<p className="max-w-2xl text-lg text-muted-foreground">

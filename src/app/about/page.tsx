@@ -17,9 +17,9 @@ export default function AboutPage() {
 			<section className="space-y-4">
 				<h1 className="text-3xl font-bold tracking-tight">About {APP_NAME}</h1>
 				<p className="max-w-2xl text-lg text-muted-foreground">
-					TTSLab is an open-source tool for testing and comparing
-					text-to-speech (TTS) and speech-to-text (STT) models directly in your
-					browser. No servers, no data collection, no API keys required.
+					TTSLab is an open-source tool for testing and comparing text-to-speech
+					(TTS) and speech-to-text (STT) models directly in your browser. No
+					servers, no data collection, no API keys required.
 				</p>
 			</section>
 
@@ -75,8 +75,8 @@ export default function AboutPage() {
 				<h2 className="text-2xl font-semibold">Methodology</h2>
 				<div className="max-w-2xl space-y-3 text-muted-foreground">
 					<p>
-						TTSLab provides a standardized environment for evaluating voice
-						AI models. By running models in the browser with WebGPU, we ensure
+						TTSLab provides a standardized environment for evaluating voice AI
+						models. By running models in the browser with WebGPU, we ensure
 						consistent and reproducible results across different hardware.
 					</p>
 					<p>
@@ -98,8 +98,8 @@ export default function AboutPage() {
 				<h2 className="text-2xl font-semibold">Open Source</h2>
 				<div className="max-w-2xl space-y-3 text-muted-foreground">
 					<p>
-						TTSLab is fully open source under the MIT License. We believe
-						that tools for evaluating AI models should be transparent and
+						TTSLab is fully open source under the MIT License. We believe that
+						tools for evaluating AI models should be transparent and
 						community-driven.
 					</p>
 					<p>

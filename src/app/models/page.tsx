@@ -1,7 +1,6 @@
-import { sql } from "drizzle-orm";
 import type { Metadata } from "next";
-import { db } from "@/lib/db";
-import { models } from "@/lib/db/schema";
+import { getAllModelsWithUpvotes } from "@/lib/db/queries";
+import type { ModelWithUpvotes } from "@/lib/db/types";
 import { ModelGrid } from "./model-grid";
 
 export const metadata: Metadata = {
@@ -11,18 +10,9 @@ export const metadata: Metadata = {
 };
 
 export default async function ModelsPage() {
-	let allModels: { model: typeof models.$inferSelect; upvoteCount: number }[] =
-		[];
+	let allModels: ModelWithUpvotes[] = [];
 	try {
-		allModels = await db
-			.select({
-				model: models,
-				upvoteCount:
-					sql<number>`(SELECT count(*) FROM upvotes WHERE model_id = models.id)`.as(
-						"upvote_count",
-					),
-			})
-			.from(models);
+		allModels = await getAllModelsWithUpvotes();
 	} catch {
 		// DB not configured yet
 	}

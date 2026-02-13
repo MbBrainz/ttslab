@@ -1,4 +1,3 @@
-import { eq, sql } from "drizzle-orm";
 import {
 	ArrowRight,
 	BarChart3,
@@ -21,80 +20,46 @@ import {
 } from "@/components/ui/card";
 import { UpvoteButton } from "@/components/upvote-button";
 import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
-import { db } from "@/lib/db";
-import { comparisons, models } from "@/lib/db/schema";
-
-type ModelWithUpvotes = {
-	model: typeof models.$inferSelect;
-	upvoteCount: number;
-};
-
-type ComparisonWithModels = {
-	comparison: typeof comparisons.$inferSelect;
-	modelA: typeof models.$inferSelect;
-};
+import {
+	getAllModelsWithUpvotes,
+	getPopularComparisons,
+} from "@/lib/db/queries";
+import type { ComparisonWithModels, ModelWithUpvotes } from "@/lib/db/types";
 
 async function getHomeData() {
 	try {
-		const allModels = await db
-			.select({
-				model: models,
-				upvoteCount:
-					sql<number>`(SELECT count(*) FROM upvotes WHERE model_id = models.id)`.as(
-						"upvote_count",
-					),
-			})
-			.from(models);
+		const [allModels, popularComparisons] = await Promise.all([
+			getAllModelsWithUpvotes(),
+			getPopularComparisons(4),
+		]);
 
-		const popularComparisons = await db
-			.select({
-				comparison: comparisons,
-				modelA: models,
-			})
-			.from(comparisons)
-			.innerJoin(models, eq(comparisons.modelAId, models.id))
-			.limit(4);
-
-		const comparisonModelBs = await Promise.all(
-			popularComparisons.map(async (c) => {
-				const [modelB] = await db
-					.select()
-					.from(models)
-					.where(eq(models.id, c.comparison.modelBId))
-					.limit(1);
-				return modelB;
-			}),
-		);
-
-		return { allModels, popularComparisons, comparisonModelBs };
+		return { allModels, popularComparisons };
 	} catch {
-		return { allModels: [], popularComparisons: [], comparisonModelBs: [] };
+		return {
+			allModels: [] as ModelWithUpvotes[],
+			popularComparisons: [] as ComparisonWithModels[],
+		};
 	}
 }
 
 export default async function HomePage() {
-	const { allModels, popularComparisons, comparisonModelBs } =
-		await getHomeData();
+	const { allModels, popularComparisons } = await getHomeData();
 
-	const supportedModels = (allModels as ModelWithUpvotes[])
+	const supportedModels = allModels
 		.filter((m) => m.model.status === "supported")
 		.slice(0, 4);
 
-	const unsupportedModels = (allModels as ModelWithUpvotes[])
+	const unsupportedModels = allModels
 		.filter((m) => m.model.status !== "supported")
 		.sort((a, b) => b.upvoteCount - a.upvoteCount)
 		.slice(0, 6);
 
 	const totalModels = allModels.length;
-	const supportedCount = (allModels as ModelWithUpvotes[]).filter(
+	const supportedCount = allModels.filter(
 		(m) => m.model.status === "supported",
 	).length;
-	const ttsCount = (allModels as ModelWithUpvotes[]).filter(
-		(m) => m.model.type === "tts",
-	).length;
-	const sttCount = (allModels as ModelWithUpvotes[]).filter(
-		(m) => m.model.type === "stt",
-	).length;
+	const ttsCount = allModels.filter((m) => m.model.type === "tts").length;
+	const sttCount = allModels.filter((m) => m.model.type === "stt").length;
 
 	return (
 		<div className="space-y-20">
@@ -171,7 +136,7 @@ export default async function HomePage() {
 			)}
 
 			{/* Popular Comparisons */}
-			{(popularComparisons as ComparisonWithModels[]).length > 0 && (
+			{popularComparisons.length > 0 && (
 				<section className="space-y-6">
 					<div className="flex items-center justify-between">
 						<h2 className="text-2xl font-semibold">Popular Comparisons</h2>
@@ -184,29 +149,23 @@ export default async function HomePage() {
 						</Link>
 					</div>
 					<div className="grid gap-4 sm:grid-cols-2">
-						{(popularComparisons as ComparisonWithModels[]).map((c, i) => {
-							const modelB = comparisonModelBs[i];
-							if (!modelB) return null;
-							return (
-								<Link
-									key={c.comparison.id}
-									href={`/compare/${c.comparison.slug}`}
-								>
-									<Card className="transition-colors hover:border-primary/50">
-										<CardContent className="flex items-center justify-between p-6">
-											<div className="flex items-center gap-3">
-												<span className="font-medium">{c.modelA.name}</span>
-												<span className="text-sm text-muted-foreground">
-													vs
-												</span>
-												<span className="font-medium">{modelB.name}</span>
-											</div>
-											<ChevronRight className="h-4 w-4 text-muted-foreground" />
-										</CardContent>
-									</Card>
-								</Link>
-							);
-						})}
+						{popularComparisons.map((c) => (
+							<Link
+								key={c.comparison.id}
+								href={`/compare/${c.comparison.slug}`}
+							>
+								<Card className="transition-colors hover:border-primary/50">
+									<CardContent className="flex items-center justify-between p-6">
+										<div className="flex items-center gap-3">
+											<span className="font-medium">{c.modelA.name}</span>
+											<span className="text-sm text-muted-foreground">vs</span>
+											<span className="font-medium">{c.modelB.name}</span>
+										</div>
+										<ChevronRight className="h-4 w-4 text-muted-foreground" />
+									</CardContent>
+								</Card>
+							</Link>
+						))}
 					</div>
 				</section>
 			)}

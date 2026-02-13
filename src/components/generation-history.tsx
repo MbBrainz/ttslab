@@ -100,7 +100,18 @@ export function GenerationHistory({ modelSlug }: GenerationHistoryProps) {
 		setPlayingId(null);
 	}
 
-	if (entries.length === 0) return null;
+	if (entries.length === 0) {
+		return (
+			<div className="space-y-3">
+				<h3 className="text-sm font-medium text-muted-foreground">
+					Recent generations
+				</h3>
+				<p className="text-sm text-muted-foreground/70">
+					No generations yet. Generate speech above to see your history here.
+				</p>
+			</div>
+		);
+	}
 
 	return (
 		<div className="space-y-3">

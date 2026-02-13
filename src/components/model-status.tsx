@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { formatMegabytes, formatMs, formatSpeed } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export type ModelState =
@@ -60,22 +61,6 @@ type ModelStatusProps = {
 	onCancel?: () => void;
 };
 
-function formatBytes(mb: number): string {
-	if (mb < 1) return `${(mb * 1024).toFixed(0)} KB`;
-	if (mb < 1024) return `${mb.toFixed(1)} MB`;
-	return `${(mb / 1024).toFixed(2)} GB`;
-}
-
-function formatSpeed(mbPerSec: number): string {
-	if (mbPerSec < 1) return `${(mbPerSec * 1024).toFixed(0)} KB/s`;
-	return `${mbPerSec.toFixed(1)} MB/s`;
-}
-
-function formatTime(ms: number): string {
-	if (ms < 1000) return `${ms.toFixed(0)}ms`;
-	return `${(ms / 1000).toFixed(1)}s`;
-}
-
 function StatusDot({
 	color,
 	animate = false,
@@ -117,7 +102,7 @@ function NotLoadedState({
 				<span className="text-sm text-muted-foreground">Not loaded</span>
 				{sizeMb != null && (
 					<span className="text-xs text-muted-foreground">
-						({formatBytes(sizeMb)})
+						({formatMegabytes(sizeMb)})
 					</span>
 				)}
 			</div>
@@ -159,7 +144,7 @@ function DownloadingState({
 					<span className="text-sm font-medium">Downloading...</span>
 					<div className="flex items-center gap-3">
 						<span className="text-xs text-muted-foreground">
-							{formatBytes(downloaded)} / {formatBytes(total)}
+							{formatMegabytes(downloaded)} / {formatMegabytes(total)}
 						</span>
 						<span className="text-xs text-muted-foreground">
 							{formatSpeed(speed)}
@@ -235,7 +220,7 @@ function ReadyState({
 				)}
 				<span>
 					<Clock className="mr-1 inline h-3 w-3" />
-					{formatTime(loadTime)}
+					{formatMs(loadTime)}
 				</span>
 			</div>
 		</div>
@@ -262,7 +247,7 @@ function ProcessingState({
 					</span>
 				</div>
 				<span className="text-xs tabular-nums text-muted-foreground">
-					{formatTime(elapsed)}
+					{formatMs(elapsed)}
 				</span>
 			</div>
 			{progress != null && <Progress value={progress} max={100} />}
@@ -289,7 +274,7 @@ function ResultState({
 			<div className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-md border border-border bg-secondary/50 p-3 text-xs">
 				<span className="text-muted-foreground">Total time</span>
 				<span className="text-right font-mono tabular-nums">
-					{formatTime(metrics.totalMs)}
+					{formatMs(metrics.totalMs)}
 				</span>
 
 				{metrics.audioDuration != null && (

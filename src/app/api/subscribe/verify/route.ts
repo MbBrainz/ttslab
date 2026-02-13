@@ -1,7 +1,5 @@
-import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { subscriptions } from "@/lib/db/schema";
+import { verifySubscription } from "@/lib/db/queries";
 
 export async function GET(request: Request) {
 	try {
@@ -15,23 +13,14 @@ export async function GET(request: Request) {
 			);
 		}
 
-		const result = await db
-			.select()
-			.from(subscriptions)
-			.where(eq(subscriptions.verifyToken, token))
-			.limit(1);
+		const verified = await verifySubscription(token);
 
-		if (result.length === 0) {
+		if (!verified) {
 			return NextResponse.json(
 				{ error: "Invalid or expired verification token" },
 				{ status: 400 },
 			);
 		}
-
-		await db
-			.update(subscriptions)
-			.set({ verified: true, verifyToken: null })
-			.where(eq(subscriptions.id, result[0].id));
 
 		return NextResponse.redirect(new URL("/?verified=true", request.url));
 	} catch (error) {

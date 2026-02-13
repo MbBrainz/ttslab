@@ -1,8 +1,6 @@
 import crypto from "node:crypto";
-import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { models, subscriptions } from "@/lib/db/schema";
+import { createSubscription, getModelBySlug } from "@/lib/db/queries";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -18,30 +16,25 @@ export async function POST(request: Request) {
 			);
 		}
 
-		let modelId: string | undefined;
+		let modelId: string | null = null;
 
 		if (modelSlug) {
-			const model = await db
-				.select()
-				.from(models)
-				.where(eq(models.slug, modelSlug))
-				.limit(1);
+			const model = await getModelBySlug(modelSlug);
 
-			if (model.length === 0) {
+			if (!model) {
 				return NextResponse.json({ error: "Model not found" }, { status: 404 });
 			}
 
-			modelId = model[0].id;
+			modelId = model.id;
 		}
 
 		const verifyToken = crypto.randomUUID();
 
 		try {
-			await db.insert(subscriptions).values({
+			await createSubscription({
 				email,
-				modelId: modelId ?? null,
+				modelId,
 				comparisonKey: comparisonSlug ?? null,
-				verified: false,
 				verifyToken,
 			});
 		} catch (insertError: unknown) {

@@ -1,7 +1,5 @@
-import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { models } from "@/lib/db/schema";
+import { getModelBySlugWithUpvotes } from "@/lib/db/queries";
 
 export async function GET(
 	_request: Request,
@@ -10,22 +8,15 @@ export async function GET(
 	try {
 		const { slug } = await params;
 
-		const result = await db
-			.select({
-				model: models,
-				upvoteCount: sql<number>`(SELECT count(*) FROM upvotes WHERE model_id = models.id)`,
-			})
-			.from(models)
-			.where(eq(models.slug, slug))
-			.limit(1);
+		const result = await getModelBySlugWithUpvotes(slug);
 
-		if (result.length === 0) {
+		if (!result) {
 			return NextResponse.json({ error: "Model not found" }, { status: 404 });
 		}
 
 		return NextResponse.json({
-			...result[0].model,
-			upvoteCount: Number(result[0].upvoteCount),
+			...result.model,
+			upvoteCount: Number(result.upvoteCount),
 		});
 	} catch (error) {
 		console.error("Failed to fetch model:", error);

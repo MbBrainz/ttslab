@@ -1,4 +1,3 @@
-import { eq } from "drizzle-orm";
 import { BarChart3, ChevronRight } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -6,8 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { db } from "@/lib/db";
-import { comparisons, models } from "@/lib/db/schema";
+import { getAllComparisonsWithModels } from "@/lib/db/queries";
+import type { ComparisonWithModels } from "@/lib/db/types";
 
 export const metadata: Metadata = {
 	title: "Compare Models",
@@ -15,42 +14,22 @@ export const metadata: Metadata = {
 };
 
 export default async function ComparePage() {
-	let comparisonDetails: {
-		comparison: typeof comparisons.$inferSelect;
-		modelA: typeof models.$inferSelect | undefined;
-		modelB: typeof models.$inferSelect | undefined;
-	}[] = [];
+	let comparisonDetails: ComparisonWithModels[] = [];
 
 	try {
-		const allComparisons = await db.select().from(comparisons);
-
-		comparisonDetails = await Promise.all(
-			allComparisons.map(async (c) => {
-				const [modelA] = await db
-					.select()
-					.from(models)
-					.where(eq(models.id, c.modelAId))
-					.limit(1);
-				const [modelB] = await db
-					.select()
-					.from(models)
-					.where(eq(models.id, c.modelBId))
-					.limit(1);
-				return { comparison: c, modelA, modelB };
-			}),
-		);
+		comparisonDetails = await getAllComparisonsWithModels();
 	} catch {
 		// DB not configured yet
 	}
 
 	const ttsComparisons = comparisonDetails.filter(
-		(c) => c.modelA?.type === "tts" && c.modelB?.type === "tts",
+		(c) => c.modelA.type === "tts" && c.modelB.type === "tts",
 	);
 	const sttComparisons = comparisonDetails.filter(
-		(c) => c.modelA?.type === "stt" && c.modelB?.type === "stt",
+		(c) => c.modelA.type === "stt" && c.modelB.type === "stt",
 	);
 	const crossTypeComparisons = comparisonDetails.filter(
-		(c) => c.modelA?.type !== c.modelB?.type,
+		(c) => c.modelA.type !== c.modelB.type,
 	);
 
 	return (
@@ -69,9 +48,38 @@ export default async function ComparePage() {
 						<Badge variant="secondary">{ttsComparisons.length}</Badge>
 					</div>
 					<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-						{ttsComparisons.map(({ comparison, modelA, modelB }) => {
-							if (!modelA || !modelB) return null;
-							return (
+						{ttsComparisons.map(({ comparison, modelA, modelB }) => (
+							<Link key={comparison.id} href={`/compare/${comparison.slug}`}>
+								<Card className="transition-colors hover:border-primary/50">
+									<CardHeader>
+										<CardTitle className="flex items-center justify-between text-base">
+											<span className="flex items-center gap-2">
+												{modelA.name}
+												<span className="text-sm font-normal text-muted-foreground">
+													vs
+												</span>
+												{modelB.name}
+											</span>
+											<ChevronRight className="h-4 w-4 text-muted-foreground" />
+										</CardTitle>
+									</CardHeader>
+								</Card>
+							</Link>
+						))}
+					</div>
+				</section>
+			)}
+
+			{sttComparisons.length > 0 && (
+				<>
+					<Separator />
+					<section className="space-y-4">
+						<div className="flex items-center gap-3">
+							<h2 className="text-xl font-semibold">STT Comparisons</h2>
+							<Badge variant="secondary">{sttComparisons.length}</Badge>
+						</div>
+						<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+							{sttComparisons.map(({ comparison, modelA, modelB }) => (
 								<Link key={comparison.id} href={`/compare/${comparison.slug}`}>
 									<Card className="transition-colors hover:border-primary/50">
 										<CardHeader>
@@ -88,45 +96,7 @@ export default async function ComparePage() {
 										</CardHeader>
 									</Card>
 								</Link>
-							);
-						})}
-					</div>
-				</section>
-			)}
-
-			{sttComparisons.length > 0 && (
-				<>
-					<Separator />
-					<section className="space-y-4">
-						<div className="flex items-center gap-3">
-							<h2 className="text-xl font-semibold">STT Comparisons</h2>
-							<Badge variant="secondary">{sttComparisons.length}</Badge>
-						</div>
-						<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-							{sttComparisons.map(({ comparison, modelA, modelB }) => {
-								if (!modelA || !modelB) return null;
-								return (
-									<Link
-										key={comparison.id}
-										href={`/compare/${comparison.slug}`}
-									>
-										<Card className="transition-colors hover:border-primary/50">
-											<CardHeader>
-												<CardTitle className="flex items-center justify-between text-base">
-													<span className="flex items-center gap-2">
-														{modelA.name}
-														<span className="text-sm font-normal text-muted-foreground">
-															vs
-														</span>
-														{modelB.name}
-													</span>
-													<ChevronRight className="h-4 w-4 text-muted-foreground" />
-												</CardTitle>
-											</CardHeader>
-										</Card>
-									</Link>
-								);
-							})}
+							))}
 						</div>
 					</section>
 				</>
@@ -141,30 +111,24 @@ export default async function ComparePage() {
 							<Badge variant="secondary">{crossTypeComparisons.length}</Badge>
 						</div>
 						<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-							{crossTypeComparisons.map(({ comparison, modelA, modelB }) => {
-								if (!modelA || !modelB) return null;
-								return (
-									<Link
-										key={comparison.id}
-										href={`/compare/${comparison.slug}`}
-									>
-										<Card className="transition-colors hover:border-primary/50">
-											<CardHeader>
-												<CardTitle className="flex items-center justify-between text-base">
-													<span className="flex items-center gap-2">
-														{modelA.name}
-														<span className="text-sm font-normal text-muted-foreground">
-															vs
-														</span>
-														{modelB.name}
+							{crossTypeComparisons.map(({ comparison, modelA, modelB }) => (
+								<Link key={comparison.id} href={`/compare/${comparison.slug}`}>
+									<Card className="transition-colors hover:border-primary/50">
+										<CardHeader>
+											<CardTitle className="flex items-center justify-between text-base">
+												<span className="flex items-center gap-2">
+													{modelA.name}
+													<span className="text-sm font-normal text-muted-foreground">
+														vs
 													</span>
-													<ChevronRight className="h-4 w-4 text-muted-foreground" />
-												</CardTitle>
-											</CardHeader>
-										</Card>
-									</Link>
-								);
-							})}
+													{modelB.name}
+												</span>
+												<ChevronRight className="h-4 w-4 text-muted-foreground" />
+											</CardTitle>
+										</CardHeader>
+									</Card>
+								</Link>
+							))}
 						</div>
 					</section>
 				</>

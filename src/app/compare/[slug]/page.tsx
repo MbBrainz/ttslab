@@ -1,9 +1,7 @@
-import { eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ComparisonTable } from "@/components/comparison-table";
-import { ModelStatus } from "@/components/model-status";
 import { SttDemo } from "@/components/stt-demo";
 import { SubscribeForm } from "@/components/subscribe-form";
 import { TtsDemo } from "@/components/tts-demo";
@@ -18,17 +16,18 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { UpvoteButton } from "@/components/upvote-button";
 import { APP_NAME, APP_URL } from "@/lib/constants";
-import { db } from "@/lib/db";
-import { comparisons, models } from "@/lib/db/schema";
+import {
+	getAllComparisonSlugs,
+	getComparisonBySlug,
+	getModelById,
+} from "@/lib/db/queries";
 
 type PageProps = {
 	params: Promise<{ slug: string }>;
 };
 
 export async function generateStaticParams() {
-	const allComparisons = await db
-		.select({ slug: comparisons.slug })
-		.from(comparisons);
+	const allComparisons = await getAllComparisonSlugs();
 	return allComparisons.map((c) => ({ slug: c.slug }));
 }
 
@@ -37,27 +36,16 @@ export async function generateMetadata({
 }: PageProps): Promise<Metadata> {
 	const { slug } = await params;
 
-	const [comparison] = await db
-		.select()
-		.from(comparisons)
-		.where(eq(comparisons.slug, slug))
-		.limit(1);
+	const comparison = await getComparisonBySlug(slug);
 
 	if (!comparison) {
 		return { title: "Comparison Not Found" };
 	}
 
-	const [modelA] = await db
-		.select()
-		.from(models)
-		.where(eq(models.id, comparison.modelAId))
-		.limit(1);
-
-	const [modelB] = await db
-		.select()
-		.from(models)
-		.where(eq(models.id, comparison.modelBId))
-		.limit(1);
+	const [modelA, modelB] = await Promise.all([
+		getModelById(comparison.modelAId),
+		getModelById(comparison.modelBId),
+	]);
 
 	if (!modelA || !modelB) {
 		return { title: "Comparison Not Found" };
@@ -82,27 +70,16 @@ export async function generateMetadata({
 export default async function ComparisonPage({ params }: PageProps) {
 	const { slug } = await params;
 
-	const [comparison] = await db
-		.select()
-		.from(comparisons)
-		.where(eq(comparisons.slug, slug))
-		.limit(1);
+	const comparison = await getComparisonBySlug(slug);
 
 	if (!comparison) {
 		notFound();
 	}
 
-	const [modelA] = await db
-		.select()
-		.from(models)
-		.where(eq(models.id, comparison.modelAId))
-		.limit(1);
-
-	const [modelB] = await db
-		.select()
-		.from(models)
-		.where(eq(models.id, comparison.modelBId))
-		.limit(1);
+	const [modelA, modelB] = await Promise.all([
+		getModelById(comparison.modelAId),
+		getModelById(comparison.modelBId),
+	]);
 
 	if (!modelA || !modelB) {
 		notFound();
@@ -144,11 +121,6 @@ export default async function ComparisonPage({ params }: PageProps) {
 								{modelA.name}
 							</Link>
 							<Badge variant="outline">{modelA.type.toUpperCase()}</Badge>
-							<ModelStatus
-								state={{ status: "not_loaded" }}
-								modelName={modelA.name}
-								sizeMb={modelA.sizeMb}
-							/>
 						</div>
 						{modelASupported ? (
 							modelA.type === "tts" ? (
@@ -187,11 +159,6 @@ export default async function ComparisonPage({ params }: PageProps) {
 								{modelB.name}
 							</Link>
 							<Badge variant="outline">{modelB.type.toUpperCase()}</Badge>
-							<ModelStatus
-								state={{ status: "not_loaded" }}
-								modelName={modelB.name}
-								sizeMb={modelB.sizeMb}
-							/>
 						</div>
 						{modelBSupported ? (
 							modelB.type === "tts" ? (

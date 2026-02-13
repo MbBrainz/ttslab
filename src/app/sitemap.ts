@@ -1,11 +1,10 @@
 import type { MetadataRoute } from "next";
 import { APP_URL } from "@/lib/constants";
-import { db } from "@/lib/db";
-import { comparisons, models } from "@/lib/db/schema";
+import { getAllComparisons, getAllModels } from "@/lib/db/queries";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-	const allModels = await db.select().from(models);
-	const allComparisons = await db.select().from(comparisons);
+	const allModels = await getAllModels();
+	const allComparisons = await getAllComparisons();
 
 	const staticPages: MetadataRoute.Sitemap = [
 		{
