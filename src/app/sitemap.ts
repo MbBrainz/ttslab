@@ -1,0 +1,54 @@
+import type { MetadataRoute } from "next";
+import { APP_URL } from "@/lib/constants";
+import { db } from "@/lib/db";
+import { comparisons, models } from "@/lib/db/schema";
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+	const allModels = await db.select().from(models);
+	const allComparisons = await db.select().from(comparisons);
+
+	const staticPages: MetadataRoute.Sitemap = [
+		{
+			url: APP_URL,
+			lastModified: new Date(),
+			changeFrequency: "weekly",
+			priority: 1,
+		},
+		{
+			url: `${APP_URL}/models`,
+			lastModified: new Date(),
+			changeFrequency: "weekly",
+			priority: 0.9,
+		},
+		{
+			url: `${APP_URL}/compare`,
+			lastModified: new Date(),
+			changeFrequency: "weekly",
+			priority: 0.8,
+		},
+		{
+			url: `${APP_URL}/about`,
+			lastModified: new Date(),
+			changeFrequency: "monthly",
+			priority: 0.5,
+		},
+	];
+
+	const modelPages: MetadataRoute.Sitemap = allModels.map((model) => ({
+		url: `${APP_URL}/models/${model.slug}`,
+		lastModified: model.updatedAt ?? new Date(),
+		changeFrequency: "weekly" as const,
+		priority: 0.7,
+	}));
+
+	const comparisonPages: MetadataRoute.Sitemap = allComparisons.map(
+		(comparison) => ({
+			url: `${APP_URL}/compare/${comparison.slug}`,
+			lastModified: new Date(),
+			changeFrequency: "weekly" as const,
+			priority: 0.6,
+		}),
+	);
+
+	return [...staticPages, ...modelPages, ...comparisonPages];
+}

@@ -1,0 +1,170 @@
+import { eq } from "drizzle-orm";
+import { ChevronRight } from "lucide-react";
+import type { Metadata } from "next";
+import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { db } from "@/lib/db";
+import { comparisons, models } from "@/lib/db/schema";
+
+export const metadata: Metadata = {
+	title: "Compare Models",
+	description: "Compare TTS and STT models side by side in your browser.",
+};
+
+export default async function ComparePage() {
+	const allComparisons = await db.select().from(comparisons);
+
+	// Fetch model details for each comparison
+	const comparisonDetails = await Promise.all(
+		allComparisons.map(async (c) => {
+			const [modelA] = await db
+				.select()
+				.from(models)
+				.where(eq(models.id, c.modelAId))
+				.limit(1);
+			const [modelB] = await db
+				.select()
+				.from(models)
+				.where(eq(models.id, c.modelBId))
+				.limit(1);
+			return { comparison: c, modelA, modelB };
+		}),
+	);
+
+	const ttsComparisons = comparisonDetails.filter(
+		(c) => c.modelA?.type === "tts" && c.modelB?.type === "tts",
+	);
+	const sttComparisons = comparisonDetails.filter(
+		(c) => c.modelA?.type === "stt" && c.modelB?.type === "stt",
+	);
+	const crossTypeComparisons = comparisonDetails.filter(
+		(c) => c.modelA?.type !== c.modelB?.type,
+	);
+
+	return (
+		<div className="space-y-8">
+			<div>
+				<h1 className="text-3xl font-bold tracking-tight">Compare Models</h1>
+				<p className="mt-2 text-muted-foreground">
+					Compare TTS and STT models side by side in your browser.
+				</p>
+			</div>
+
+			{ttsComparisons.length > 0 && (
+				<section className="space-y-4">
+					<div className="flex items-center gap-3">
+						<h2 className="text-xl font-semibold">TTS Comparisons</h2>
+						<Badge variant="secondary">{ttsComparisons.length}</Badge>
+					</div>
+					<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+						{ttsComparisons.map(({ comparison, modelA, modelB }) => {
+							if (!modelA || !modelB) return null;
+							return (
+								<Link key={comparison.id} href={`/compare/${comparison.slug}`}>
+									<Card className="transition-colors hover:border-primary/50">
+										<CardHeader>
+											<CardTitle className="flex items-center justify-between text-base">
+												<span className="flex items-center gap-2">
+													{modelA.name}
+													<span className="text-sm font-normal text-muted-foreground">
+														vs
+													</span>
+													{modelB.name}
+												</span>
+												<ChevronRight className="h-4 w-4 text-muted-foreground" />
+											</CardTitle>
+										</CardHeader>
+									</Card>
+								</Link>
+							);
+						})}
+					</div>
+				</section>
+			)}
+
+			{sttComparisons.length > 0 && (
+				<>
+					<Separator />
+					<section className="space-y-4">
+						<div className="flex items-center gap-3">
+							<h2 className="text-xl font-semibold">STT Comparisons</h2>
+							<Badge variant="secondary">{sttComparisons.length}</Badge>
+						</div>
+						<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+							{sttComparisons.map(({ comparison, modelA, modelB }) => {
+								if (!modelA || !modelB) return null;
+								return (
+									<Link
+										key={comparison.id}
+										href={`/compare/${comparison.slug}`}
+									>
+										<Card className="transition-colors hover:border-primary/50">
+											<CardHeader>
+												<CardTitle className="flex items-center justify-between text-base">
+													<span className="flex items-center gap-2">
+														{modelA.name}
+														<span className="text-sm font-normal text-muted-foreground">
+															vs
+														</span>
+														{modelB.name}
+													</span>
+													<ChevronRight className="h-4 w-4 text-muted-foreground" />
+												</CardTitle>
+											</CardHeader>
+										</Card>
+									</Link>
+								);
+							})}
+						</div>
+					</section>
+				</>
+			)}
+
+			{crossTypeComparisons.length > 0 && (
+				<>
+					<Separator />
+					<section className="space-y-4">
+						<div className="flex items-center gap-3">
+							<h2 className="text-xl font-semibold">Cross-Type Comparisons</h2>
+							<Badge variant="secondary">{crossTypeComparisons.length}</Badge>
+						</div>
+						<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+							{crossTypeComparisons.map(({ comparison, modelA, modelB }) => {
+								if (!modelA || !modelB) return null;
+								return (
+									<Link
+										key={comparison.id}
+										href={`/compare/${comparison.slug}`}
+									>
+										<Card className="transition-colors hover:border-primary/50">
+											<CardHeader>
+												<CardTitle className="flex items-center justify-between text-base">
+													<span className="flex items-center gap-2">
+														{modelA.name}
+														<span className="text-sm font-normal text-muted-foreground">
+															vs
+														</span>
+														{modelB.name}
+													</span>
+													<ChevronRight className="h-4 w-4 text-muted-foreground" />
+												</CardTitle>
+											</CardHeader>
+										</Card>
+									</Link>
+								);
+							})}
+						</div>
+					</section>
+				</>
+			)}
+
+			{comparisonDetails.length === 0 && (
+				<div className="py-12 text-center text-muted-foreground">
+					No comparisons available yet. Check back soon.
+				</div>
+			)}
+		</div>
+	);
+}
