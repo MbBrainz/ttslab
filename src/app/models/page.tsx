@@ -11,15 +11,21 @@ export const metadata: Metadata = {
 };
 
 export default async function ModelsPage() {
-	const allModels = await db
-		.select({
-			model: models,
-			upvoteCount:
-				sql<number>`(SELECT count(*) FROM upvotes WHERE model_id = models.id)`.as(
-					"upvote_count",
-				),
-		})
-		.from(models);
+	let allModels: { model: typeof models.$inferSelect; upvoteCount: number }[] =
+		[];
+	try {
+		allModels = await db
+			.select({
+				model: models,
+				upvoteCount:
+					sql<number>`(SELECT count(*) FROM upvotes WHERE model_id = models.id)`.as(
+						"upvote_count",
+					),
+			})
+			.from(models);
+	} catch {
+		// DB not configured yet
+	}
 
 	return (
 		<div className="space-y-8">

@@ -1,7 +1,7 @@
 import { ExternalLink, Github, Globe, Shield, Zap } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { APP_NAME } from "@/lib/constants";
@@ -17,7 +17,7 @@ export default function AboutPage() {
 			<section className="space-y-4">
 				<h1 className="text-3xl font-bold tracking-tight">About {APP_NAME}</h1>
 				<p className="max-w-2xl text-lg text-muted-foreground">
-					VoiceBench is an open-source tool for testing and comparing
+					TTSLab is an open-source tool for testing and comparing
 					text-to-speech (TTS) and speech-to-text (STT) models directly in your
 					browser. No servers, no data collection, no API keys required.
 				</p>
@@ -75,7 +75,7 @@ export default function AboutPage() {
 				<h2 className="text-2xl font-semibold">Methodology</h2>
 				<div className="max-w-2xl space-y-3 text-muted-foreground">
 					<p>
-						VoiceBench provides a standardized environment for evaluating voice
+						TTSLab provides a standardized environment for evaluating voice
 						AI models. By running models in the browser with WebGPU, we ensure
 						consistent and reproducible results across different hardware.
 					</p>
@@ -98,7 +98,7 @@ export default function AboutPage() {
 				<h2 className="text-2xl font-semibold">Open Source</h2>
 				<div className="max-w-2xl space-y-3 text-muted-foreground">
 					<p>
-						VoiceBench is fully open source under the MIT License. We believe
+						TTSLab is fully open source under the MIT License. We believe
 						that tools for evaluating AI models should be transparent and
 						community-driven.
 					</p>
@@ -109,14 +109,13 @@ export default function AboutPage() {
 				</div>
 				<div className="flex gap-3">
 					<a
-						href="https://github.com/nicholasgriffintn/voicebench"
+						href="https://github.com/MbBrainz/ttslab"
 						target="_blank"
 						rel="noopener noreferrer"
+						className={`${buttonVariants({ variant: "outline" })} gap-2`}
 					>
-						<Button variant="outline" className="gap-2">
-							<Github className="h-4 w-4" />
-							View on GitHub
-						</Button>
+						<Github className="h-4 w-4" />
+						View on GitHub
 					</a>
 				</div>
 			</section>
@@ -149,14 +148,13 @@ export default function AboutPage() {
 					</ul>
 				</div>
 				<a
-					href="https://github.com/nicholasgriffintn/voicebench/issues"
+					href="https://github.com/MbBrainz/ttslab/issues"
 					target="_blank"
 					rel="noopener noreferrer"
+					className={`${buttonVariants({ variant: "secondary" })} gap-2`}
 				>
-					<Button variant="secondary" className="gap-2">
-						<ExternalLink className="h-4 w-4" />
-						Open an Issue
-					</Button>
+					<ExternalLink className="h-4 w-4" />
+					Open an Issue
 				</a>
 			</section>
 
@@ -166,7 +164,7 @@ export default function AboutPage() {
 				<h2 className="text-2xl font-semibold">Links</h2>
 				<div className="flex flex-wrap gap-4">
 					<a
-						href="https://github.com/nicholasgriffintn/voicebench"
+						href="https://github.com/MbBrainz/ttslab"
 						target="_blank"
 						rel="noopener noreferrer"
 						className="text-sm text-primary hover:underline"

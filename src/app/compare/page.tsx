@@ -1,8 +1,9 @@
 import { eq } from "drizzle-orm";
-import { ChevronRight } from "lucide-react";
+import { BarChart3, ChevronRight } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { db } from "@/lib/db";
@@ -14,24 +15,33 @@ export const metadata: Metadata = {
 };
 
 export default async function ComparePage() {
-	const allComparisons = await db.select().from(comparisons);
+	let comparisonDetails: {
+		comparison: typeof comparisons.$inferSelect;
+		modelA: typeof models.$inferSelect | undefined;
+		modelB: typeof models.$inferSelect | undefined;
+	}[] = [];
 
-	// Fetch model details for each comparison
-	const comparisonDetails = await Promise.all(
-		allComparisons.map(async (c) => {
-			const [modelA] = await db
-				.select()
-				.from(models)
-				.where(eq(models.id, c.modelAId))
-				.limit(1);
-			const [modelB] = await db
-				.select()
-				.from(models)
-				.where(eq(models.id, c.modelBId))
-				.limit(1);
-			return { comparison: c, modelA, modelB };
-		}),
-	);
+	try {
+		const allComparisons = await db.select().from(comparisons);
+
+		comparisonDetails = await Promise.all(
+			allComparisons.map(async (c) => {
+				const [modelA] = await db
+					.select()
+					.from(models)
+					.where(eq(models.id, c.modelAId))
+					.limit(1);
+				const [modelB] = await db
+					.select()
+					.from(models)
+					.where(eq(models.id, c.modelBId))
+					.limit(1);
+				return { comparison: c, modelA, modelB };
+			}),
+		);
+	} catch {
+		// DB not configured yet
+	}
 
 	const ttsComparisons = comparisonDetails.filter(
 		(c) => c.modelA?.type === "tts" && c.modelB?.type === "tts",
@@ -161,8 +171,21 @@ export default async function ComparePage() {
 			)}
 
 			{comparisonDetails.length === 0 && (
-				<div className="py-12 text-center text-muted-foreground">
-					No comparisons available yet. Check back soon.
+				<div className="flex flex-col items-center gap-4 py-16 text-center">
+					<BarChart3 className="h-12 w-12 text-muted-foreground" />
+					<div className="space-y-2">
+						<h3 className="text-lg font-semibold">No comparisons yet</h3>
+						<p className="text-sm text-muted-foreground">
+							Comparisons will appear here once models are added to the
+							database.
+						</p>
+					</div>
+					<Link
+						href="/models"
+						className={buttonVariants({ variant: "default" })}
+					>
+						Browse Models
+					</Link>
 				</div>
 			)}
 		</div>

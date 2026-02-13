@@ -63,7 +63,7 @@ export async function POST(request: Request) {
 		// TODO: Send verification email via Resend
 		// await resend.emails.send({
 		//   to: email,
-		//   subject: "Verify your VoiceBench subscription",
+		//   subject: "Verify your TTSLab subscription",
 		//   html: `<a href="${process.env.NEXT_PUBLIC_URL}/api/subscribe/verify?token=${verifyToken}">Verify</a>`,
 		// });
 

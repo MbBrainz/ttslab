@@ -132,14 +132,14 @@ export function setPreferences(prefs: Partial<UserPreferences>): void {
 
 // Upvote tracking (client-side)
 export function hasUpvoted(modelSlug: string): boolean {
-	const voted = getItem<string[]>("voicebench:upvoted", []);
+	const voted = getItem<string[]>("ttslab:upvoted", []);
 	return voted.includes(modelSlug);
 }
 
 export function markUpvoted(modelSlug: string): void {
-	const voted = getItem<string[]>("voicebench:upvoted", []);
+	const voted = getItem<string[]>("ttslab:upvoted", []);
 	if (!voted.includes(modelSlug)) {
 		voted.push(modelSlug);
-		setItem("voicebench:upvoted", voted);
+		setItem("ttslab:upvoted", voted);
 	}
 }

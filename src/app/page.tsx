@@ -1,9 +1,9 @@
 import { eq, sql } from "drizzle-orm";
 import {
 	ArrowRight,
+	BarChart3,
 	ChevronRight,
 	Download,
-	Mic,
 	Shield,
 	Volume2,
 	Zap,
@@ -11,7 +11,7 @@ import {
 import Link from "next/link";
 import { ModelCard } from "@/components/model-card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
 	Card,
 	CardContent,
@@ -24,52 +24,77 @@ import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
 import { db } from "@/lib/db";
 import { comparisons, models } from "@/lib/db/schema";
 
-export default async function HomePage() {
-	const allModels = await db
-		.select({
-			model: models,
-			upvoteCount:
-				sql<number>`(SELECT count(*) FROM upvotes WHERE model_id = models.id)`.as(
-					"upvote_count",
-				),
-		})
-		.from(models);
+type ModelWithUpvotes = {
+	model: typeof models.$inferSelect;
+	upvoteCount: number;
+};
 
-	const supportedModels = allModels
+type ComparisonWithModels = {
+	comparison: typeof comparisons.$inferSelect;
+	modelA: typeof models.$inferSelect;
+};
+
+async function getHomeData() {
+	try {
+		const allModels = await db
+			.select({
+				model: models,
+				upvoteCount:
+					sql<number>`(SELECT count(*) FROM upvotes WHERE model_id = models.id)`.as(
+						"upvote_count",
+					),
+			})
+			.from(models);
+
+		const popularComparisons = await db
+			.select({
+				comparison: comparisons,
+				modelA: models,
+			})
+			.from(comparisons)
+			.innerJoin(models, eq(comparisons.modelAId, models.id))
+			.limit(4);
+
+		const comparisonModelBs = await Promise.all(
+			popularComparisons.map(async (c) => {
+				const [modelB] = await db
+					.select()
+					.from(models)
+					.where(eq(models.id, c.comparison.modelBId))
+					.limit(1);
+				return modelB;
+			}),
+		);
+
+		return { allModels, popularComparisons, comparisonModelBs };
+	} catch {
+		return { allModels: [], popularComparisons: [], comparisonModelBs: [] };
+	}
+}
+
+export default async function HomePage() {
+	const { allModels, popularComparisons, comparisonModelBs } =
+		await getHomeData();
+
+	const supportedModels = (allModels as ModelWithUpvotes[])
 		.filter((m) => m.model.status === "supported")
 		.slice(0, 4);
 
-	const unsupportedModels = allModels
+	const unsupportedModels = (allModels as ModelWithUpvotes[])
 		.filter((m) => m.model.status !== "supported")
 		.sort((a, b) => b.upvoteCount - a.upvoteCount)
 		.slice(0, 6);
 
-	const popularComparisons = await db
-		.select({
-			comparison: comparisons,
-			modelA: models,
-		})
-		.from(comparisons)
-		.innerJoin(models, eq(comparisons.modelAId, models.id))
-		.limit(4);
-
-	const comparisonModelBs = await Promise.all(
-		popularComparisons.map(async (c) => {
-			const [modelB] = await db
-				.select()
-				.from(models)
-				.where(eq(models.id, c.comparison.modelBId))
-				.limit(1);
-			return modelB;
-		}),
-	);
-
 	const totalModels = allModels.length;
-	const supportedCount = allModels.filter(
+	const supportedCount = (allModels as ModelWithUpvotes[]).filter(
 		(m) => m.model.status === "supported",
 	).length;
-	const ttsCount = allModels.filter((m) => m.model.type === "tts").length;
-	const sttCount = allModels.filter((m) => m.model.type === "stt").length;
+	const ttsCount = (allModels as ModelWithUpvotes[]).filter(
+		(m) => m.model.type === "tts",
+	).length;
+	const sttCount = (allModels as ModelWithUpvotes[]).filter(
+		(m) => m.model.type === "stt",
+	).length;
 
 	return (
 		<div className="space-y-20">
@@ -86,34 +111,38 @@ export default async function HomePage() {
 					{APP_DESCRIPTION}
 				</p>
 				<div className="flex flex-wrap justify-center gap-4">
-					<Link href="/models/kokoro-tts">
-						<Button size="lg" className="gap-2">
-							<Volume2 className="h-5 w-5" />
-							Try Kokoro TTS
-						</Button>
+					<Link
+						href="/models"
+						className={`${buttonVariants({ size: "lg" })} gap-2`}
+					>
+						<Volume2 className="h-5 w-5" />
+						Browse Models
 					</Link>
-					<Link href="/models/whisper-small">
-						<Button size="lg" variant="outline" className="gap-2">
-							<Mic className="h-5 w-5" />
-							Try Whisper STT
-						</Button>
+					<Link
+						href="/compare"
+						className={`${buttonVariants({ variant: "outline", size: "lg" })} gap-2`}
+					>
+						<BarChart3 className="h-5 w-5" />
+						Compare Models
 					</Link>
 				</div>
-				<div className="flex gap-8 text-sm text-muted-foreground">
-					<span>
-						<strong className="text-foreground">{totalModels}</strong> models
-					</span>
-					<span>
-						<strong className="text-foreground">{supportedCount}</strong>{" "}
-						supported
-					</span>
-					<span>
-						<strong className="text-foreground">{ttsCount}</strong> TTS
-					</span>
-					<span>
-						<strong className="text-foreground">{sttCount}</strong> STT
-					</span>
-				</div>
+				{totalModels > 0 && (
+					<div className="flex gap-8 text-sm text-muted-foreground">
+						<span>
+							<strong className="text-foreground">{totalModels}</strong> models
+						</span>
+						<span>
+							<strong className="text-foreground">{supportedCount}</strong>{" "}
+							supported
+						</span>
+						<span>
+							<strong className="text-foreground">{ttsCount}</strong> TTS
+						</span>
+						<span>
+							<strong className="text-foreground">{sttCount}</strong> STT
+						</span>
+					</div>
+				)}
 			</section>
 
 			{/* Featured Models */}
@@ -142,7 +171,7 @@ export default async function HomePage() {
 			)}
 
 			{/* Popular Comparisons */}
-			{popularComparisons.length > 0 && (
+			{(popularComparisons as ComparisonWithModels[]).length > 0 && (
 				<section className="space-y-6">
 					<div className="flex items-center justify-between">
 						<h2 className="text-2xl font-semibold">Popular Comparisons</h2>
@@ -155,7 +184,7 @@ export default async function HomePage() {
 						</Link>
 					</div>
 					<div className="grid gap-4 sm:grid-cols-2">
-						{popularComparisons.map((c, i) => {
+						{(popularComparisons as ComparisonWithModels[]).map((c, i) => {
 							const modelB = comparisonModelBs[i];
 							if (!modelB) return null;
 							return (
@@ -267,24 +296,24 @@ export default async function HomePage() {
 			<section className="rounded-xl border border-border bg-card p-8 text-center sm:p-12">
 				<h2 className="text-2xl font-semibold">Open Source</h2>
 				<p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-					VoiceBench is MIT licensed and fully open source. Contribute models,
+					TTSLab is MIT licensed and fully open source. Contribute models,
 					report bugs, or build on top of the project.
 				</p>
 				<div className="mt-6 flex flex-wrap justify-center gap-4">
 					<a
-						href="https://github.com/nicholasgriffintn/voicebench"
+						href="https://github.com/MbBrainz/ttslab"
 						target="_blank"
 						rel="noopener noreferrer"
+						className={`${buttonVariants({ variant: "default", size: "lg" })} gap-2`}
 					>
-						<Button variant="default" size="lg" className="gap-2">
-							View on GitHub
-							<ArrowRight className="h-4 w-4" />
-						</Button>
+						View on GitHub
+						<ArrowRight className="h-4 w-4" />
 					</a>
-					<Link href="/about">
-						<Button variant="outline" size="lg">
-							Learn More
-						</Button>
+					<Link
+						href="/about"
+						className={buttonVariants({ variant: "outline", size: "lg" })}
+					>
+						Learn More
 					</Link>
 				</div>
 			</section>

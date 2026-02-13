@@ -12,7 +12,7 @@ type UpvoteButtonProps = {
 };
 
 function getStorageKey(slug: string) {
-	return `voicebench:upvoted:${slug}`;
+	return `ttslab:upvoted:${slug}`;
 }
 
 export function UpvoteButton({ modelSlug, initialCount }: UpvoteButtonProps) {

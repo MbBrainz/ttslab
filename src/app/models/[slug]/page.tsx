@@ -268,7 +268,7 @@ export default async function ModelPage({ params }: PageProps) {
 								<CardDescription>
 									{model.status === "planned"
 										? `${model.name} is planned for a future release. Upvote to show your interest and get notified when it's ready.`
-										: `${model.name} is not yet supported in VoiceBench. Upvote to help us prioritize and get notified when support is added.`}
+										: `${model.name} is not yet supported in TTSLab. Upvote to help us prioritize and get notified when support is added.`}
 								</CardDescription>
 							</CardHeader>
 							<CardContent className="space-y-4">

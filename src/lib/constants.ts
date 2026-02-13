@@ -1,9 +1,9 @@
-export const APP_NAME = "VoiceBench";
+export const APP_NAME = "TTSLab";
 export const APP_DESCRIPTION =
 	"Test TTS & STT models in your browser. No server. No data collection. Powered by WebGPU.";
 export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://ttslab.dev";
 
-export const LOCAL_STORAGE_PREFIX = "voicebench:";
+export const LOCAL_STORAGE_PREFIX = "ttslab:";
 
 export const STORAGE_KEYS = {
 	TTS_TEXTS: `${LOCAL_STORAGE_PREFIX}tts-texts`,
@@ -14,7 +14,13 @@ export const STORAGE_KEYS = {
 	COMPARISON_PINS: `${LOCAL_STORAGE_PREFIX}comparison-pins`,
 } as const;
 
-export const AUDIO_CACHE_NAME = "voicebench-audio";
+export const AUDIO_CACHE_NAME = "ttslab-audio";
+
+export const NAV_LINKS = [
+	{ href: "/models", label: "Models" },
+	{ href: "/compare", label: "Compare" },
+	{ href: "/about", label: "About" },
+] as const;
 
 export const MAX_TTS_TEXTS = 50;
 export const MAX_TTS_HISTORY = 100;

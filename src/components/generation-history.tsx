@@ -20,7 +20,7 @@ type GenerationHistoryProps = {
 };
 
 function getStorageKey(slug: string) {
-	return `voicebench:tts-history:${slug}`;
+	return `ttslab:tts-history:${slug}`;
 }
 
 function getHistory(slug: string): HistoryEntry[] {

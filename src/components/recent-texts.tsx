@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
-const STORAGE_KEY = "voicebench:tts-texts";
+const STORAGE_KEY = "ttslab:tts-texts";
 const MAX_RECENT = 10;
 
 type RecentTextsProps = {

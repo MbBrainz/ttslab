@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
- * VoiceBench Design System
+ * TTSLab Design System
  * Dark-first theme with semantic color tokens.
  * Uses oklch color space for perceptual uniformity.
  */
@@ -23,7 +23,7 @@
   --secondary-foreground: oklch(0.9 0 0);
 
   --muted: oklch(0.22 0 0);
-  --muted-foreground: oklch(0.6 0 0);
+  --muted-foreground: oklch(0.7 0 0);
 
   --accent: oklch(0.25 0.02 260);
   --accent-foreground: oklch(0.95 0 0);
@@ -61,7 +61,7 @@
   --secondary-foreground: oklch(0.9 0 0);
 
   --muted: oklch(0.22 0 0);
-  --muted-foreground: oklch(0.6 0 0);
+  --muted-foreground: oklch(0.7 0 0);
 
   --accent: oklch(0.25 0.02 260);
   --accent-foreground: oklch(0.95 0 0);
@@ -157,7 +157,7 @@
   --radius-xl: calc(var(--radius) + 0.375rem);
 
   --font-sans: var(--font-inter);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 body {
