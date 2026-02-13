@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackendBadge } from "@/components/backend-badge";
-import { GenerationHistory } from "@/components/generation-history";
 import { SttDemo } from "@/components/stt-demo";
 import { SubscribeForm } from "@/components/subscribe-form";
 import { TtsDemo } from "@/components/tts-demo";
@@ -197,14 +196,6 @@ export default async function ModelPage({ params }: PageProps) {
 								</Card>
 							)}
 						</div>
-					</section>
-
-					<Separator />
-
-					{/* Generation History */}
-					<section className="space-y-4">
-						<h2 className="text-xl font-semibold">Generation History</h2>
-						<GenerationHistory modelSlug={model.slug} />
 					</section>
 				</>
 			) : (
