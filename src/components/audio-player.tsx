@@ -110,6 +110,7 @@ export function AudioPlayer({ audioUrl, duration }: AudioPlayerProps) {
 				size="icon"
 				className="h-8 w-8 shrink-0"
 				onClick={togglePlayPause}
+				aria-label={isPlaying ? "Pause" : "Play"}
 			>
 				{isPlaying ? (
 					<Pause className="h-4 w-4" />
@@ -122,6 +123,12 @@ export function AudioPlayer({ audioUrl, duration }: AudioPlayerProps) {
 				ref={progressRef}
 				className="relative h-1.5 flex-1 cursor-pointer rounded-full bg-secondary"
 				onClick={handleScrub}
+				role="slider"
+				aria-valuemin={0}
+				aria-valuemax={Math.round(totalDuration)}
+				aria-valuenow={Math.round(currentTime)}
+				aria-label="Audio progress"
+				tabIndex={0}
 			>
 				<div
 					className="absolute left-0 top-0 h-full rounded-full bg-primary transition-[width] duration-100"

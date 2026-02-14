@@ -8,9 +8,10 @@ type ComparisonTableProps = {
 };
 
 function BoolCell({ value }: { value: boolean | null }) {
-	if (value === true) return <Check className="mx-auto h-4 w-4 text-success" />;
+	if (value === true)
+		return <Check className="mx-auto h-4 w-4 text-success" aria-label="Yes" />;
 	if (value === false)
-		return <X className="mx-auto h-4 w-4 text-destructive" />;
+		return <X className="mx-auto h-4 w-4 text-destructive" aria-label="No" />;
 	return <span className="text-muted-foreground">&mdash;</span>;
 }
 

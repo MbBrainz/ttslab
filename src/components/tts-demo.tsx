@@ -253,6 +253,8 @@ export function TtsDemo({ model }: TtsDemoProps) {
 	const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
 	const isReady =
 		modelState.status === "ready" || modelState.status === "result";
+	const canGenerate =
+		isReady || (modelState.status === "error" && modelReadyRef.current);
 
 	return (
 		<div className="space-y-6">
@@ -267,13 +269,13 @@ export function TtsDemo({ model }: TtsDemoProps) {
 			<div className="space-y-4">
 				<div className="space-y-2">
 					<label
-						htmlFor="tts-text"
+						htmlFor={`tts-text-${model.slug}`}
 						className="text-sm font-medium text-foreground"
 					>
 						Text to speak
 					</label>
 					<Textarea
-						id="tts-text"
+						id={`tts-text-${model.slug}`}
 						placeholder={DEFAULT_PLACEHOLDER}
 						value={text}
 						onChange={(e) =>
@@ -291,16 +293,16 @@ export function TtsDemo({ model }: TtsDemoProps) {
 					</div>
 				</div>
 
-				{voices.length > 0 && isReady && (
+				{voices.length > 0 && canGenerate && (
 					<div className="space-y-2">
 						<label
-							htmlFor="tts-voice"
+							htmlFor={`tts-voice-${model.slug}`}
 							className="text-sm font-medium text-foreground"
 						>
 							Voice
 						</label>
 						<Select
-							id="tts-voice"
+							id={`tts-voice-${model.slug}`}
 							value={voice}
 							onChange={(e) => setVoice(e.target.value)}
 						>
@@ -315,7 +317,7 @@ export function TtsDemo({ model }: TtsDemoProps) {
 
 				<Button
 					onClick={handleGenerate}
-					disabled={!text.trim() || !isReady}
+					disabled={!text.trim() || !canGenerate}
 					className="w-full gap-2"
 				>
 					{modelState.status === "processing" ? (
