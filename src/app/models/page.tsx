@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { getAllModelsWithUpvotes } from "@/lib/db/queries";
 import type { ModelWithUpvotes } from "@/lib/db/types";
 import { ModelGrid } from "./model-grid";
@@ -25,12 +26,14 @@ export default async function ModelsPage() {
 					Browse and test TTS and STT models that run directly in your browser.
 				</p>
 			</div>
-			<ModelGrid
-				models={allModels.map(({ model, upvoteCount }) => ({
-					...model,
-					upvoteCount,
-				}))}
-			/>
+			<Suspense>
+				<ModelGrid
+					models={allModels.map(({ model, upvoteCount }) => ({
+						...model,
+						upvoteCount,
+					}))}
+				/>
+			</Suspense>
 		</div>
 	);
 }
