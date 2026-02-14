@@ -5,6 +5,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { type ModelState, ModelStatus } from "@/components/model-status";
 import { Button } from "@/components/ui/button";
 import type { Model } from "@/lib/db/schema";
+import { selectBackend } from "@/lib/inference/backend-select";
+import { getLoader } from "@/lib/inference/registry";
+import type { ModelLoader } from "@/lib/inference/types";
 import { cn } from "@/lib/utils";
 
 type SttDemoProps = {
@@ -19,45 +22,176 @@ export function SttDemo({ model }: SttDemoProps) {
 	const [audioLevel, setAudioLevel] = useState(0);
 	const [transcript, setTranscript] = useState("");
 	const [recordingDuration, setRecordingDuration] = useState(0);
-	const [comingSoon, setComingSoon] = useState(false);
 
+	const loaderRef = useRef<ModelLoader | null>(null);
+	const backendRef = useRef<"webgpu" | "wasm">("wasm");
 	const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-	const levelAnimRef = useRef<ReturnType<typeof setInterval> | null>(null);
+	const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+	const audioChunksRef = useRef<Blob[]>([]);
+	const analyserRef = useRef<AnalyserNode | null>(null);
+	const levelAnimRef = useRef<ReturnType<typeof requestAnimationFrame> | null>(
+		null,
+	);
+	const streamRef = useRef<MediaStream | null>(null);
 
-	// Clean up timers on unmount
+	// Clean up on unmount
 	useEffect(() => {
 		return () => {
 			if (timerRef.current) clearInterval(timerRef.current);
-			if (levelAnimRef.current) clearInterval(levelAnimRef.current);
+			if (levelAnimRef.current) cancelAnimationFrame(levelAnimRef.current);
+			if (streamRef.current) {
+				for (const track of streamRef.current.getTracks()) {
+					track.stop();
+				}
+			}
 		};
 	}, []);
 
-	const handleDownload = useCallback(() => {
-		setComingSoon(true);
-		setTimeout(() => setComingSoon(false), 3000);
-	}, []);
+	const handleDownload = useCallback(async () => {
+		try {
+			const loader = await getLoader(model.slug);
+			if (!loader) {
+				setModelState({
+					status: "error",
+					code: "LOADER_NOT_FOUND",
+					message: `No loader registered for ${model.slug}`,
+					recoverable: false,
+				});
+				return;
+			}
+
+			loaderRef.current = loader;
+
+			const backend = await selectBackend(
+				model.supportsWebgpu ?? false,
+				model.supportsWasm ?? false,
+			);
+			backendRef.current = backend;
+
+			let totalBytes = (model.sizeMb ?? 0) * 1024 * 1024;
+			let downloadedBytes = 0;
+			let lastTime = performance.now();
+			let lastBytes = 0;
+
+			setModelState({
+				status: "downloading",
+				progress: 0,
+				speed: 0,
+				total: totalBytes,
+				downloaded: 0,
+			});
+
+			const loadStart = performance.now();
+
+			await loader.load({
+				backend,
+				onProgress: (progress) => {
+					if (progress.total > 0) {
+						totalBytes = progress.total;
+					}
+					downloadedBytes = progress.loaded;
+					const now = performance.now();
+					const dt = (now - lastTime) / 1000;
+					const speed = dt > 0 ? (downloadedBytes - lastBytes) / dt : 0;
+					lastTime = now;
+					lastBytes = downloadedBytes;
+
+					const pct =
+						totalBytes > 0
+							? Math.round((downloadedBytes / totalBytes) * 100)
+							: 0;
+
+					setModelState({
+						status: "downloading",
+						progress: pct,
+						speed,
+						total: totalBytes,
+						downloaded: downloadedBytes,
+					});
+				},
+			});
+
+			setModelState({ status: "initializing" });
+			await new Promise((r) => setTimeout(r, 200));
+
+			const loadTime = Math.round(performance.now() - loadStart);
+
+			setModelState({
+				status: "ready",
+				backend,
+				loadTime,
+			});
+		} catch (err) {
+			setModelState({
+				status: "error",
+				code: "LOAD_FAILED",
+				message: err instanceof Error ? err.message : "Failed to load model",
+				recoverable: true,
+			});
+		}
+	}, [model.slug, model.supportsWebgpu, model.supportsWasm, model.sizeMb]);
 
 	const handleRetry = useCallback(() => {
+		loaderRef.current = null;
 		setModelState({ status: "not_loaded" });
 	}, []);
 
-	const startRecording = useCallback(() => {
-		// MVP: Simulate recording UI without actual audio capture
-		setIsRecording(true);
-		setRecordingDuration(0);
-		setTranscript("");
+	const startRecording = useCallback(async () => {
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+			streamRef.current = stream;
 
-		timerRef.current = setInterval(() => {
-			setRecordingDuration((prev) => prev + 100);
-		}, 100);
+			// Set up audio level analysis
+			const audioCtx = new AudioContext();
+			const source = audioCtx.createMediaStreamSource(stream);
+			const analyser = audioCtx.createAnalyser();
+			analyser.fftSize = 256;
+			source.connect(analyser);
+			analyserRef.current = analyser;
 
-		// Simulate audio level changes
-		levelAnimRef.current = setInterval(() => {
-			setAudioLevel(Math.random() * 0.8 + 0.1);
-		}, 100);
+			// Animate audio level
+			const dataArray = new Uint8Array(analyser.frequencyBinCount);
+			function updateLevel() {
+				analyser.getByteFrequencyData(dataArray);
+				const avg =
+					dataArray.reduce((sum, val) => sum + val, 0) / dataArray.length;
+				setAudioLevel(avg / 255);
+				levelAnimRef.current = requestAnimationFrame(updateLevel);
+			}
+			updateLevel();
+
+			// Start MediaRecorder
+			const recorder = new MediaRecorder(stream);
+			audioChunksRef.current = [];
+			recorder.ondataavailable = (e) => {
+				if (e.data.size > 0) {
+					audioChunksRef.current.push(e.data);
+				}
+			};
+			recorder.start();
+			mediaRecorderRef.current = recorder;
+
+			setIsRecording(true);
+			setRecordingDuration(0);
+			setTranscript("");
+
+			timerRef.current = setInterval(() => {
+				setRecordingDuration((prev) => prev + 100);
+			}, 100);
+		} catch (err) {
+			setModelState({
+				status: "error",
+				code: "MIC_ACCESS_DENIED",
+				message:
+					err instanceof Error
+						? err.message
+						: "Could not access microphone. Please allow microphone access.",
+				recoverable: true,
+			});
+		}
 	}, []);
 
-	const stopRecording = useCallback(() => {
+	const stopRecording = useCallback(async () => {
 		setIsRecording(false);
 		setAudioLevel(0);
 
@@ -66,13 +200,88 @@ export function SttDemo({ model }: SttDemoProps) {
 			timerRef.current = null;
 		}
 		if (levelAnimRef.current) {
-			clearInterval(levelAnimRef.current);
+			cancelAnimationFrame(levelAnimRef.current);
 			levelAnimRef.current = null;
 		}
 
-		// MVP: Show coming soon
-		setComingSoon(true);
-		setTimeout(() => setComingSoon(false), 3000);
+		const recorder = mediaRecorderRef.current;
+		if (!recorder || recorder.state === "inactive") return;
+
+		// Wait for the recorder to finish
+		const audioBlob = await new Promise<Blob>((resolve) => {
+			recorder.onstop = () => {
+				const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+				resolve(blob);
+			};
+			recorder.stop();
+		});
+
+		// Stop microphone
+		if (streamRef.current) {
+			for (const track of streamRef.current.getTracks()) {
+				track.stop();
+			}
+			streamRef.current = null;
+		}
+
+		// Transcribe
+		if (!loaderRef.current?.transcribe) return;
+
+		const startTime = performance.now();
+
+		setModelState({
+			status: "processing",
+			elapsed: 0,
+			type: "stt",
+		});
+
+		const timer = setInterval(() => {
+			setModelState((prev) => {
+				if (prev.status !== "processing") return prev;
+				return {
+					...prev,
+					elapsed: Math.round(performance.now() - startTime),
+				};
+			});
+		}, 100);
+
+		try {
+			// Decode audio blob to Float32Array
+			const audioCtx = new AudioContext({ sampleRate: 16000 });
+			const arrayBuffer = await audioBlob.arrayBuffer();
+			const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+			const pcm = audioBuffer.getChannelData(0);
+
+			const result = await loaderRef.current.transcribe(pcm, 16000);
+
+			clearInterval(timer);
+
+			setTranscript(result.text);
+
+			const audioDuration = audioBuffer.duration;
+
+			setModelState({
+				status: "result",
+				metrics: {
+					totalMs: result.metrics.totalMs,
+					audioDuration,
+					rtf:
+						audioDuration > 0
+							? result.metrics.totalMs / 1000 / audioDuration
+							: undefined,
+					backend: result.metrics.backend ?? backendRef.current,
+				},
+			});
+		} catch (err) {
+			clearInterval(timer);
+			setModelState({
+				status: "error",
+				code: "TRANSCRIBE_FAILED",
+				message:
+					err instanceof Error ? err.message : "Failed to transcribe audio",
+				recoverable: true,
+			});
+		}
 	}, []);
 
 	const toggleRecording = useCallback(() => {
@@ -89,6 +298,9 @@ export function SttDemo({ model }: SttDemoProps) {
 		const secs = seconds % 60;
 		return `${mins}:${secs.toString().padStart(2, "0")}`;
 	}
+
+	const isReady =
+		modelState.status === "ready" || modelState.status === "result";
 
 	return (
 		<div className="space-y-6">
@@ -110,6 +322,7 @@ export function SttDemo({ model }: SttDemoProps) {
 						variant={isRecording ? "destructive" : "default"}
 						size="lg"
 						onClick={toggleRecording}
+						disabled={!isReady && !isRecording}
 						className={cn(
 							"relative h-20 w-20 rounded-full",
 							isRecording && "shadow-lg shadow-destructive/25",
@@ -124,12 +337,16 @@ export function SttDemo({ model }: SttDemoProps) {
 				</div>
 
 				<p className="text-sm text-muted-foreground">
-					{isRecording ? "Click to stop recording" : "Click to start recording"}
+					{!isReady && !isRecording
+						? "Download the model first to start recording"
+						: isRecording
+							? "Click to stop recording"
+							: "Click to start recording"}
 				</p>
 
 				{/* Recording duration */}
 				{isRecording && (
-					<div className="flex items-center gap-2 text-lg font-mono tabular-nums text-destructive">
+					<div className="flex items-center gap-2 font-mono text-lg tabular-nums text-destructive">
 						<span className="h-2 w-2 animate-pulse rounded-full bg-destructive" />
 						{formatDuration(recordingDuration)}
 					</div>
@@ -154,12 +371,6 @@ export function SttDemo({ model }: SttDemoProps) {
 					</div>
 				)}
 			</div>
-
-			{comingSoon && (
-				<div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-center text-sm text-primary">
-					Coming soon -- inference pipeline is not wired up yet.
-				</div>
-			)}
 
 			{/* Transcript output */}
 			{transcript && (
