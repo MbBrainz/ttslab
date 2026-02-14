@@ -75,8 +75,8 @@ export function TtsDemo({ model }: TtsDemoProps) {
 
 			let totalBytes = (model.sizeMb ?? 0) * 1024 * 1024;
 			let downloadedBytes = 0;
-			let lastTime = performance.now();
-			let lastBytes = 0;
+			let lastDisplayTime = 0;
+			let smoothSpeed = 0;
 
 			setModelState({
 				status: "downloading",
@@ -95,11 +95,17 @@ export function TtsDemo({ model }: TtsDemoProps) {
 						totalBytes = progress.total;
 					}
 					downloadedBytes = progress.loaded;
+
+					// Throttle UI updates to every 500ms
 					const now = performance.now();
-					const dt = (now - lastTime) / 1000;
-					const speed = dt > 0 ? (downloadedBytes - lastBytes) / dt : 0;
-					lastTime = now;
-					lastBytes = downloadedBytes;
+					const dt = (now - lastDisplayTime) / 1000;
+					if (dt < 0.5 && downloadedBytes < totalBytes) return;
+
+					const elapsed = (now - loadStart) / 1000;
+					const speed = elapsed > 0 ? downloadedBytes / elapsed : 0;
+					smoothSpeed =
+						smoothSpeed === 0 ? speed : smoothSpeed * 0.7 + speed * 0.3;
+					lastDisplayTime = now;
 
 					const pct =
 						totalBytes > 0
@@ -109,7 +115,7 @@ export function TtsDemo({ model }: TtsDemoProps) {
 					setModelState({
 						status: "downloading",
 						progress: pct,
-						speed,
+						speed: smoothSpeed,
 						total: totalBytes,
 						downloaded: downloadedBytes,
 					});

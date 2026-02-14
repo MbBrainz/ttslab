@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { formatMegabytes, formatMs, formatSpeed } from "@/lib/format";
+import { formatBytes, formatMegabytes, formatMs } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export type ModelState =
@@ -116,6 +116,18 @@ function NotLoadedState({
 	);
 }
 
+function formatBytesSpeed(bytesPerSec: number): string {
+	if (bytesPerSec < 1024) return `${Math.round(bytesPerSec)} B/s`;
+	if (bytesPerSec < 1024 * 1024)
+		return `${Math.round(bytesPerSec / 1024)} KB/s`;
+	return `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`;
+}
+
+function formatEta(seconds: number): string {
+	if (seconds < 60) return `${Math.ceil(seconds)}s`;
+	return `${Math.floor(seconds / 60)}m ${Math.ceil(seconds % 60)}s`;
+}
+
 function DownloadingState({
 	progress,
 	speed,
@@ -131,10 +143,6 @@ function DownloadingState({
 }) {
 	const remaining = total - downloaded;
 	const etaSeconds = speed > 0 ? remaining / speed : 0;
-	const etaDisplay =
-		etaSeconds < 60
-			? `${Math.ceil(etaSeconds)}s`
-			: `${Math.floor(etaSeconds / 60)}m ${Math.ceil(etaSeconds % 60)}s`;
 
 	return (
 		<div className="space-y-2">
@@ -142,18 +150,16 @@ function DownloadingState({
 				<StatusDot color="bg-primary" animate />
 				<div className="flex flex-1 items-center justify-between">
 					<span className="text-sm font-medium">Downloading...</span>
-					<div className="flex items-center gap-3">
-						<span className="text-xs text-muted-foreground">
-							{formatMegabytes(downloaded)} / {formatMegabytes(total)}
+					<div className="flex items-center gap-3 text-xs tabular-nums text-muted-foreground">
+						<span className="min-w-[10ch] text-right">
+							{formatBytes(downloaded)} / {formatBytes(total)}
 						</span>
-						<span className="text-xs text-muted-foreground">
-							{formatSpeed(speed)}
+						<span className="min-w-[7ch] text-right">
+							{formatBytesSpeed(speed)}
 						</span>
-						{speed > 0 && (
-							<span className="text-xs text-muted-foreground">
-								ETA {etaDisplay}
-							</span>
-						)}
+						<span className="min-w-[5ch] text-right">
+							{speed > 0 ? formatEta(etaSeconds) : "—"}
+						</span>
 						{onCancel && (
 							<Button
 								variant="ghost"
