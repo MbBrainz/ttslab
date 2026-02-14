@@ -21,14 +21,6 @@ export function formatBytes(bytes: number): string {
 }
 
 /**
- * Format a download speed in MB/s to a human-readable string.
- */
-export function formatSpeed(mbPerSec: number): string {
-	if (mbPerSec < 1) return `${(mbPerSec * 1024).toFixed(0)} KB/s`;
-	return `${mbPerSec.toFixed(1)} MB/s`;
-}
-
-/**
  * Format a duration in milliseconds to a human-readable string.
  * Example: 500 -> "500ms", 1500 -> "1.5s"
  */

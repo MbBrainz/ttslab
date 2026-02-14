@@ -188,7 +188,7 @@ function InitializingState() {
 					<span className="text-sm font-medium">Initializing...</span>
 				</div>
 				<span className="text-xs text-muted-foreground">
-					Compiling shaders...
+					Preparing model...
 				</span>
 			</div>
 			<div className="h-2 w-full overflow-hidden rounded-full bg-secondary">

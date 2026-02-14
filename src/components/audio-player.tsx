@@ -130,7 +130,7 @@ export function AudioPlayer({ audioUrl, duration }: AudioPlayerProps) {
 				<div
 					className={cn(
 						"absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-primary shadow-sm transition-[left] duration-100",
-						progressPercent === 0 && "opacity-0",
+						progressPercent === 0 && "opacity-50",
 					)}
 					style={{ left: `${progressPercent}%` }}
 				/>

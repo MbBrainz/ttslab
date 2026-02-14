@@ -9,6 +9,7 @@ type HistoryEntry = {
 	id: string;
 	text: string;
 	voice?: string;
+	voiceName?: string;
 	audioUrl?: string;
 	generationTimeMs: number;
 	backend: "webgpu" | "wasm";
@@ -157,7 +158,9 @@ export function GenerationHistory({ modelSlug }: GenerationHistoryProps) {
 						<div className="min-w-0 flex-1">
 							<p className="truncate text-foreground">{entry.text}</p>
 							<div className="flex items-center gap-2 text-xs text-muted-foreground">
-								{entry.voice && <span>{entry.voice}</span>}
+								{(entry.voiceName || entry.voice) && (
+									<span>{entry.voiceName ?? entry.voice}</span>
+								)}
 								<span className="flex items-center gap-1">
 									<Clock className="h-3 w-3" />
 									{entry.generationTimeMs < 1000

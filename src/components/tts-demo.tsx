@@ -22,6 +22,7 @@ type TtsDemoProps = {
 };
 
 const DEFAULT_PLACEHOLDER = "Type or paste text here to convert to speech...";
+const MAX_TEXT_LENGTH = 5000;
 
 export function TtsDemo({ model }: TtsDemoProps) {
 	const [text, setText] = useState("");
@@ -34,15 +35,18 @@ export function TtsDemo({ model }: TtsDemoProps) {
 
 	const loaderRef = useRef<ModelLoader | null>(null);
 	const voicesRef = useRef<Voice[]>([]);
+	const backendRef = useRef<"webgpu" | "wasm">("wasm");
+	const loadTimeRef = useRef(0);
+	const modelReadyRef = useRef(false);
 
-	// Use loader voices if available, otherwise fall back to count-based
-	const voices: { id: string; name: string }[] =
-		voicesRef.current.length > 0
-			? voicesRef.current.map((v) => ({ id: v.id, name: v.name }))
-			: Array.from({ length: model.voices ?? 0 }, (_, i) => ({
-					id: `voice_${i + 1}`,
-					name: `Voice ${i + 1}`,
-				}));
+	const voices: { id: string; name: string }[] = voicesRef.current.map(
+		(v) => ({ id: v.id, name: v.name }),
+	);
+
+	function getVoiceName(voiceId: string): string {
+		const found = voicesRef.current.find((v) => v.id === voiceId);
+		return found?.name ?? voiceId;
+	}
 
 	const handleDownload = useCallback(async () => {
 		try {
@@ -129,6 +133,10 @@ export function TtsDemo({ model }: TtsDemoProps) {
 
 			const loadTime = Math.round(performance.now() - loadStart);
 
+			backendRef.current = backend;
+			loadTimeRef.current = loadTime;
+			modelReadyRef.current = true;
+
 			setModelState({
 				status: "ready",
 				backend,
@@ -149,8 +157,6 @@ export function TtsDemo({ model }: TtsDemoProps) {
 		if (!text.trim() || !loader?.synthesize) return;
 
 		addRecentText(text);
-
-		const backend = modelState.status === "ready" ? modelState.backend : "wasm";
 
 		setModelState({
 			status: "processing",
@@ -195,7 +201,7 @@ export function TtsDemo({ model }: TtsDemoProps) {
 						result.duration > 0
 							? result.metrics.totalMs / 1000 / result.duration
 							: undefined,
-					backend: result.metrics.backend ?? backend,
+					backend: result.metrics.backend ?? backendRef.current,
 				},
 			});
 
@@ -204,9 +210,10 @@ export function TtsDemo({ model }: TtsDemoProps) {
 				id: crypto.randomUUID(),
 				text: text.slice(0, 200),
 				voice,
+				voiceName: getVoiceName(voice),
 				audioUrl: url,
 				generationTimeMs: result.metrics.totalMs,
-				backend: result.metrics.backend ?? backend,
+				backend: result.metrics.backend ?? backendRef.current,
 				timestamp: Date.now(),
 			});
 			setHistoryKey((k) => k + 1);
@@ -220,18 +227,30 @@ export function TtsDemo({ model }: TtsDemoProps) {
 				recoverable: true,
 			});
 		}
-	}, [text, voice, modelState, audioUrl, model.slug]);
+	}, [text, voice, audioUrl, model.slug]);
 
 	const handleRetry = useCallback(() => {
-		loaderRef.current = null;
-		voicesRef.current = [];
-		setModelState({ status: "not_loaded" });
+		// If the model was successfully loaded, return to ready state
+		if (modelReadyRef.current && loaderRef.current) {
+			setModelState({
+				status: "ready",
+				backend: backendRef.current,
+				loadTime: loadTimeRef.current,
+			});
+		} else {
+			// Full reset for load errors
+			loaderRef.current = null;
+			voicesRef.current = [];
+			modelReadyRef.current = false;
+			setModelState({ status: "not_loaded" });
+		}
 	}, []);
 
 	const handleSelectRecentText = useCallback((selected: string) => {
 		setText(selected);
 	}, []);
 
+	const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
 	const isReady =
 		modelState.status === "ready" || modelState.status === "result";
 
@@ -257,19 +276,22 @@ export function TtsDemo({ model }: TtsDemoProps) {
 						id="tts-text"
 						placeholder={DEFAULT_PLACEHOLDER}
 						value={text}
-						onChange={(e) => setText(e.target.value)}
+						onChange={(e) =>
+							setText(e.target.value.slice(0, MAX_TEXT_LENGTH))
+						}
 						rows={4}
 						className="resize-none"
+						maxLength={MAX_TEXT_LENGTH}
 					/>
 					<div className="flex items-center justify-between text-xs text-muted-foreground">
-						<span>{text.length} characters</span>
 						<span>
-							~{text.trim().split(/\s+/).filter(Boolean).length} words
+							{text.length} / {MAX_TEXT_LENGTH}
 						</span>
+						{wordCount > 0 && <span>~{wordCount} words</span>}
 					</div>
 				</div>
 
-				{voices.length > 0 && (
+				{voices.length > 0 && isReady && (
 					<div className="space-y-2">
 						<label
 							htmlFor="tts-voice"
