@@ -13,6 +13,7 @@ export class WhisperLoader implements ModelLoader {
 	private modelId: string;
 	private pipeline: unknown = null;
 	private session: ModelSession | null = null;
+	private loadedBackend: "webgpu" | "wasm" = "wasm";
 
 	constructor(slug: string, modelId: string) {
 		this.slug = slug;
@@ -20,6 +21,7 @@ export class WhisperLoader implements ModelLoader {
 	}
 
 	async load(options: LoadOptions): Promise<ModelSession> {
+		this.loadedBackend = options.backend === "webgpu" ? "webgpu" : "wasm";
 		const { pipeline } = await import("@xenova/transformers");
 
 		const transcriber = await pipeline(
@@ -85,7 +87,7 @@ export class WhisperLoader implements ModelLoader {
 			chunks: result.chunks,
 			metrics: {
 				totalMs: Math.round(totalMs),
-				backend: "webgpu",
+				backend: this.loadedBackend,
 			},
 		};
 	}

@@ -12,8 +12,10 @@ export class MoonshineLoader implements ModelLoader {
 
 	private pipeline: unknown = null;
 	private session: ModelSession | null = null;
+	private loadedBackend: "webgpu" | "wasm" = "wasm";
 
 	async load(options: LoadOptions): Promise<ModelSession> {
+		this.loadedBackend = options.backend === "webgpu" ? "webgpu" : "wasm";
 		const { pipeline } = await import("@xenova/transformers");
 
 		const transcriber = await pipeline(
@@ -71,7 +73,7 @@ export class MoonshineLoader implements ModelLoader {
 			text: result.text,
 			metrics: {
 				totalMs: Math.round(totalMs),
-				backend: "webgpu",
+				backend: this.loadedBackend,
 			},
 		};
 	}

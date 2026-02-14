@@ -13,16 +13,22 @@ export class KokoroLoader implements ModelLoader {
 
 	private session: ModelSession | null = null;
 	private tts: unknown = null;
+	private loadedBackend: "webgpu" | "wasm" = "wasm";
 
 	async load(options: LoadOptions): Promise<ModelSession> {
-		// Dynamic import of kokoro-js
 		const { KokoroTTS } = await import("kokoro-js");
+
+		const device = options.backend === "webgpu" ? "webgpu" : ("wasm" as const);
+		// WebGPU requires fp32; quantized models only work with wasm/cpu
+		const dtype = device === "webgpu" ? "fp32" : (options.quantization ?? "q8");
+
+		this.loadedBackend = options.backend === "webgpu" ? "webgpu" : "wasm";
 
 		const tts = await KokoroTTS.from_pretrained(
 			"onnx-community/Kokoro-82M-v1.0-ONNX",
 			{
-				dtype: options.quantization ?? "q8",
-				device: options.backend === "wasm" ? "cpu" : "webgpu",
+				dtype,
+				device,
 				progress_callback: options.onProgress
 					? (progress: {
 							status: string;
@@ -76,7 +82,7 @@ export class KokoroLoader implements ModelLoader {
 			duration,
 			metrics: {
 				totalMs: Math.round(totalMs),
-				backend: "webgpu", // TODO: detect actual backend
+				backend: this.loadedBackend,
 			},
 		};
 	}

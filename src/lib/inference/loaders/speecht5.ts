@@ -13,8 +13,10 @@ export class SpeechT5Loader implements ModelLoader {
 
 	private pipeline: unknown = null;
 	private session: ModelSession | null = null;
+	private loadedBackend: "webgpu" | "wasm" = "wasm";
 
 	async load(options: LoadOptions): Promise<ModelSession> {
+		this.loadedBackend = options.backend === "webgpu" ? "webgpu" : "wasm";
 		const { pipeline } = await import("@xenova/transformers");
 
 		const synthesizer = await pipeline(
@@ -72,7 +74,7 @@ export class SpeechT5Loader implements ModelLoader {
 			duration,
 			metrics: {
 				totalMs: Math.round(totalMs),
-				backend: "webgpu",
+				backend: this.loadedBackend,
 			},
 		};
 	}
