@@ -273,8 +273,10 @@ export function TtsDemo({ model }: TtsDemoProps) {
 	const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
 	const isReady =
 		modelState.status === "ready" || modelState.status === "result";
+	const isProcessing = modelState.status === "processing";
 	const canGenerate =
 		isReady || (modelState.status === "error" && modelReadyRef.current);
+	const showVoiceSelect = voices.length > 0 && (canGenerate || isProcessing);
 
 	return (
 		<div className="space-y-6">
@@ -302,6 +304,7 @@ export function TtsDemo({ model }: TtsDemoProps) {
 						rows={4}
 						className="resize-none"
 						maxLength={MAX_TEXT_LENGTH}
+						disabled={isProcessing}
 					/>
 					<div className="flex items-center justify-between text-xs text-muted-foreground">
 						<span>
@@ -311,7 +314,7 @@ export function TtsDemo({ model }: TtsDemoProps) {
 					</div>
 				</div>
 
-				{voices.length > 0 && canGenerate && (
+				{showVoiceSelect && (
 					<div className="space-y-2">
 						<label
 							htmlFor={`tts-voice-${model.slug}`}
@@ -323,6 +326,7 @@ export function TtsDemo({ model }: TtsDemoProps) {
 							id={`tts-voice-${model.slug}`}
 							value={voice}
 							onChange={(e) => setVoice(e.target.value)}
+							disabled={isProcessing}
 						>
 							{voices.map((v) => (
 								<SelectOption key={v.id} value={v.id}>
