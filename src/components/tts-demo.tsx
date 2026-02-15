@@ -50,14 +50,15 @@ export function TtsDemo({ model }: TtsDemoProps) {
 		};
 	}, [audioUrl]);
 
-	const voices: { id: string; name: string }[] = voicesRef.current.map(
-		(v) => ({ id: v.id, name: v.name }),
-	);
+	const voices: { id: string; name: string }[] = voicesRef.current.map((v) => ({
+		id: v.id,
+		name: v.name,
+	}));
 
-	function getVoiceName(voiceId: string): string {
+	const getVoiceName = useCallback((voiceId: string): string => {
 		const found = voicesRef.current.find((v) => v.id === voiceId);
 		return found?.name ?? voiceId;
-	}
+	}, []);
 
 	const handleDownload = useCallback(async () => {
 		if (loadingRef.current) return;
@@ -246,7 +247,7 @@ export function TtsDemo({ model }: TtsDemoProps) {
 		} finally {
 			generatingRef.current = false;
 		}
-	}, [text, voice, audioUrl, model.slug]);
+	}, [text, voice, audioUrl, model.slug, getVoiceName]);
 
 	const handleRetry = useCallback(() => {
 		// If the model was successfully loaded, return to ready state
@@ -297,9 +298,7 @@ export function TtsDemo({ model }: TtsDemoProps) {
 						id={`tts-text-${model.slug}`}
 						placeholder={DEFAULT_PLACEHOLDER}
 						value={text}
-						onChange={(e) =>
-							setText(e.target.value.slice(0, MAX_TEXT_LENGTH))
-						}
+						onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT_LENGTH))}
 						rows={4}
 						className="resize-none"
 						maxLength={MAX_TEXT_LENGTH}

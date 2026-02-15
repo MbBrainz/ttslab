@@ -35,9 +35,18 @@ function getHistory(slug: string): HistoryEntry[] {
 	}
 }
 
+// In-memory cache for blob URLs (not persisted — they're invalid after reload)
+const sessionAudioUrls = new Map<string, string>();
+
 export function addToHistory(slug: string, entry: HistoryEntry) {
+	// Cache blob URL in memory for same-session playback
+	if (entry.audioUrl) {
+		sessionAudioUrls.set(entry.id, entry.audioUrl);
+	}
 	const existing = getHistory(slug);
-	const updated = [entry, ...existing].slice(0, 20);
+	// Strip blob URLs before persisting — they become invalid after page reload
+	const { audioUrl: _, ...persistable } = entry;
+	const updated = [persistable, ...existing].slice(0, 20);
 	localStorage.setItem(getStorageKey(slug), JSON.stringify(updated));
 }
 
@@ -71,7 +80,8 @@ export function GenerationHistory({ modelSlug }: GenerationHistoryProps) {
 	}, [audio]);
 
 	function handlePlay(entry: HistoryEntry) {
-		if (!entry.audioUrl) return;
+		const url = sessionAudioUrls.get(entry.id);
+		if (!url) return;
 
 		if (playingId === entry.id && audio) {
 			audio.pause();
@@ -84,9 +94,10 @@ export function GenerationHistory({ modelSlug }: GenerationHistoryProps) {
 			audio.src = "";
 		}
 
-		const newAudio = new Audio(entry.audioUrl);
+		const newAudio = new Audio(url);
 		newAudio.addEventListener("ended", () => setPlayingId(null));
-		newAudio.play();
+		newAudio.addEventListener("error", () => setPlayingId(null));
+		newAudio.play().catch(() => setPlayingId(null));
 		setAudio(newAudio);
 		setPlayingId(entry.id);
 	}
@@ -140,7 +151,7 @@ export function GenerationHistory({ modelSlug }: GenerationHistoryProps) {
 							playingId === entry.id && "border-primary/50 bg-accent/50",
 						)}
 					>
-						{entry.audioUrl && (
+						{sessionAudioUrls.has(entry.id) && (
 							<Button
 								variant="ghost"
 								size="icon"

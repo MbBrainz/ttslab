@@ -1,6 +1,6 @@
-import type { NextConfig } from "next";
 import { createRequire } from "node:module";
 import path from "node:path";
+import type { NextConfig } from "next";
 
 // Dynamically resolve the correct onnxruntime-common version by walking the
 // dependency chain: kokoro-js → @huggingface/transformers → onnxruntime-web → onnxruntime-common.

@@ -42,7 +42,7 @@ export interface Voice {
 }
 
 export interface ModelSession {
-	dispose(): void;
+	dispose(): void | Promise<void>;
 }
 
 export interface ModelLoader {

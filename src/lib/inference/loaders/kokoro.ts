@@ -52,7 +52,14 @@ export class KokoroLoader implements ModelLoader {
 
 		this.tts = tts;
 		this.session = {
-			dispose: () => {
+			dispose: async () => {
+				// Release underlying ONNX sessions to free WASM memory
+				const instance = this.tts as {
+					model?: { dispose?: () => Promise<unknown> };
+				} | null;
+				if (instance?.model?.dispose) {
+					await instance.model.dispose();
+				}
 				this.tts = null;
 				this.session = null;
 			},
