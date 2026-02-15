@@ -16,7 +16,8 @@ export class KokoroLoader implements ModelLoader {
 	private loadedBackend: "webgpu" | "wasm" = "wasm";
 
 	async load(options: LoadOptions): Promise<ModelSession> {
-		const { KokoroTTS } = await import("kokoro-js");
+		const kokoroModule = await import("kokoro-js");
+		const { KokoroTTS } = kokoroModule;
 
 		const device = options.backend === "webgpu" ? "webgpu" : ("wasm" as const);
 		// WebGPU requires fp32; quantized models only work with wasm/cpu
@@ -70,7 +71,6 @@ export class KokoroLoader implements ModelLoader {
 			) => Promise<{ audio: Float32Array; sampling_rate: number }>;
 		};
 		const start = performance.now();
-
 		const result = await tts.generate(text, { voice });
 		const totalMs = performance.now() - start;
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, Volume2 } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AudioPlayer } from "@/components/audio-player";
 import {
 	addToHistory,
@@ -38,6 +38,17 @@ export function TtsDemo({ model }: TtsDemoProps) {
 	const backendRef = useRef<"webgpu" | "wasm">("wasm");
 	const loadTimeRef = useRef(0);
 	const modelReadyRef = useRef(false);
+	const loadingRef = useRef(false);
+	const generatingRef = useRef(false);
+
+	// Clean up blob URL on unmount
+	useEffect(() => {
+		return () => {
+			if (audioUrl) {
+				URL.revokeObjectURL(audioUrl);
+			}
+		};
+	}, [audioUrl]);
 
 	const voices: { id: string; name: string }[] = voicesRef.current.map(
 		(v) => ({ id: v.id, name: v.name }),
@@ -49,6 +60,8 @@ export function TtsDemo({ model }: TtsDemoProps) {
 	}
 
 	const handleDownload = useCallback(async () => {
+		if (loadingRef.current) return;
+		loadingRef.current = true;
 		try {
 			const loader = await getLoader(model.slug);
 			if (!loader) {
@@ -149,12 +162,16 @@ export function TtsDemo({ model }: TtsDemoProps) {
 				message: err instanceof Error ? err.message : "Failed to load model",
 				recoverable: true,
 			});
+		} finally {
+			loadingRef.current = false;
 		}
 	}, [model.slug, model.supportsWebgpu, model.supportsWasm, model.sizeMb]);
 
 	const handleGenerate = useCallback(async () => {
+		if (generatingRef.current) return;
 		const loader = loaderRef.current;
 		if (!text.trim() || !loader?.synthesize) return;
+		generatingRef.current = true;
 
 		addRecentText(text);
 
@@ -226,6 +243,8 @@ export function TtsDemo({ model }: TtsDemoProps) {
 					err instanceof Error ? err.message : "Failed to generate speech",
 				recoverable: true,
 			});
+		} finally {
+			generatingRef.current = false;
 		}
 	}, [text, voice, audioUrl, model.slug]);
 
