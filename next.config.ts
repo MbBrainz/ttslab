@@ -50,6 +50,13 @@ const nextConfig: NextConfig = {
 		];
 	},
 
+	// Turbopack equivalent of the webpack resolve alias below
+	turbopack: {
+		resolveAlias: {
+			"onnxruntime-common": ortCommonPath,
+		},
+	},
+
 	webpack: (config, { isServer }) => {
 		if (!isServer) {
 			// Ensure WASM async compilation is enabled
