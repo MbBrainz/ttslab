@@ -3,6 +3,7 @@
 import { ChevronUp } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { trackModelUpvote } from "@/lib/analytics";
 import { getFingerprint } from "@/lib/fingerprint";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +36,7 @@ export function UpvoteButton({ modelSlug, initialCount }: UpvoteButtonProps) {
 		setCount((prev) => prev + 1);
 		setVoted(true);
 		localStorage.setItem(getStorageKey(modelSlug), "true");
+		trackModelUpvote(modelSlug);
 
 		try {
 			const fingerprint = await getFingerprint();

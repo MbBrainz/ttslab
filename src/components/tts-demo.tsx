@@ -12,6 +12,7 @@ import { addRecentText, RecentTexts } from "@/components/recent-texts";
 import { Button } from "@/components/ui/button";
 import { Select, SelectOption } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { trackModelLoad, trackTTSGeneration } from "@/lib/analytics";
 import { float32ToWav } from "@/lib/audio-utils";
 import type { Model } from "@/lib/db/schema";
 import { selectBackend } from "@/lib/inference/backend-select";
@@ -161,6 +162,8 @@ export function TtsDemo({ model }: TtsDemoProps) {
 			loadTimeRef.current = loadTime;
 			modelReadyRef.current = true;
 
+			trackModelLoad(model.slug, backend, loadTime);
+
 			setModelState({
 				status: "ready",
 				backend,
@@ -220,15 +223,25 @@ export function TtsDemo({ model }: TtsDemoProps) {
 
 			setAudioUrl(url);
 
+			const rtf =
+				result.duration > 0
+					? result.metrics.totalMs / 1000 / result.duration
+					: undefined;
+
+			trackTTSGeneration(
+				model.slug,
+				result.metrics.backend ?? backendRef.current,
+				text.length,
+				result.metrics.totalMs,
+				rtf,
+			);
+
 			setModelState({
 				status: "result",
 				metrics: {
 					totalMs: result.metrics.totalMs,
 					audioDuration: result.duration,
-					rtf:
-						result.duration > 0
-							? result.metrics.totalMs / 1000 / result.duration
-							: undefined,
+					rtf,
 					backend: result.metrics.backend ?? backendRef.current,
 				},
 			});

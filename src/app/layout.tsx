@@ -1,10 +1,12 @@
+import { Analytics } from "@vercel/analytics/next";
 import { Github } from "lucide-react";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Link from "next/link";
+import { GitHubStars } from "@/components/github-stars";
 import { MobileNav } from "@/components/mobile-nav";
 import { NavLinks } from "@/components/nav-links";
-import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
+import { APP_DESCRIPTION, APP_NAME, APP_URL } from "@/lib/constants";
 import "./globals.css";
 
 const inter = Inter({
@@ -13,11 +15,20 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+	metadataBase: new URL(APP_URL),
 	title: {
 		template: `%s | ${APP_NAME}`,
 		default: APP_NAME,
 	},
 	description: APP_DESCRIPTION,
+	openGraph: {
+		type: "website",
+		siteName: APP_NAME,
+		locale: "en_US",
+	},
+	twitter: {
+		card: "summary_large_image",
+	},
 };
 
 export default function RootLayout({
@@ -27,15 +38,6 @@ export default function RootLayout({
 }>) {
 	return (
 		<html lang="en" className="dark">
-			<head>
-				{process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN && (
-					<script
-						defer
-						data-domain={process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN}
-						src="https://plausible.io/js/script.js"
-					/>
-				)}
-			</head>
 			<body
 				className={`${inter.variable} flex min-h-screen flex-col bg-background font-sans text-foreground antialiased`}
 			>
@@ -53,8 +55,11 @@ export default function RootLayout({
 						>
 							{APP_NAME}
 						</Link>
-						<NavLinks />
-						<MobileNav />
+						<div className="flex items-center gap-4">
+							<NavLinks />
+							<GitHubStars />
+							<MobileNav />
+						</div>
 					</nav>
 				</header>
 
@@ -101,6 +106,7 @@ export default function RootLayout({
 						</div>
 					</div>
 				</footer>
+				<Analytics />
 			</body>
 		</html>
 	);

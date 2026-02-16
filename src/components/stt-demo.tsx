@@ -4,6 +4,7 @@ import { Cpu, Mic, Zap } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type ModelState, ModelStatus } from "@/components/model-status";
 import { Button } from "@/components/ui/button";
+import { trackModelLoad, trackSTTTranscription } from "@/lib/analytics";
 import type { Model } from "@/lib/db/schema";
 import { selectBackend } from "@/lib/inference/backend-select";
 import { getLoader } from "@/lib/inference/registry";
@@ -121,6 +122,8 @@ export function SttDemo({ model }: SttDemoProps) {
 			await new Promise((r) => setTimeout(r, 200));
 
 			const loadTime = Math.round(performance.now() - loadStart);
+
+			trackModelLoad(model.slug, backend, loadTime);
 
 			setModelState({
 				status: "ready",
@@ -265,6 +268,13 @@ export function SttDemo({ model }: SttDemoProps) {
 			setTranscript(result.text);
 
 			const audioDuration = audioBuffer.duration;
+
+			trackSTTTranscription(
+				model.slug,
+				backendRef.current,
+				Math.round(audioDuration * 1000),
+				result.metrics.totalMs,
+			);
 
 			setModelState({
 				status: "result",

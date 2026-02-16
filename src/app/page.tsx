@@ -8,6 +8,7 @@ import {
 	Zap,
 } from "lucide-react";
 import Link from "next/link";
+import { AudioSamples } from "@/components/audio-samples";
 import { ModelCard } from "@/components/model-card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -108,6 +109,17 @@ export default async function HomePage() {
 						</span>
 					</div>
 				)}
+			</section>
+
+			{/* Audio Samples */}
+			<section className="space-y-6">
+				<div className="text-center space-y-2">
+					<h2 className="text-2xl font-semibold">Hear It In Action</h2>
+					<p className="text-muted-foreground">
+						Listen to samples generated entirely in the browser.
+					</p>
+				</div>
+				<AudioSamples />
 			</section>
 
 			{/* Featured Models */}

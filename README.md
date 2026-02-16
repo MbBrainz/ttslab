@@ -1,36 +1,96 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+<p align="center">
+  <h1 align="center">TTSLab</h1>
+  <p align="center">
+    Test TTS & STT models in your browser. No server. No data collection. Powered by WebGPU.
+  </p>
+</p>
+
+<p align="center">
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" /></a>
+  <a href="https://github.com/MbBrainz/ttslab/stargazers"><img src="https://img.shields.io/github/stars/MbBrainz/ttslab?style=social" alt="GitHub Stars" /></a>
+</p>
+
+<p align="center">
+  <a href="https://ttslab.dev">ttslab.dev</a>
+</p>
+
+---
+
+<!-- Add a screenshot here before launch -->
+<!-- ![TTSLab Screenshot](./public/screenshot.png) -->
+
+## Features
+
+- **In-browser inference** — models run entirely on your device via WebGPU or WASM
+- **Zero data collection** — your text and audio never leave your browser
+- **Side-by-side comparisons** — compare TTS and STT models head to head
+- **Model directory** — browse, search, and upvote models
+- **Instant caching** — model weights are cached locally after first download
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | [Next.js 16](https://nextjs.org) |
+| Styling | [Tailwind CSS v4](https://tailwindcss.com) |
+| Database | [Neon Postgres](https://neon.tech) + [Drizzle ORM](https://orm.drizzle.team) |
+| Inference | [ONNX Runtime Web](https://onnxruntime.ai), [kokoro-js](https://github.com/niconielsen32/kokoro-js), [@xenova/transformers](https://github.com/xenova/transformers.js) |
+| Analytics | [Vercel Analytics](https://vercel.com/analytics) |
+| Linter | [Biome](https://biomejs.dev) |
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+# Clone
+git clone https://github.com/MbBrainz/ttslab.git
+cd ttslab
+
+# Install dependencies
+pnpm install
+
+# Set up environment
+cp .env.example .env.local
+# Fill in DATABASE_URL and other variables
+
+# Push DB schema & seed
+pnpm db:push
+pnpm db:seed
+
+# Start dev server (--webpack flag is required for ONNX alias resolution)
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in a browser with WebGPU support (Chrome 113+, Edge 113+).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+src/
+├── app/                  # Next.js App Router pages & API routes
+│   ├── models/           # Model directory & detail pages
+│   ├── compare/          # Comparison pages
+│   ├── api/              # API routes (upvotes, subscriptions)
+│   └── opengraph-image.tsx
+├── components/           # React components
+│   ├── tts-demo.tsx      # TTS playground UI
+│   ├── stt-demo.tsx      # STT playground UI
+│   ├── audio-player.tsx  # Reusable audio player
+│   └── ui/               # Shared UI primitives
+├── lib/
+│   ├── db/               # Drizzle schema, queries, types
+│   ├── inference/        # Model loaders & registry
+│   │   ├── loaders/      # Per-model loader implementations
+│   │   └── registry.ts   # Lazy loader registry
+│   ├── analytics.ts      # Vercel Analytics event wrappers
+│   └── constants.ts      # App-wide constants
+└── public/
+    └── audio-samples/    # Pre-generated audio samples
+```
 
-## Learn More
+## Contributing
 
-To learn more about Next.js, take a look at the following resources:
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup, code style, and how to add a model.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## License
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+[MIT](./LICENSE)
