@@ -101,9 +101,10 @@ export function TtsCompare({ modelA, modelB }: TtsCompareProps) {
 				}));
 			}
 
+			const loaderBackends = loader.getSupportedBackends?.() ?? ["wasm"];
 			const backend = await selectBackend(
-				modelA.supportsWebgpu ?? false,
-				modelA.supportsWasm ?? false,
+				loaderBackends.includes("webgpu"),
+				loaderBackends.includes("wasm"),
 			);
 
 			const estimatedBytesA = (modelA.sizeMb ?? 0) * 1024 * 1024;
@@ -224,9 +225,10 @@ export function TtsCompare({ modelA, modelB }: TtsCompareProps) {
 				}));
 			}
 
+			const loaderBackends = loader.getSupportedBackends?.() ?? ["wasm"];
 			const backend = await selectBackend(
-				modelB.supportsWebgpu ?? false,
-				modelB.supportsWasm ?? false,
+				loaderBackends.includes("webgpu"),
+				loaderBackends.includes("wasm"),
 			);
 
 			const estimatedBytesB = (modelB.sizeMb ?? 0) * 1024 * 1024;
@@ -382,6 +384,14 @@ export function TtsCompare({ modelA, modelB }: TtsCompareProps) {
 				currentVoice = p.voice;
 				return p;
 			});
+
+			// Resolve "default" to the first available voice from the loader
+			if (currentVoice === "default" && loader.getVoices) {
+				const voices = loader.getVoices();
+				if (voices.length > 0) {
+					currentVoice = voices[0].id;
+				}
+			}
 
 			setPanel((p) => ({
 				...p,

@@ -18,17 +18,15 @@ export class SpeechT5Loader implements ModelLoader {
 
 	private pipeline: unknown = null;
 	private session: ModelSession | null = null;
-	private loadedBackend: "webgpu" | "wasm" = "wasm";
 
 	async load(options: LoadOptions): Promise<ModelSession> {
-		this.loadedBackend = options.backend === "webgpu" ? "webgpu" : "wasm";
 		const { pipeline } = await import("@huggingface/transformers");
 
 		const synthesizer = await pipeline(
 			"text-to-speech",
 			"Xenova/speecht5_tts",
 			{
-				device: options.backend === "wasm" ? "wasm" : "webgpu",
+				device: "wasm",
 				progress_callback: options.onProgress
 					? (progress: {
 							status: string;
@@ -67,8 +65,8 @@ export class SpeechT5Loader implements ModelLoader {
 			text: string,
 			options: { speaker_embeddings: string },
 		) => Promise<{ audio: Float32Array; sampling_rate: number }>;
-		const start = performance.now();
 
+		const start = performance.now();
 		const result = await synthesizer(text, {
 			speaker_embeddings: SPEAKER_EMBEDDINGS_URL,
 		});
@@ -82,7 +80,7 @@ export class SpeechT5Loader implements ModelLoader {
 			duration,
 			metrics: {
 				totalMs: Math.round(totalMs),
-				backend: this.loadedBackend,
+				backend: "wasm",
 			},
 		};
 	}
@@ -96,6 +94,6 @@ export class SpeechT5Loader implements ModelLoader {
 	}
 
 	getSupportedBackends(): ("webgpu" | "wasm")[] {
-		return ["webgpu", "wasm"];
+		return ["wasm"];
 	}
 }

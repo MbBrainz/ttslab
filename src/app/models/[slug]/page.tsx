@@ -1,8 +1,9 @@
-import { ArrowRight, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackendBadge } from "@/components/backend-badge";
+import { CompareModelPicker } from "@/components/compare-model-picker";
 import { SttDemo } from "@/components/stt-demo";
 import { SubscribeForm } from "@/components/subscribe-form";
 import { TtsDemo } from "@/components/tts-demo";
@@ -109,6 +110,17 @@ export default async function ModelPage({ params }: PageProps) {
 				<div className="flex flex-wrap items-center gap-3">
 					<h1 className="text-3xl font-bold tracking-tight">{model.name}</h1>
 					<Badge variant="outline">{model.type.toUpperCase()}</Badge>
+					<CompareModelPicker
+						comparisons={comparisonModels.map(({ comparison, otherModel }) => ({
+							slug: comparison.slug,
+							model: {
+								slug: otherModel.slug,
+								name: otherModel.name,
+								status: otherModel.status,
+								type: otherModel.type,
+							},
+						}))}
+					/>
 				</div>
 				{model.description && (
 					<p className="max-w-2xl text-lg text-muted-foreground">
@@ -299,25 +311,6 @@ export default async function ModelPage({ params }: PageProps) {
 				</section>
 			)}
 
-			{/* Compare With */}
-			{comparisonModels.length > 0 && (
-				<section className="space-y-4">
-					<h2 className="text-xl font-semibold">Compare With</h2>
-					<div className="flex flex-wrap gap-3">
-						{comparisonModels.map(({ comparison, otherModel }) => {
-							if (!otherModel) return null;
-							return (
-								<Link key={comparison.id} href={`/compare/${comparison.slug}`}>
-									<Button variant="secondary" className="gap-2">
-										{otherModel.name}
-										<ArrowRight className="h-4 w-4" />
-									</Button>
-								</Link>
-							);
-						})}
-					</div>
-				</section>
-			)}
-		</div>
+			</div>
 	);
 }

@@ -71,6 +71,10 @@ export class KokoroLoader implements ModelLoader {
 	async synthesize(text: string, voice: string): Promise<AudioResult> {
 		if (!this.tts) throw new Error("Model not loaded");
 
+		// Resolve "default" to the first available voice
+		const resolvedVoice =
+			voice === "default" ? this.getVoices()[0]?.id ?? "af_heart" : voice;
+
 		const tts = this.tts as {
 			generate: (
 				text: string,
@@ -78,7 +82,7 @@ export class KokoroLoader implements ModelLoader {
 			) => Promise<{ audio: Float32Array; sampling_rate: number }>;
 		};
 		const start = performance.now();
-		const result = await tts.generate(text, { voice });
+		const result = await tts.generate(text, { voice: resolvedVoice });
 		const totalMs = performance.now() - start;
 
 		if (!result.audio || result.audio.length === 0) {

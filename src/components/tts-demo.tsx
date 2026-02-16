@@ -87,9 +87,10 @@ export function TtsDemo({ model }: TtsDemoProps) {
 				}
 			}
 
+			const loaderBackends = loader.getSupportedBackends?.() ?? ["wasm"];
 			const backend = await selectBackend(
-				model.supportsWebgpu ?? false,
-				model.supportsWasm ?? false,
+				loaderBackends.includes("webgpu"),
+				loaderBackends.includes("wasm"),
 			);
 
 			const estimatedBytes = (model.sizeMb ?? 0) * 1024 * 1024;
