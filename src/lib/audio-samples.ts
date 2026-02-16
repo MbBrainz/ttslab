@@ -8,31 +8,24 @@ export type AudioSample = {
 
 export const audioSamples: AudioSample[] = [
 	{
-		id: "kokoro-hello",
+		id: "kokoro-sample",
 		modelSlug: "kokoro-82m",
 		modelName: "Kokoro 82M",
 		text: "Welcome to TTSLab, where you can test text-to-speech models directly in your browser.",
-		audioPath: "/audio-samples/kokoro-hello.wav",
+		audioPath: "/audio-samples/kokoro-82m.wav",
 	},
 	{
-		id: "kokoro-poem",
-		modelSlug: "kokoro-82m",
-		modelName: "Kokoro 82M",
-		text: "The quick brown fox jumps over the lazy dog, while the sun sets behind the distant mountains.",
-		audioPath: "/audio-samples/kokoro-poem.wav",
-	},
-	{
-		id: "speecht5-intro",
+		id: "speecht5-sample",
 		modelSlug: "speecht5",
 		modelName: "SpeechT5",
-		text: "All models run entirely on your device using WebGPU or WebAssembly. No data ever leaves your browser.",
-		audioPath: "/audio-samples/speecht5-intro.wav",
+		text: "Welcome to TTSLab, where you can test text-to-speech models directly in your browser.",
+		audioPath: "/audio-samples/speecht5.wav",
 	},
 	{
-		id: "kokoro-technical",
-		modelSlug: "kokoro-82m",
-		modelName: "Kokoro 82M",
-		text: "Neural text-to-speech synthesis has improved dramatically, enabling real-time voice generation on consumer hardware.",
-		audioPath: "/audio-samples/kokoro-technical.wav",
+		id: "piper-sample",
+		modelSlug: "piper-en-us-lessac-medium",
+		modelName: "Piper Lessac Medium",
+		text: "Welcome to TTSLab, where you can test text-to-speech models directly in your browser.",
+		audioPath: "/audio-samples/piper-lessac.wav",
 	},
 ];
