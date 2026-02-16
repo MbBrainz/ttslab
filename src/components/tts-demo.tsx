@@ -389,7 +389,7 @@ export function TtsDemo({ model }: TtsDemoProps) {
 							className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
 						>
 							<Download className="h-3.5 w-3.5" />
-							Download WAV
+							Download audio
 						</a>
 					</div>
 					<AudioPlayer audioUrl={audioUrl} />
