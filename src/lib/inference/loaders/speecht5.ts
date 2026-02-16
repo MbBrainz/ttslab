@@ -6,6 +6,11 @@ import type {
 	Voice,
 } from "../types";
 
+// SpeechT5 requires speaker embeddings for synthesis.
+// This is a pre-extracted x-vector from the CMU ARCTIC dataset.
+const SPEAKER_EMBEDDINGS_URL =
+	"https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/speaker_embeddings.bin";
+
 export class SpeechT5Loader implements ModelLoader {
 	slug = "speecht5";
 	type = "tts" as const;
@@ -17,26 +22,26 @@ export class SpeechT5Loader implements ModelLoader {
 
 	async load(options: LoadOptions): Promise<ModelSession> {
 		this.loadedBackend = options.backend === "webgpu" ? "webgpu" : "wasm";
-		const { pipeline } = await import("@xenova/transformers");
+		const { pipeline } = await import("@huggingface/transformers");
 
 		const synthesizer = await pipeline(
 			"text-to-speech",
 			"Xenova/speecht5_tts",
 			{
-				device: options.backend === "wasm" ? "cpu" : "webgpu",
+				device: options.backend === "wasm" ? "wasm" : "webgpu",
 				progress_callback: options.onProgress
 					? (progress: {
 							status: string;
-							file: string;
-							loaded: number;
-							total: number;
+							file?: string;
+							loaded?: number;
+							total?: number;
 						}) => {
-							if (progress.status === "progress") {
+							if (progress.status === "progress" && progress.file != null) {
 								options.onProgress?.({
 									status: "downloading",
 									file: progress.file,
-									loaded: progress.loaded,
-									total: progress.total,
+									loaded: progress.loaded ?? 0,
+									total: progress.total ?? 0,
 								});
 							}
 						}
@@ -60,10 +65,13 @@ export class SpeechT5Loader implements ModelLoader {
 
 		const synthesizer = this.pipeline as (
 			text: string,
+			options: { speaker_embeddings: string },
 		) => Promise<{ audio: Float32Array; sampling_rate: number }>;
 		const start = performance.now();
 
-		const result = await synthesizer(text);
+		const result = await synthesizer(text, {
+			speaker_embeddings: SPEAKER_EMBEDDINGS_URL,
+		});
 		const totalMs = performance.now() - start;
 
 		const duration = result.audio.length / result.sampling_rate;

@@ -71,10 +71,9 @@ const nextConfig: NextConfig = {
 			};
 
 			// CRITICAL: Force resolve onnxruntime-common to the correct version.
-			// There are multiple versions installed (1.14.0, 1.21.0, 1.22.0-dev).
-			// The 1.14.0 version (from @xenova/transformers) has a Tensor class
-			// without the `location` getter, causing "invalid data location: undefined"
-			// errors when used with onnxruntime-web@1.22.0-dev's session handler.
+			// Multiple versions can exist; the alias ensures the v1.22.0-dev version
+			// (with the `location` getter) is used everywhere, preventing
+			// "invalid data location: undefined" errors at inference time.
 			config.resolve = {
 				...config.resolve,
 				alias: {

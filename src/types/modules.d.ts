@@ -23,20 +23,3 @@ declare module "kokoro-js" {
 		}>;
 	}
 }
-
-declare module "@xenova/transformers" {
-	export function pipeline(
-		task: string,
-		model: string,
-		options?: {
-			device?: string;
-			dtype?: Record<string, string>;
-			progress_callback?: (progress: {
-				status: string;
-				file: string;
-				loaded: number;
-				total: number;
-			}) => void;
-		},
-	): Promise<CallableFunction>;
-}

@@ -12,6 +12,7 @@ import { addRecentText, RecentTexts } from "@/components/recent-texts";
 import { Button } from "@/components/ui/button";
 import { Select, SelectOption } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { float32ToWav } from "@/lib/audio-utils";
 import type { Model } from "@/lib/db/schema";
 import { selectBackend } from "@/lib/inference/backend-select";
 import { getLoader } from "@/lib/inference/registry";
@@ -91,16 +92,16 @@ export function TtsDemo({ model }: TtsDemoProps) {
 				model.supportsWasm ?? false,
 			);
 
-			let totalBytes = (model.sizeMb ?? 0) * 1024 * 1024;
-			let downloadedBytes = 0;
+			const estimatedBytes = (model.sizeMb ?? 0) * 1024 * 1024;
 			let lastDisplayTime = 0;
 			let smoothSpeed = 0;
+			const fileMap = new Map<string, { loaded: number; total: number }>();
 
 			setModelState({
 				status: "downloading",
 				progress: 0,
 				speed: 0,
-				total: totalBytes,
+				total: estimatedBytes,
 				downloaded: 0,
 			});
 
@@ -109,10 +110,18 @@ export function TtsDemo({ model }: TtsDemoProps) {
 			await loader.load({
 				backend,
 				onProgress: (progress) => {
-					if (progress.total > 0) {
-						totalBytes = progress.total;
+					fileMap.set(progress.file, {
+						loaded: progress.loaded,
+						total: progress.total,
+					});
+
+					let downloadedBytes = 0;
+					let totalBytes = 0;
+					for (const fp of fileMap.values()) {
+						downloadedBytes += fp.loaded;
+						totalBytes += fp.total;
 					}
-					downloadedBytes = progress.loaded;
+					if (totalBytes === 0) totalBytes = estimatedBytes;
 
 					// Throttle UI updates to every 500ms
 					const now = performance.now();
@@ -397,47 +406,3 @@ export function TtsDemo({ model }: TtsDemoProps) {
 	);
 }
 
-/** Convert a Float32Array of PCM samples to a WAV Blob */
-function float32ToWav(samples: Float32Array, sampleRate: number): Blob {
-	const numChannels = 1;
-	const bitsPerSample = 16;
-	const bytesPerSample = bitsPerSample / 8;
-	const dataLength = samples.length * bytesPerSample;
-	const buffer = new ArrayBuffer(44 + dataLength);
-	const view = new DataView(buffer);
-
-	// RIFF header
-	writeString(view, 0, "RIFF");
-	view.setUint32(4, 36 + dataLength, true);
-	writeString(view, 8, "WAVE");
-
-	// fmt chunk
-	writeString(view, 12, "fmt ");
-	view.setUint32(16, 16, true); // chunk size
-	view.setUint16(20, 1, true); // PCM format
-	view.setUint16(22, numChannels, true);
-	view.setUint32(24, sampleRate, true);
-	view.setUint32(28, sampleRate * numChannels * bytesPerSample, true);
-	view.setUint16(32, numChannels * bytesPerSample, true);
-	view.setUint16(34, bitsPerSample, true);
-
-	// data chunk
-	writeString(view, 36, "data");
-	view.setUint32(40, dataLength, true);
-
-	// Write PCM samples
-	let offset = 44;
-	for (let i = 0; i < samples.length; i++) {
-		const clamped = Math.max(-1, Math.min(1, samples[i]));
-		view.setInt16(offset, clamped * 0x7fff, true);
-		offset += 2;
-	}
-
-	return new Blob([buffer], { type: "audio/wav" });
-}
-
-function writeString(view: DataView, offset: number, str: string) {
-	for (let i = 0; i < str.length; i++) {
-		view.setUint8(offset + i, str.charCodeAt(i));
-	}
-}

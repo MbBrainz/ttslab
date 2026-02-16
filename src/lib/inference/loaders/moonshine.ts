@@ -16,26 +16,26 @@ export class MoonshineLoader implements ModelLoader {
 
 	async load(options: LoadOptions): Promise<ModelSession> {
 		this.loadedBackend = options.backend === "webgpu" ? "webgpu" : "wasm";
-		const { pipeline } = await import("@xenova/transformers");
+		const { pipeline } = await import("@huggingface/transformers");
 
 		const transcriber = await pipeline(
 			"automatic-speech-recognition",
 			"onnx-community/moonshine-base-ONNX",
 			{
-				device: options.backend === "wasm" ? "cpu" : "webgpu",
+				device: options.backend === "wasm" ? "wasm" : "webgpu",
 				progress_callback: options.onProgress
 					? (progress: {
 							status: string;
-							file: string;
-							loaded: number;
-							total: number;
+							file?: string;
+							loaded?: number;
+							total?: number;
 						}) => {
-							if (progress.status === "progress") {
+							if (progress.status === "progress" && progress.file != null) {
 								options.onProgress?.({
 									status: "downloading",
 									file: progress.file,
-									loaded: progress.loaded,
-									total: progress.total,
+									loaded: progress.loaded ?? 0,
+									total: progress.total ?? 0,
 								});
 							}
 						}

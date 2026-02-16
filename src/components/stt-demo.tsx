@@ -333,6 +333,7 @@ export function SttDemo({ model }: SttDemoProps) {
 							"relative h-20 w-20 rounded-full",
 							isRecording && "shadow-lg shadow-destructive/25",
 						)}
+						aria-label={isRecording ? "Stop recording" : "Start recording"}
 					>
 						{isRecording ? (
 							<div className="h-6 w-6 rounded-sm bg-destructive-foreground" />

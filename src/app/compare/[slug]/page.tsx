@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ComparisonTable } from "@/components/comparison-table";
 import { SttDemo } from "@/components/stt-demo";
 import { SubscribeForm } from "@/components/subscribe-form";
+import { TtsCompare } from "@/components/tts-compare";
 import { TtsDemo } from "@/components/tts-demo";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -87,8 +88,6 @@ export default async function ComparisonPage({ params }: PageProps) {
 
 	const modelASupported = modelA.status === "supported";
 	const modelBSupported = modelB.status === "supported";
-	const _bothSupported = modelASupported && modelBSupported;
-	const _sameType = modelA.type === modelB.type;
 
 	return (
 		<div className="space-y-8">
@@ -110,83 +109,87 @@ export default async function ComparisonPage({ params }: PageProps) {
 			{/* Side-by-side demo area */}
 			<section className="space-y-6">
 				<h2 className="text-xl font-semibold">Try Both Models</h2>
-				<div className="grid gap-6 lg:grid-cols-2">
-					{/* Model A */}
-					<div className="space-y-4">
-						<div className="flex items-center gap-3">
-							<Link
-								href={`/models/${modelA.slug}`}
-								className="text-lg font-semibold hover:underline"
-							>
-								{modelA.name}
-							</Link>
-							<Badge variant="outline">{modelA.type.toUpperCase()}</Badge>
-						</div>
-						{modelASupported ? (
-							modelA.type === "tts" ? (
-								<TtsDemo model={modelA} />
+				{modelASupported && modelBSupported && modelA.type === "tts" && modelB.type === "tts" ? (
+					<TtsCompare modelA={modelA} modelB={modelB} />
+				) : (
+					<div className="grid gap-6 md:grid-cols-2">
+						{/* Model A */}
+						<div className="space-y-4">
+							<div className="flex items-center gap-3">
+								<Link
+									href={`/models/${modelA.slug}`}
+									className="text-lg font-semibold hover:underline"
+								>
+									{modelA.name}
+								</Link>
+								<Badge variant="outline">{modelA.type.toUpperCase()}</Badge>
+							</div>
+							{modelASupported ? (
+								modelA.type === "tts" ? (
+									<TtsDemo model={modelA} />
+								) : (
+									<SttDemo model={modelA} />
+								)
 							) : (
-								<SttDemo model={modelA} />
-							)
-						) : (
-							<Card className="border-dashed">
-								<CardHeader>
-									<CardTitle>
-										{modelA.status === "planned"
-											? "Coming Soon"
-											: "Not Yet Supported"}
-									</CardTitle>
-									<CardDescription>
-										{modelA.name} is not yet available for testing. Upvote to
-										help us prioritize.
-									</CardDescription>
-								</CardHeader>
-								<CardContent className="space-y-4">
-									<UpvoteButton modelSlug={modelA.slug} initialCount={0} />
-									<SubscribeForm modelSlug={modelA.slug} />
-								</CardContent>
-							</Card>
-						)}
-					</div>
+								<Card className="border-dashed">
+									<CardHeader>
+										<CardTitle>
+											{modelA.status === "planned"
+												? "Coming Soon"
+												: "Not Yet Supported"}
+										</CardTitle>
+										<CardDescription>
+											{modelA.name} is not yet available for testing. Upvote to
+											help us prioritize.
+										</CardDescription>
+									</CardHeader>
+									<CardContent className="space-y-4">
+										<UpvoteButton modelSlug={modelA.slug} initialCount={0} />
+										<SubscribeForm modelSlug={modelA.slug} />
+									</CardContent>
+								</Card>
+							)}
+						</div>
 
-					{/* Model B */}
-					<div className="space-y-4">
-						<div className="flex items-center gap-3">
-							<Link
-								href={`/models/${modelB.slug}`}
-								className="text-lg font-semibold hover:underline"
-							>
-								{modelB.name}
-							</Link>
-							<Badge variant="outline">{modelB.type.toUpperCase()}</Badge>
-						</div>
-						{modelBSupported ? (
-							modelB.type === "tts" ? (
-								<TtsDemo model={modelB} />
+						{/* Model B */}
+						<div className="space-y-4">
+							<div className="flex items-center gap-3">
+								<Link
+									href={`/models/${modelB.slug}`}
+									className="text-lg font-semibold hover:underline"
+								>
+									{modelB.name}
+								</Link>
+								<Badge variant="outline">{modelB.type.toUpperCase()}</Badge>
+							</div>
+							{modelBSupported ? (
+								modelB.type === "tts" ? (
+									<TtsDemo model={modelB} />
+								) : (
+									<SttDemo model={modelB} />
+								)
 							) : (
-								<SttDemo model={modelB} />
-							)
-						) : (
-							<Card className="border-dashed">
-								<CardHeader>
-									<CardTitle>
-										{modelB.status === "planned"
-											? "Coming Soon"
-											: "Not Yet Supported"}
-									</CardTitle>
-									<CardDescription>
-										{modelB.name} is not yet available for testing. Upvote to
-										help us prioritize.
-									</CardDescription>
-								</CardHeader>
-								<CardContent className="space-y-4">
-									<UpvoteButton modelSlug={modelB.slug} initialCount={0} />
-									<SubscribeForm modelSlug={modelB.slug} />
-								</CardContent>
-							</Card>
-						)}
+								<Card className="border-dashed">
+									<CardHeader>
+										<CardTitle>
+											{modelB.status === "planned"
+												? "Coming Soon"
+												: "Not Yet Supported"}
+										</CardTitle>
+										<CardDescription>
+											{modelB.name} is not yet available for testing. Upvote to
+											help us prioritize.
+										</CardDescription>
+									</CardHeader>
+									<CardContent className="space-y-4">
+										<UpvoteButton modelSlug={modelB.slug} initialCount={0} />
+										<SubscribeForm modelSlug={modelB.slug} />
+									</CardContent>
+								</Card>
+							)}
+						</div>
 					</div>
-				</div>
+				)}
 			</section>
 
 			<Separator />

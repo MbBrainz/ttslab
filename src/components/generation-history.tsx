@@ -157,6 +157,7 @@ export function GenerationHistory({ modelSlug }: GenerationHistoryProps) {
 								size="icon"
 								className="h-7 w-7 shrink-0"
 								onClick={() => handlePlay(entry)}
+								aria-label={playingId === entry.id ? "Stop" : "Play"}
 							>
 								{playingId === entry.id ? (
 									<Volume2 className="h-3.5 w-3.5 text-primary" />

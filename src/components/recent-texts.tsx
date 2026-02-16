@@ -70,8 +70,17 @@ export function RecentTexts({ onSelect, currentText }: RecentTextsProps) {
 					>
 						<span className="truncate">{text}</span>
 						<span
+							role="button"
+							tabIndex={0}
 							onClick={(e) => handleRemove(text, e)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									handleRemove(text, e as unknown as React.MouseEvent);
+								}
+							}}
 							className="ml-0.5 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full opacity-0 transition-opacity hover:bg-destructive/20 group-hover:opacity-100"
+							aria-label="Remove"
 						>
 							<X className="h-2.5 w-2.5" />
 						</span>

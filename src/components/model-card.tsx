@@ -32,11 +32,11 @@ type ModelCardProps = {
 function StatusIcon({ status }: { status: Model["status"] }) {
 	switch (status) {
 		case "supported":
-			return <Check className="h-4 w-4 text-success" />;
+			return <Check className="h-4 w-4 text-success" aria-label="Supported" />;
 		case "planned":
-			return <Clock className="h-4 w-4 text-warning" />;
+			return <Clock className="h-4 w-4 text-warning" aria-label="Planned" />;
 		case "unsupported":
-			return <X className="h-4 w-4 text-destructive" />;
+			return <X className="h-4 w-4 text-destructive" aria-label="Not supported" />;
 	}
 }
 

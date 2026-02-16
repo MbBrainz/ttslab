@@ -90,6 +90,40 @@ export function AudioPlayer({ audioUrl, duration }: AudioPlayerProps) {
 		[totalDuration, audioUrl],
 	);
 
+	const handleSliderKeyDown = useCallback(
+		(e: React.KeyboardEvent<HTMLDivElement>) => {
+			const audio = audioRef.current;
+			if (!audio || !audioUrl || totalDuration <= 0) return;
+
+			const step = 5;
+			let newTime = audio.currentTime;
+
+			switch (e.key) {
+				case "ArrowRight":
+				case "ArrowUp":
+					newTime = Math.min(totalDuration, newTime + step);
+					break;
+				case "ArrowLeft":
+				case "ArrowDown":
+					newTime = Math.max(0, newTime - step);
+					break;
+				case "Home":
+					newTime = 0;
+					break;
+				case "End":
+					newTime = totalDuration;
+					break;
+				default:
+					return;
+			}
+
+			e.preventDefault();
+			audio.currentTime = newTime;
+			setCurrentTime(newTime);
+		},
+		[totalDuration, audioUrl],
+	);
+
 	const progressPercent =
 		totalDuration > 0 ? (currentTime / totalDuration) * 100 : 0;
 
@@ -121,8 +155,9 @@ export function AudioPlayer({ audioUrl, duration }: AudioPlayerProps) {
 
 			<div
 				ref={progressRef}
-				className="relative h-1.5 flex-1 cursor-pointer rounded-full bg-secondary"
+				className="relative h-1.5 flex-1 cursor-pointer rounded-full bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 				onClick={handleScrub}
+				onKeyDown={handleSliderKeyDown}
 				role="slider"
 				aria-valuemin={0}
 				aria-valuemax={Math.round(totalDuration)}

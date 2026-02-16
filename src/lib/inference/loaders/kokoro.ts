@@ -81,6 +81,10 @@ export class KokoroLoader implements ModelLoader {
 		const result = await tts.generate(text, { voice });
 		const totalMs = performance.now() - start;
 
+		if (!result.audio || result.audio.length === 0) {
+			throw new Error("Model returned empty audio data. Try reloading the model.");
+		}
+
 		const duration = result.audio.length / result.sampling_rate;
 
 		return {

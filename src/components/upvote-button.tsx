@@ -67,6 +67,7 @@ export function UpvoteButton({ modelSlug, initialCount }: UpvoteButtonProps) {
 			onClick={handleUpvote}
 			disabled={voted || loading}
 			className={cn("gap-1 tabular-nums", voted && "text-primary")}
+			aria-label={voted ? `Upvoted (${count})` : `Upvote (${count})`}
 		>
 			<ChevronUp
 				className={cn("h-4 w-4 transition-transform", voted && "text-primary")}

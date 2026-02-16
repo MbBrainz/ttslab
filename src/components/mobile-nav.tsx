@@ -46,6 +46,10 @@ export function MobileNav() {
 					<div
 						className="fixed top-14 right-0 bottom-0 left-0 z-40 bg-background"
 						onClick={() => setOpen(false)}
+						onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
+						role="button"
+						tabIndex={-1}
+						aria-label="Close menu"
 					/>
 					{/* Menu panel */}
 					<div className="fixed inset-x-0 top-14 z-[60] border-b border-border bg-background p-4 shadow-lg">
