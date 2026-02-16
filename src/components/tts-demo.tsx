@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Volume2 } from "lucide-react";
+import { Download, Loader2, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AudioPlayer } from "@/components/audio-player";
 import {
@@ -381,7 +381,17 @@ export function TtsDemo({ model }: TtsDemoProps) {
 
 			{audioUrl && (
 				<div className="space-y-2">
-					<h3 className="text-sm font-medium text-foreground">Output</h3>
+					<div className="flex items-center justify-between">
+						<h3 className="text-sm font-medium text-foreground">Output</h3>
+						<a
+							href={audioUrl}
+							download={`${model.slug}-${Date.now()}.wav`}
+							className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+						>
+							<Download className="h-3.5 w-3.5" />
+							Download WAV
+						</a>
+					</div>
 					<AudioPlayer audioUrl={audioUrl} />
 				</div>
 			)}

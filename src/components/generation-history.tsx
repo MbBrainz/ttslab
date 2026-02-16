@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, Play, Volume2, X } from "lucide-react";
+import { Clock, Download, Play, Volume2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -182,6 +182,17 @@ export function GenerationHistory({ modelSlug }: GenerationHistoryProps) {
 								<span className="uppercase">{entry.backend}</span>
 							</div>
 						</div>
+
+						{sessionAudioUrls.has(entry.id) && (
+							<a
+								href={sessionAudioUrls.get(entry.id)}
+								download={`generation-${entry.id.slice(0, 8)}.wav`}
+								className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+								aria-label="Download audio"
+							>
+								<Download className="h-3.5 w-3.5" />
+							</a>
+						)}
 
 						<span className="shrink-0 text-xs text-muted-foreground">
 							{formatTimeAgo(entry.timestamp)}
