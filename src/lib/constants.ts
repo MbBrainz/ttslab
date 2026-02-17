@@ -19,6 +19,8 @@ export const AUDIO_CACHE_NAME = "ttslab-audio";
 export const NAV_LINKS = [
 	{ href: "/models", label: "Models" },
 	{ href: "/compare", label: "Compare" },
+	{ href: "/benchmark", label: "Benchmark" },
+	{ href: "/contribute", label: "Contribute" },
 	{ href: "/about", label: "About" },
 ] as const;
 

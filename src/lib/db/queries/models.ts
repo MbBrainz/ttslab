@@ -1,4 +1,4 @@
-import { desc, eq, or, sql } from "drizzle-orm";
+import { asc, desc, eq, or, sql } from "drizzle-orm";
 import { db } from "..";
 import { comparisons, models } from "../schema";
 import type { ModelWithUpvotes } from "../types";
@@ -29,7 +29,7 @@ export async function getAllModelsWithUpvotesOrdered(): Promise<
 			upvoteCount: upvoteCountSql,
 		})
 		.from(models)
-		.orderBy(desc(upvoteCountSql));
+		.orderBy(desc(upvoteCountSql), asc(models.name));
 }
 
 /** Fetch a single model by slug with its upvote count. Returns null if not found. */

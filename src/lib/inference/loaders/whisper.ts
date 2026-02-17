@@ -11,13 +11,21 @@ export class WhisperLoader implements ModelLoader {
 	framework = "transformers-js" as const;
 
 	private modelId: string;
+	private dtype:
+		| Record<string, "q8" | "fp32" | "q4" | "fp16" | "auto" | "int8" | "uint8" | "q4f16">
+		| undefined;
 	private pipeline: unknown = null;
 	private session: ModelSession | null = null;
 	private loadedBackend: "webgpu" | "wasm" = "wasm";
 
-	constructor(slug: string, modelId: string) {
+	constructor(
+		slug: string,
+		modelId: string,
+		dtype?: Record<string, "q8" | "fp32" | "q4" | "fp16" | "auto" | "int8" | "uint8" | "q4f16">,
+	) {
 		this.slug = slug;
 		this.modelId = modelId;
+		this.dtype = dtype;
 	}
 
 	async load(options: LoadOptions): Promise<ModelSession> {
@@ -29,6 +37,7 @@ export class WhisperLoader implements ModelLoader {
 			this.modelId,
 			{
 				device: options.backend === "wasm" ? "wasm" : "webgpu",
+				...(this.dtype ? { dtype: this.dtype } : {}),
 				progress_callback: options.onProgress
 					? (progress: {
 							status: string;

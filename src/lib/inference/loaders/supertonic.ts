@@ -6,32 +6,41 @@ import type {
 	Voice,
 } from "../types";
 
-// SpeechT5 requires speaker embeddings for synthesis.
-// This is a pre-extracted x-vector from the CMU ARCTIC dataset.
-const SPEAKER_EMBEDDINGS_URL =
-	"https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/speaker_embeddings.bin";
+const VOICE_BASE_URL =
+	"https://huggingface.co/onnx-community/Supertonic-TTS-2-ONNX/resolve/main/voices";
 
-export class SpeechT5Loader implements ModelLoader {
-	slug = "speecht5";
+const VOICES: Voice[] = [
+	{ id: "F1", name: "Calm", gender: "female" },
+	{ id: "F2", name: "Cheerful", gender: "female" },
+	{ id: "F3", name: "Professional", gender: "female" },
+	{ id: "F4", name: "Confident", gender: "female" },
+	{ id: "F5", name: "Gentle", gender: "female" },
+	{ id: "M1", name: "Energetic", gender: "male" },
+	{ id: "M2", name: "Deep", gender: "male" },
+	{ id: "M3", name: "Authoritative", gender: "male" },
+	{ id: "M4", name: "Friendly", gender: "male" },
+	{ id: "M5", name: "Storyteller", gender: "male" },
+];
+
+export class SupertonicLoader implements ModelLoader {
+	slug = "supertonic-2";
 	type = "tts" as const;
 	framework = "transformers-js" as const;
 
 	private pipeline: unknown = null;
 	private session: ModelSession | null = null;
-	private customSpeakerEmbeddingUrl: string | null = null;
-
-	setSpeakerEmbedding(url: string | null): void {
-		this.customSpeakerEmbeddingUrl = url;
-	}
+	private loadedBackend: "webgpu" | "wasm" = "wasm";
 
 	async load(options: LoadOptions): Promise<ModelSession> {
+		this.loadedBackend = options.backend === "webgpu" ? "webgpu" : "wasm";
 		const { pipeline } = await import("@huggingface/transformers");
 
 		const synthesizer = await pipeline(
 			"text-to-speech",
-			"Xenova/speecht5_tts",
+			"onnx-community/Supertonic-TTS-2-ONNX",
 			{
-				device: "wasm",
+				device: options.backend === "wasm" ? "wasm" : "webgpu",
+				dtype: "fp32",
 				progress_callback: options.onProgress
 					? (progress: {
 							status: string;
@@ -63,8 +72,12 @@ export class SpeechT5Loader implements ModelLoader {
 		return this.session;
 	}
 
-	async synthesize(text: string): Promise<AudioResult> {
+	async synthesize(text: string, voice: string): Promise<AudioResult> {
 		if (!this.pipeline) throw new Error("Model not loaded");
+
+		const resolvedVoice =
+			voice === "default" ? VOICES[0].id : voice;
+		const embeddingUrl = `${VOICE_BASE_URL}/${resolvedVoice}.bin`;
 
 		const synthesizer = this.pipeline as (
 			text: string,
@@ -73,10 +86,13 @@ export class SpeechT5Loader implements ModelLoader {
 
 		const start = performance.now();
 		const result = await synthesizer(text, {
-			speaker_embeddings:
-				this.customSpeakerEmbeddingUrl ?? SPEAKER_EMBEDDINGS_URL,
+			speaker_embeddings: embeddingUrl,
 		});
 		const totalMs = performance.now() - start;
+
+		if (!result.audio || result.audio.length === 0) {
+			throw new Error("Model returned empty audio data. Try reloading the model.");
+		}
 
 		const duration = result.audio.length / result.sampling_rate;
 
@@ -86,26 +102,20 @@ export class SpeechT5Loader implements ModelLoader {
 			duration,
 			metrics: {
 				totalMs: Math.round(totalMs),
-				backend: "wasm",
+				backend: this.loadedBackend,
 			},
 		};
 	}
 
 	getVoices(): Voice[] {
-		const voices: Voice[] = [
-			{ id: "default", name: "Default", gender: "neutral" },
-		];
-		if (this.customSpeakerEmbeddingUrl) {
-			voices.push({ id: "custom", name: "Custom Voice", gender: "neutral" });
-		}
-		return voices;
+		return VOICES;
 	}
 
 	getLanguages(): string[] {
-		return ["en"];
+		return ["en", "ko", "es", "pt", "fr"];
 	}
 
 	getSupportedBackends(): ("webgpu" | "wasm")[] {
-		return ["wasm"];
+		return ["webgpu", "wasm"];
 	}
 }

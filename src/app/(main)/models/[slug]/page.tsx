@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackendBadge } from "@/components/backend-badge";
 import { CompareModelPicker } from "@/components/compare-model-picker";
+import { EmbedCodeDialog } from "@/components/embed-code-dialog";
 import { SttDemo } from "@/components/stt-demo";
 import { SubscribeForm } from "@/components/subscribe-form";
 import { TtsDemo } from "@/components/tts-demo";
@@ -127,13 +128,16 @@ export default async function ModelPage({ params }: PageProps) {
 						{model.description}
 					</p>
 				)}
-				<div className="flex flex-wrap gap-2">
+				<div className="flex flex-wrap items-center gap-2">
 					{model.supportsWebgpu && <BackendBadge backend="webgpu" />}
 					{model.supportsWasm && <BackendBadge backend="wasm" />}
 					{model.supportsStreaming && (
 						<Badge variant="secondary">Streaming</Badge>
 					)}
 					{model.license && <Badge variant="outline">{model.license}</Badge>}
+					{isSupported && model.type === "tts" && (
+						<EmbedCodeDialog modelSlug={model.slug} modelName={model.name} />
+					)}
 				</div>
 			</div>
 
@@ -183,7 +187,7 @@ export default async function ModelPage({ params }: PageProps) {
 										<CardDescription>Model Size</CardDescription>
 									</CardHeader>
 									<CardContent>
-										<p className="font-medium">{model.sizeMb} MB</p>
+										<p className="font-medium">{model.sizeMb >= 1024 ? `${(model.sizeMb / 1024).toFixed(1)} GB` : `${model.sizeMb} MB`}</p>
 									</CardContent>
 								</Card>
 							)}

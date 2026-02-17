@@ -2,22 +2,27 @@
 
 import { Download, Loader2, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AudioPlayer } from "@/components/audio-player";
 import {
 	addToHistory,
 	GenerationHistory,
 } from "@/components/generation-history";
 import { type ModelState, ModelStatus } from "@/components/model-status";
 import { addRecentText, RecentTexts } from "@/components/recent-texts";
+import { ShareButton } from "@/components/share-button";
+import { SSMLHints } from "@/components/ssml-hints";
+import { TextPresets } from "@/components/text-presets";
 import { Button } from "@/components/ui/button";
 import { Select, SelectOption } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { VoiceCloneUpload } from "@/components/voice-clone-upload";
+import { WaveformPlayer } from "@/components/waveform-player";
 import { trackModelLoad, trackTTSGeneration } from "@/lib/analytics";
 import { float32ToWav } from "@/lib/audio-utils";
 import type { Model } from "@/lib/db/schema";
 import { selectBackend } from "@/lib/inference/backend-select";
 import { getLoader } from "@/lib/inference/registry";
 import type { ModelLoader, Voice } from "@/lib/inference/types";
+import { getShareParams } from "@/lib/share-params";
 
 type TtsDemoProps = {
 	model: Model;
@@ -51,6 +56,13 @@ export function TtsDemo({ model }: TtsDemoProps) {
 			}
 		};
 	}, [audioUrl]);
+
+	// Pre-fill from share URL params on mount
+	useEffect(() => {
+		const params = getShareParams();
+		if (params.text) setText(params.text);
+		if (params.voice) setVoice(params.voice);
+	}, []);
 
 	const voices: { id: string; name: string }[] = voicesRef.current.map((v) => ({
 		id: v.id,
@@ -313,12 +325,15 @@ export function TtsDemo({ model }: TtsDemoProps) {
 
 			<div className="space-y-4">
 				<div className="space-y-2">
-					<label
-						htmlFor={`tts-text-${model.slug}`}
-						className="text-sm font-medium text-foreground"
-					>
-						Text to speak
-					</label>
+					<div className="flex items-center gap-1.5">
+						<label
+							htmlFor={`tts-text-${model.slug}`}
+							className="text-sm font-medium text-foreground"
+						>
+							Text to speak
+						</label>
+						<SSMLHints modelSlug={model.slug} />
+					</div>
 					<Textarea
 						id={`tts-text-${model.slug}`}
 						placeholder={DEFAULT_PLACEHOLDER}
@@ -335,6 +350,7 @@ export function TtsDemo({ model }: TtsDemoProps) {
 						</span>
 						{wordCount > 0 && <span>~{wordCount} words</span>}
 					</div>
+					<TextPresets onSelect={setText} disabled={isProcessing} />
 				</div>
 
 				{showVoiceSelect && (
@@ -360,6 +376,18 @@ export function TtsDemo({ model }: TtsDemoProps) {
 					</div>
 				)}
 
+				{model.slug === "speecht5" && (
+					<VoiceCloneUpload
+						onEmbeddingReady={(url) => {
+							const loader = loaderRef.current;
+							if (loader && "setSpeakerEmbedding" in loader) {
+								(loader as { setSpeakerEmbedding: (url: string | null) => void }).setSpeakerEmbedding(url);
+							}
+						}}
+						disabled={!canGenerate || isProcessing}
+					/>
+				)}
+
 				<Button
 					onClick={handleGenerate}
 					disabled={!text.trim() || !canGenerate}
@@ -383,16 +411,19 @@ export function TtsDemo({ model }: TtsDemoProps) {
 				<div className="space-y-2">
 					<div className="flex items-center justify-between">
 						<h3 className="text-sm font-medium text-foreground">Output</h3>
-						<a
-							href={audioUrl}
-							download={`${model.slug}-${Date.now()}.wav`}
-							className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-						>
-							<Download className="h-3.5 w-3.5" />
-							Download audio
-						</a>
+						<div className="flex items-center gap-1">
+							<ShareButton modelSlug={model.slug} text={text} voice={voice} />
+							<a
+								href={audioUrl}
+								download={`${model.slug}-${Date.now()}.wav`}
+								className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+							>
+								<Download className="h-3.5 w-3.5" />
+								Download audio
+							</a>
+						</div>
 					</div>
-					<AudioPlayer audioUrl={audioUrl} />
+					<WaveformPlayer audioUrl={audioUrl} />
 				</div>
 			)}
 

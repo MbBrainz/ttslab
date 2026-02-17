@@ -2,21 +2,25 @@
 
 import { Loader2, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AudioPlayer } from "@/components/audio-player";
 import { type ModelState, ModelStatus } from "@/components/model-status";
 import { RecentTexts, addRecentText } from "@/components/recent-texts";
+import { ShareButton } from "@/components/share-button";
+import { TextPresets } from "@/components/text-presets";
 import { Button } from "@/components/ui/button";
 import { Select, SelectOption } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { WaveformPlayer } from "@/components/waveform-player";
 import { float32ToWav } from "@/lib/audio-utils";
 import type { Model } from "@/lib/db/schema";
 import { selectBackend } from "@/lib/inference/backend-select";
 import { getLoader } from "@/lib/inference/registry";
 import type { ModelLoader, Voice } from "@/lib/inference/types";
+import { getShareParams } from "@/lib/share-params";
 
 type TtsCompareProps = {
 	modelA: Model;
 	modelB: Model;
+	comparisonSlug?: string;
 };
 
 const DEFAULT_PLACEHOLDER =
@@ -41,10 +45,16 @@ function createInitialPanel(): PanelState {
 	};
 }
 
-export function TtsCompare({ modelA, modelB }: TtsCompareProps) {
+export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) {
 	const [text, setText] = useState("");
 	const [panelA, setPanelA] = useState<PanelState>(createInitialPanel);
 	const [panelB, setPanelB] = useState<PanelState>(createInitialPanel);
+
+	// Pre-fill from share URL params on mount
+	useEffect(() => {
+		const params = getShareParams();
+		if (params.text) setText(params.text);
+	}, []);
 
 	// Refs for mutable state that shouldn't trigger re-renders
 	const loaderARef = useRef<ModelLoader | null>(null);
@@ -525,8 +535,18 @@ export function TtsCompare({ modelA, modelB }: TtsCompareProps) {
 					<span>
 						{text.length} / {MAX_TEXT_LENGTH}
 					</span>
-					<span>{wordCount > 0 ? `~${wordCount} words` : "\u00A0"}</span>
+					<div className="flex items-center gap-2">
+						<span>{wordCount > 0 ? `~${wordCount} words` : "\u00A0"}</span>
+						{text.trim() && (
+							<ShareButton
+								modelSlug={modelA.slug}
+								text={text}
+								comparisonSlug={comparisonSlug}
+							/>
+						)}
+					</div>
 				</div>
+				<TextPresets onSelect={setText} disabled={eitherGenerating} />
 			</div>
 
 			{/* Two model panels side by side */}
@@ -567,7 +587,7 @@ export function TtsCompare({ modelA, modelB }: TtsCompareProps) {
 					{panelA.audioUrl && (
 						<div className="space-y-2">
 							<h4 className="text-sm font-medium text-foreground">Output</h4>
-							<AudioPlayer audioUrl={panelA.audioUrl} />
+							<WaveformPlayer audioUrl={panelA.audioUrl} />
 						</div>
 					)}
 					{panelA.modelState.status === "result" && (
@@ -636,7 +656,7 @@ export function TtsCompare({ modelA, modelB }: TtsCompareProps) {
 					{panelB.audioUrl && (
 						<div className="space-y-2">
 							<h4 className="text-sm font-medium text-foreground">Output</h4>
-							<AudioPlayer audioUrl={panelB.audioUrl} />
+							<WaveformPlayer audioUrl={panelB.audioUrl} />
 						</div>
 					)}
 					{panelB.modelState.status === "result" && (

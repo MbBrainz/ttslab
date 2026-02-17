@@ -6,13 +6,25 @@ import type {
 } from "../types";
 
 export class MoonshineLoader implements ModelLoader {
-	slug = "moonshine-base";
+	slug: string;
 	type = "stt" as const;
 	framework = "transformers-js" as const;
 
+	private modelId: string;
+	private languages: string[];
 	private pipeline: unknown = null;
 	private session: ModelSession | null = null;
 	private loadedBackend: "webgpu" | "wasm" = "wasm";
+
+	constructor(
+		slug = "moonshine-base",
+		modelId = "onnx-community/moonshine-base-ONNX",
+		languages = ["en"],
+	) {
+		this.slug = slug;
+		this.modelId = modelId;
+		this.languages = languages;
+	}
 
 	async load(options: LoadOptions): Promise<ModelSession> {
 		this.loadedBackend = options.backend === "webgpu" ? "webgpu" : "wasm";
@@ -20,7 +32,7 @@ export class MoonshineLoader implements ModelLoader {
 
 		const transcriber = await pipeline(
 			"automatic-speech-recognition",
-			"onnx-community/moonshine-base-ONNX",
+			this.modelId,
 			{
 				device: options.backend === "wasm" ? "wasm" : "webgpu",
 				progress_callback: options.onProgress
@@ -79,7 +91,7 @@ export class MoonshineLoader implements ModelLoader {
 	}
 
 	getLanguages(): string[] {
-		return ["en"];
+		return this.languages;
 	}
 
 	getSupportedBackends(): ("webgpu" | "wasm")[] {

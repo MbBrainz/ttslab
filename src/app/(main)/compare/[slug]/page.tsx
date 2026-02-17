@@ -110,7 +110,7 @@ export default async function ComparisonPage({ params }: PageProps) {
 			<section className="space-y-6">
 				<h2 className="text-xl font-semibold">Try Both Models</h2>
 				{modelASupported && modelBSupported && modelA.type === "tts" && modelB.type === "tts" ? (
-					<TtsCompare modelA={modelA} modelB={modelB} />
+					<TtsCompare modelA={modelA} modelB={modelB} comparisonSlug={slug} />
 				) : (
 					<div className="grid gap-6 md:grid-cols-2">
 						{/* Model A */}

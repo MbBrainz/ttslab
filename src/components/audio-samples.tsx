@@ -2,7 +2,7 @@
 
 import { Volume2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { AudioPlayer } from "@/components/audio-player";
+import { WaveformPlayer } from "@/components/waveform-player";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { type AudioSample, audioSamples } from "@/lib/audio-samples";
@@ -65,7 +65,7 @@ function SampleCard({
 						onKeyDown={() => {}}
 						role="presentation"
 					>
-						<AudioPlayer audioUrl={sample.audioPath} />
+						<WaveformPlayer audioUrl={sample.audioPath} />
 					</div>
 				) : (
 					<div className="flex items-center gap-2 rounded-lg border border-dashed border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
