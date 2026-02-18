@@ -72,12 +72,28 @@ const nextConfig: NextConfig = {
 			// Multiple versions can exist; the alias ensures the v1.25.0-dev version
 			// (with the `location` getter) is used everywhere, preventing
 			// "invalid data location: undefined" errors at inference time.
+			//
+			// The "onnxruntime-web-use-extern-wasm" condition tells onnxruntime-web
+			// to use the non-bundle entry (e.g. ort.webgpu.min.mjs instead of
+			// ort.webgpu.bundle.min.mjs). The bundle variant embeds the WASM module
+			// inline which breaks import.meta.url resolution inside webpack chunks.
+			// The extern variant loads the WASM module dynamically via the wasmPaths
+			// override we set in configureOnnxWasmPaths().
 			config.resolve = {
 				...config.resolve,
 				alias: {
 					...config.resolve?.alias,
 					"onnxruntime-common": ortCommonPath,
 				},
+				conditionNames: [
+					"onnxruntime-web-use-extern-wasm",
+					...(config.resolve?.conditionNames ?? [
+						"import",
+						"module",
+						"require",
+						"default",
+					]),
+				],
 			};
 
 			// Suppress import.meta "Critical dependency" warnings from
