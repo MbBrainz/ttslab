@@ -13,6 +13,7 @@
 		"db:migrate": "drizzle-kit migrate",
 		"db:push": "drizzle-kit push",
 		"db:studio": "drizzle-kit studio",
+		"postinstall": "node scripts/copy-onnx-wasm.mjs",
 		"db:seed": "tsx scripts/seed-models.ts"
 	},
 	"dependencies": {

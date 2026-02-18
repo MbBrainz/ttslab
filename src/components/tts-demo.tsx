@@ -139,6 +139,13 @@ export function TtsDemo({ model }: TtsDemoProps) {
 					}
 					if (totalBytes === 0) totalBytes = estimatedBytes;
 
+					// When download completes, show initializing immediately
+					// instead of staying stuck at "Downloading 100%"
+					if (downloadedBytes >= totalBytes && totalBytes > 0) {
+						setModelState({ status: "initializing" });
+						return;
+					}
+
 					// Throttle UI updates to every 500ms
 					const now = performance.now();
 					const dt = (now - lastDisplayTime) / 1000;

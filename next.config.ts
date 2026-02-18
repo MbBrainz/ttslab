@@ -80,20 +80,17 @@ const nextConfig: NextConfig = {
 				},
 			};
 
-			// Suppress import.meta warnings from @huggingface/transformers v4.
-			// The library uses import.meta.url for WASM worker URLs, which webpack
-			// doesn't fully support in non-ESM mode. This is safe because the
-			// actual URL resolution falls back correctly at runtime.
-			config.module = {
-				...config.module,
-				rules: [
-					...(config.module?.rules ?? []),
-					{
-						test: /transformers\.web\.js$/,
-						parser: { javascript: { importMeta: false } },
-					},
-				],
-			};
+			// Suppress import.meta "Critical dependency" warnings from
+			// @huggingface/transformers v4. The library uses import.meta.url for
+			// WASM worker URLs — this works correctly at runtime, but webpack
+			// emits noisy warnings. We use ignoreWarnings instead of
+			// `parser.importMeta: false` because the latter breaks import.meta.url
+			// resolution, causing ONNX Runtime to fall back to cross-origin CDN
+			// URLs that trigger Worker SecurityErrors.
+			config.ignoreWarnings = [
+				...(config.ignoreWarnings ?? []),
+				{ message: /Accessing import\.meta directly is unsupported/ },
+			];
 		}
 		return config;
 	},

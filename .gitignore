@@ -35,6 +35,9 @@ yarn-error.log*
 .env.*
 !.env.example
 
+# ONNX WASM runtime files (copied from node_modules by postinstall)
+/public/onnx/
+
 # vercel
 .vercel
 

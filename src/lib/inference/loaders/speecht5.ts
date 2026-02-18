@@ -25,7 +25,9 @@ export class SpeechT5Loader implements ModelLoader {
 	}
 
 	async load(options: LoadOptions): Promise<ModelSession> {
-		const { pipeline } = await import("@huggingface/transformers");
+		const { env, pipeline } = await import("@huggingface/transformers");
+		const { configureOnnxWasmPaths } = await import("../onnx-config");
+		configureOnnxWasmPaths(env);
 
 		const synthesizer = await pipeline(
 			"text-to-speech",

@@ -153,6 +153,11 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 					}
 					if (totalBytes === 0) totalBytes = estimatedBytesA;
 
+					if (downloadedBytes >= totalBytes && totalBytes > 0) {
+						setPanelA((p) => ({ ...p, modelState: { status: "initializing" } }));
+						return;
+					}
+
 					const now = performance.now();
 					const dt = (now - lastDisplayTime) / 1000;
 					if (dt < 0.5 && downloadedBytes < totalBytes) return;
@@ -278,6 +283,11 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 						totalBytes += fp.total;
 					}
 					if (totalBytes === 0) totalBytes = estimatedBytesB;
+
+					if (downloadedBytes >= totalBytes && totalBytes > 0) {
+						setPanelB((p) => ({ ...p, modelState: { status: "initializing" } }));
+						return;
+					}
 
 					const now = performance.now();
 					const dt = (now - lastDisplayTime) / 1000;

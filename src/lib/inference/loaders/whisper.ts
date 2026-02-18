@@ -30,7 +30,9 @@ export class WhisperLoader implements ModelLoader {
 
 	async load(options: LoadOptions): Promise<ModelSession> {
 		this.loadedBackend = options.backend === "webgpu" ? "webgpu" : "wasm";
-		const { pipeline } = await import("@huggingface/transformers");
+		const { env, pipeline } = await import("@huggingface/transformers");
+		const { configureOnnxWasmPaths } = await import("../onnx-config");
+		configureOnnxWasmPaths(env);
 
 		const transcriber = await pipeline(
 			"automatic-speech-recognition",

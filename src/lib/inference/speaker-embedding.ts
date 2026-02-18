@@ -11,7 +11,9 @@ export async function extractSpeakerEmbedding(
 ): Promise<string> {
 	// 1. Load the feature extraction pipeline (cached after first load)
 	if (!extractorPipeline) {
-		const { pipeline } = await import("@huggingface/transformers");
+		const { env, pipeline } = await import("@huggingface/transformers");
+		const { configureOnnxWasmPaths } = await import("./onnx-config");
+		configureOnnxWasmPaths(env);
 		onProgress?.({ status: "Loading speaker model..." });
 		extractorPipeline = await pipeline(
 			"feature-extraction",

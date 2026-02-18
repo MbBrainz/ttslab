@@ -94,6 +94,11 @@ export function SttDemo({ model }: SttDemoProps) {
 					}
 					downloadedBytes = progress.loaded;
 
+					if (downloadedBytes >= totalBytes && totalBytes > 0) {
+						setModelState({ status: "initializing" });
+						return;
+					}
+
 					// Throttle UI updates to every 500ms
 					const now = performance.now();
 					const dt = (now - lastDisplayTime) / 1000;

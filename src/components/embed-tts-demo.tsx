@@ -113,6 +113,11 @@ export function EmbedTtsDemo({ model }: EmbedTtsDemoProps) {
 					}
 					if (totalBytes === 0) totalBytes = estimatedBytes;
 
+					if (downloadedBytes >= totalBytes && totalBytes > 0) {
+						setModelState({ status: "initializing" });
+						return;
+					}
+
 					const now = performance.now();
 					const dt = (now - lastDisplayTime) / 1000;
 					if (dt < 0.5 && downloadedBytes < totalBytes) return;
