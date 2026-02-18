@@ -118,4 +118,8 @@ export class SupertonicLoader implements ModelLoader {
 	getSupportedBackends(): ("webgpu" | "wasm")[] {
 		return ["webgpu", "wasm"];
 	}
+
+	getPreferredBackend(): "webgpu" | "wasm" | "auto" {
+		return "wasm";
+	}
 }

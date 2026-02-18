@@ -63,9 +63,11 @@ export function SttDemo({ model }: SttDemoProps) {
 
 			loaderRef.current = loader;
 
+			const preferred = loader.getPreferredBackend?.() ?? "auto";
 			const backend = await selectBackend(
 				model.supportsWebgpu ?? false,
 				model.supportsWasm ?? false,
+				preferred,
 			);
 			backendRef.current = backend;
 

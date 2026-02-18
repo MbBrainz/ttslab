@@ -112,9 +112,11 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 			}
 
 			const loaderBackends = loader.getSupportedBackends?.() ?? ["wasm"];
+			const preferred = loader.getPreferredBackend?.() ?? "auto";
 			const backend = await selectBackend(
 				loaderBackends.includes("webgpu"),
 				loaderBackends.includes("wasm"),
+				preferred,
 			);
 
 			const estimatedBytesA = (modelA.sizeMb ?? 0) * 1024 * 1024;
@@ -236,9 +238,11 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 			}
 
 			const loaderBackends = loader.getSupportedBackends?.() ?? ["wasm"];
+			const preferred = loader.getPreferredBackend?.() ?? "auto";
 			const backend = await selectBackend(
 				loaderBackends.includes("webgpu"),
 				loaderBackends.includes("wasm"),
+				preferred,
 			);
 
 			const estimatedBytesB = (modelB.sizeMb ?? 0) * 1024 * 1024;

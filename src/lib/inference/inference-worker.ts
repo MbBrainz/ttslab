@@ -31,10 +31,12 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 
 				// Resolve backend in the worker (WebGPU is available in workers)
 				const supported = loader.getSupportedBackends?.() ?? ["wasm"];
+				const preferred = loader.getPreferredBackend?.() ?? "auto";
+				const effectivePreference = cmd.options.backend === "auto" ? preferred : cmd.options.backend;
 				const backend = await selectBackend(
 					supported.includes("webgpu"),
 					supported.includes("wasm"),
-					cmd.options.backend,
+					effectivePreference,
 				);
 
 				const loadStart = performance.now();

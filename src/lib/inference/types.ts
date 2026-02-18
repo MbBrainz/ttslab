@@ -66,6 +66,7 @@ export interface ModelLoader {
 	getVoices?(): Voice[];
 	getLanguages(): string[];
 	getSupportedBackends(): ("webgpu" | "wasm")[];
+	getPreferredBackend?(): "webgpu" | "wasm" | "auto";
 }
 
 // Worker message types

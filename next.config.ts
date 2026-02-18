@@ -3,17 +3,13 @@ import path from "node:path";
 import type { NextConfig } from "next";
 
 // Dynamically resolve the correct onnxruntime-common version by walking the
-// dependency chain: kokoro-js → @huggingface/transformers → onnxruntime-web → onnxruntime-common.
+// dependency chain: @huggingface/transformers → onnxruntime-web → onnxruntime-common.
 // This avoids hardcoding pnpm store hashes and survives dependency updates.
 const require_ = createRequire(import.meta.url);
 const ortWebDir = path.dirname(
 	require_.resolve("onnxruntime-web", {
 		paths: [
-			path.dirname(
-				require_.resolve("@huggingface/transformers", {
-					paths: [path.dirname(require_.resolve("kokoro-js"))],
-				}),
-			),
+			path.dirname(require_.resolve("@huggingface/transformers")),
 		],
 	}),
 );
@@ -29,6 +25,8 @@ const nextConfig: NextConfig = {
 		"onnxruntime-common",
 		"@huggingface/transformers",
 		"kokoro-js",
+		"sharp",
+		"@huggingface/tokenizers",
 	],
 
 	// Allow HuggingFace CDN for model files
@@ -71,7 +69,7 @@ const nextConfig: NextConfig = {
 			};
 
 			// CRITICAL: Force resolve onnxruntime-common to the correct version.
-			// Multiple versions can exist; the alias ensures the v1.22.0-dev version
+			// Multiple versions can exist; the alias ensures the v1.25.0-dev version
 			// (with the `location` getter) is used everywhere, preventing
 			// "invalid data location: undefined" errors at inference time.
 			config.resolve = {
@@ -80,6 +78,21 @@ const nextConfig: NextConfig = {
 					...config.resolve?.alias,
 					"onnxruntime-common": ortCommonPath,
 				},
+			};
+
+			// Suppress import.meta warnings from @huggingface/transformers v4.
+			// The library uses import.meta.url for WASM worker URLs, which webpack
+			// doesn't fully support in non-ESM mode. This is safe because the
+			// actual URL resolution falls back correctly at runtime.
+			config.module = {
+				...config.module,
+				rules: [
+					...(config.module?.rules ?? []),
+					{
+						test: /transformers\.web\.js$/,
+						parser: { javascript: { importMeta: false } },
+					},
+				],
 			};
 		}
 		return config;
