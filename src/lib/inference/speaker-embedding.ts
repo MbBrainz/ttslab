@@ -1,15 +1,42 @@
 /**
- * Extract speaker embeddings from an audio file for use with SpeechT5 voice cloning.
- * Uses a small speaker verification model to extract x-vectors.
+ * Speaker embedding utilities for SpeechT5 voice cloning.
+ *
+ * - `decodeAudioToPCM()` — main-thread only (uses AudioContext)
+ * - `extractEmbeddingFromPCM()` — worker only (runs ONNX pipeline)
  */
 
+const TARGET_SAMPLE_RATE = 16000;
+
+/**
+ * Decode an audio Blob to 16 kHz mono Float32Array PCM.
+ * Must run on the main thread (AudioContext is not available in workers).
+ */
+export async function decodeAudioToPCM(
+	audioBlob: Blob,
+): Promise<{ audio: Float32Array; sampleRate: number }> {
+	const arrayBuffer = await audioBlob.arrayBuffer();
+	const audioContext = new AudioContext({ sampleRate: TARGET_SAMPLE_RATE });
+	try {
+		const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+		const audio = audioBuffer.getChannelData(0);
+		return { audio, sampleRate: TARGET_SAMPLE_RATE };
+	} finally {
+		await audioContext.close();
+	}
+}
+
+/**
+ * Run the speaker verification model on PCM audio and return a blob URL
+ * pointing to the raw Float32Array embedding.
+ * Must run inside a Web Worker (ONNX WASM).
+ */
 let extractorPipeline: unknown = null;
 
-export async function extractSpeakerEmbedding(
-	audioBlob: Blob,
-	onProgress?: (progress: { status: string; progress?: number }) => void,
+export async function extractEmbeddingFromPCM(
+	audio: Float32Array,
+	_sampleRate: number,
+	onProgress?: (progress: { status: string }) => void,
 ): Promise<string> {
-	// 1. Load the feature extraction pipeline (cached after first load)
 	if (!extractorPipeline) {
 		const { env, pipeline } = await import("@huggingface/transformers");
 		const { configureOnnxWasmPaths } = await import("./onnx-config");
@@ -22,30 +49,17 @@ export async function extractSpeakerEmbedding(
 		);
 	}
 
-	// 2. Convert audio blob to 16kHz mono PCM
-	onProgress?.({ status: "Processing audio..." });
-	const arrayBuffer = await audioBlob.arrayBuffer();
-	const audioContext = new AudioContext({ sampleRate: 16000 });
-	const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-	const audioData = audioBuffer.getChannelData(0);
-	await audioContext.close();
-
-	// 3. Extract embeddings
 	onProgress?.({ status: "Extracting speaker embedding..." });
-	const output = await (extractorPipeline as CallableFunction)(audioData, {
+	const output = await (extractorPipeline as CallableFunction)(audio, {
 		pooling: "mean",
 		normalize: true,
 	});
 
-	// 4. Convert to blob URL (binary Float32Array matching SpeechT5's expected format)
 	const embeddingData = output.data as Float32Array;
 	const bytes = embeddingData.buffer.slice(
 		embeddingData.byteOffset,
 		embeddingData.byteOffset + embeddingData.byteLength,
 	) as ArrayBuffer;
 	const blob = new Blob([bytes], { type: "application/octet-stream" });
-	const url = URL.createObjectURL(blob);
-
-	onProgress?.({ status: "Ready" });
-	return url;
+	return URL.createObjectURL(blob);
 }

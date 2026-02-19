@@ -1,5 +1,6 @@
 import { selectBackend } from "./backend-select";
 import { getLoader } from "./registry";
+import { splitIntoSentences } from "./streaming";
 import type {
 	ModelLoader,
 	ModelSession,
@@ -9,6 +10,7 @@ import type {
 
 const loaders = new Map<string, ModelLoader>();
 const sessions = new Map<string, ModelSession>();
+let streamCancelled = false;
 
 self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 	const cmd = e.data;
@@ -91,6 +93,108 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 
 				const result = await loader.transcribe(cmd.audio, cmd.sampleRate);
 				post({ type: "transcript", data: result });
+				break;
+			}
+
+			case "synthesize-stream": {
+				const loader = loaders.get(cmd.modelSlug);
+				if (!loader?.synthesize) {
+					post({
+						type: "error",
+						code: "NOT_LOADED",
+						message: "Model not loaded or does not support synthesis",
+					});
+					return;
+				}
+
+				// Forward speaker embedding URL to SpeechT5 loader
+				if (cmd.speakerEmbeddingUrl != null && "setSpeakerEmbedding" in loader) {
+					(loader as { setSpeakerEmbedding: (url: string | null) => void }).setSpeakerEmbedding(cmd.speakerEmbeddingUrl);
+				}
+
+				streamCancelled = false;
+				const streamStart = performance.now();
+				let chunkIndex = 0;
+
+				if (loader.synthesizeStream) {
+					// Native streaming (Kokoro) — use split() to pre-compute totalChunks
+					let totalChunks: number;
+					try {
+						const sentences = splitIntoSentences(cmd.text);
+						totalChunks = Math.max(1, sentences.length);
+					} catch {
+						totalChunks = 1;
+					}
+
+					for await (const chunk of loader.synthesizeStream(cmd.text, cmd.voice)) {
+						if (streamCancelled) {
+							post({ type: "stream-cancelled" });
+							return;
+						}
+						post(
+							{
+								type: "audio-chunk",
+								data: {
+									audio: chunk.audio,
+									sampleRate: chunk.sampleRate,
+									chunkIndex,
+									totalChunks,
+									sentenceText: chunk.text,
+								},
+							},
+							[chunk.audio.buffer],
+						);
+						chunkIndex++;
+					}
+				} else {
+					// Fallback: sentence-level sequential synthesis
+					const sentences = splitIntoSentences(cmd.text);
+					const totalChunks = sentences.length;
+
+					for (const sentence of sentences) {
+						if (streamCancelled) {
+							post({ type: "stream-cancelled" });
+							return;
+						}
+						const result = await loader.synthesize(sentence, cmd.voice);
+						post(
+							{
+								type: "audio-chunk",
+								data: {
+									audio: result.audio,
+									sampleRate: result.sampleRate,
+									chunkIndex,
+									totalChunks,
+									sentenceText: sentence,
+								},
+							},
+							[result.audio.buffer],
+						);
+						chunkIndex++;
+					}
+				}
+
+				const totalMs = Math.round(performance.now() - streamStart);
+				post({
+					type: "stream-end",
+					data: { totalMs, sampleRate: 24000, totalChunks: chunkIndex },
+				});
+				break;
+			}
+
+			case "cancel-stream": {
+				streamCancelled = true;
+				break;
+			}
+
+			case "extract-embedding": {
+				const { extractEmbeddingFromPCM } = await import(
+					"./speaker-embedding"
+				);
+				const url = await extractEmbeddingFromPCM(cmd.audio, cmd.sampleRate, (p) => {
+					post({ type: "progress", data: { status: "downloading", file: p.status, loaded: 0, total: 0 } });
+				});
+				post({ type: "embedding", url });
 				break;
 			}
 

@@ -76,6 +76,7 @@ export class SpeechT5Loader implements ModelLoader {
 			"Xenova/speecht5_tts",
 			{
 				device: "wasm",
+				dtype: "fp32",
 				progress_callback: progressCallback,
 			},
 		);

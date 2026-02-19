@@ -1,7 +1,8 @@
 "use client";
 
-import { Download, Loader2, Volume2 } from "lucide-react";
+import { Download, Loader2, Radio, Square, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { StreamingVisualizer } from "@/components/streaming-visualizer";
 import { WaveformPlayer } from "@/components/waveform-player";
 import { type ModelState, ModelStatus } from "@/components/model-status";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { Select, SelectOption } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { float32ToWav } from "@/lib/audio-utils";
 import type { Model } from "@/lib/db/schema";
+import { useStreamingTts } from "@/lib/hooks/use-streaming-tts";
 import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
 import type { Voice } from "@/lib/inference/types";
 
@@ -27,12 +29,40 @@ export function EmbedTtsDemo({ model }: EmbedTtsDemoProps) {
 	const [audioUrl, setAudioUrl] = useState<string | null>(null);
 	const [voices, setVoices] = useState<Voice[]>([]);
 
-	const { loadModel, synthesize, dispose } = useInferenceWorker();
+	const {
+		loadModel,
+		synthesize,
+		synthesizeStream,
+		cancelStream,
+		dispose,
+	} = useInferenceWorker();
 
 	const backendRef = useRef<"webgpu" | "wasm">("wasm");
 	const modelReadyRef = useRef(false);
 	const loadingRef = useRef(false);
 	const generatingRef = useRef(false);
+
+	const handleStreamAudioReady = useCallback(
+		(url: string) => {
+			if (audioUrl) URL.revokeObjectURL(audioUrl);
+			setAudioUrl(url);
+		},
+		[audioUrl],
+	);
+
+	const {
+		startStream,
+		stopStream,
+		isStreaming,
+		analyser,
+	} = useStreamingTts({
+		synthesizeStream,
+		cancelStream,
+		modelSlug: model.slug,
+		backend: backendRef.current,
+		setModelState,
+		onAudioReady: handleStreamAudioReady,
+	});
 
 	useEffect(() => {
 		return () => {
@@ -199,6 +229,11 @@ export function EmbedTtsDemo({ model }: EmbedTtsDemoProps) {
 		}
 	}, [text, voice, audioUrl, model.slug, synthesize]);
 
+	const handleStream = useCallback(() => {
+		if (!text.trim() || isStreaming) return;
+		startStream(text, voice);
+	}, [text, voice, isStreaming, startStream]);
+
 	const handleRetry = useCallback(() => {
 		if (modelReadyRef.current) {
 			setModelState({
@@ -219,7 +254,7 @@ export function EmbedTtsDemo({ model }: EmbedTtsDemoProps) {
 	const isProcessing = modelState.status === "processing";
 	const canGenerate =
 		isReady || (modelState.status === "error" && modelReadyRef.current);
-	const showVoiceSelect = displayVoices.length > 0 && (canGenerate || isProcessing);
+	const showVoiceSelect = displayVoices.length > 0 && (canGenerate || isProcessing || isStreaming);
 
 	return (
 		<div className="mx-auto max-w-lg space-y-3">
@@ -255,23 +290,49 @@ export function EmbedTtsDemo({ model }: EmbedTtsDemoProps) {
 				</Select>
 			)}
 
-			<Button
-				onClick={handleGenerate}
-				disabled={!text.trim() || !canGenerate}
-				className="w-full gap-2"
-			>
-				{isProcessing ? (
-					<>
-						<Loader2 className="h-4 w-4 animate-spin" />
-						Generating...
-					</>
+			<div className="flex gap-2">
+				<Button
+					onClick={handleGenerate}
+					disabled={!text.trim() || !canGenerate || isStreaming}
+					className="flex-1 gap-2"
+				>
+					{isProcessing ? (
+						<>
+							<Loader2 className="h-4 w-4 animate-spin" />
+							Generating...
+						</>
+					) : (
+						<>
+							<Volume2 className="h-4 w-4" />
+							Generate Speech
+						</>
+					)}
+				</Button>
+				{isStreaming ? (
+					<Button
+						onClick={stopStream}
+						variant="destructive"
+						className="gap-2"
+					>
+						<Square className="h-4 w-4" />
+						Stop
+					</Button>
 				) : (
-					<>
-						<Volume2 className="h-4 w-4" />
-						Generate Speech
-					</>
+					<Button
+						onClick={handleStream}
+						disabled={!text.trim() || !canGenerate || isProcessing}
+						variant="outline"
+						className="gap-2"
+					>
+						<Radio className="h-4 w-4" />
+						Stream
+					</Button>
 				)}
-			</Button>
+			</div>
+
+			{isStreaming && (
+				<StreamingVisualizer analyser={analyser} isActive={isStreaming} />
+			)}
 
 			{audioUrl && (
 				<div className="space-y-1">

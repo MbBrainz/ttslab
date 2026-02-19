@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Loader2, Volume2 } from "lucide-react";
+import { Download, Loader2, Radio, Square, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	addToHistory,
@@ -15,10 +15,12 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectOption } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { VoiceCloneUpload } from "@/components/voice-clone-upload";
+import { StreamingVisualizer } from "@/components/streaming-visualizer";
 import { WaveformPlayer } from "@/components/waveform-player";
 import { trackModelLoad, trackTTSGeneration } from "@/lib/analytics";
 import { float32ToWav } from "@/lib/audio-utils";
 import type { Model } from "@/lib/db/schema";
+import { useStreamingTts } from "@/lib/hooks/use-streaming-tts";
 import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
 import type { Voice } from "@/lib/inference/types";
 import { getShareParams } from "@/lib/share-params";
@@ -41,13 +43,54 @@ export function TtsDemo({ model }: TtsDemoProps) {
 	const [voices, setVoices] = useState<Voice[]>([]);
 	const [speakerEmbeddingUrl, setSpeakerEmbeddingUrl] = useState<string | null>(null);
 
-	const { loadModel, synthesize, dispose } = useInferenceWorker();
+	const {
+		loadModel,
+		synthesize,
+		synthesizeStream,
+		cancelStream,
+		extractEmbedding,
+		dispose,
+	} = useInferenceWorker();
 
 	const backendRef = useRef<"webgpu" | "wasm">("wasm");
 	const loadTimeRef = useRef(0);
 	const modelReadyRef = useRef(false);
 	const loadingRef = useRef(false);
 	const generatingRef = useRef(false);
+
+	const handleStreamAudioReady = useCallback(
+		(url: string) => {
+			if (audioUrl) URL.revokeObjectURL(audioUrl);
+			setAudioUrl(url);
+
+			addToHistory(model.slug, {
+				id: crypto.randomUUID(),
+				text: text.slice(0, 200),
+				voice,
+				voiceName: voices.find((v) => v.id === voice)?.name ?? voice,
+				audioUrl: url,
+				generationTimeMs: 0,
+				backend: backendRef.current,
+				timestamp: Date.now(),
+			});
+			setHistoryKey((k) => k + 1);
+		},
+		[audioUrl, model.slug, text, voice, voices],
+	);
+
+	const {
+		startStream,
+		stopStream,
+		isStreaming,
+		analyser,
+	} = useStreamingTts({
+		synthesizeStream,
+		cancelStream,
+		modelSlug: model.slug,
+		backend: backendRef.current,
+		setModelState,
+		onAudioReady: handleStreamAudioReady,
+	});
 
 	// Clean up blob URL on unmount
 	useEffect(() => {
@@ -272,6 +315,12 @@ export function TtsDemo({ model }: TtsDemoProps) {
 		}
 	}, [text, voice, audioUrl, model.slug, speakerEmbeddingUrl, synthesize, getVoiceName]);
 
+	const handleStream = useCallback(() => {
+		if (!text.trim() || isStreaming) return;
+		addRecentText(text);
+		startStream(text, voice, speakerEmbeddingUrl ?? undefined);
+	}, [text, voice, speakerEmbeddingUrl, isStreaming, startStream]);
+
 	const handleRetry = useCallback(() => {
 		if (modelReadyRef.current) {
 			setModelState({
@@ -297,7 +346,7 @@ export function TtsDemo({ model }: TtsDemoProps) {
 	const isProcessing = modelState.status === "processing";
 	const canGenerate =
 		isReady || (modelState.status === "error" && modelReadyRef.current);
-	const showVoiceSelect = displayVoices.length > 0 && (canGenerate || isProcessing);
+	const showVoiceSelect = displayVoices.length > 0 && (canGenerate || isProcessing || isStreaming);
 
 	return (
 		<div className="space-y-6">
@@ -367,28 +416,55 @@ export function TtsDemo({ model }: TtsDemoProps) {
 						onEmbeddingReady={(url) => {
 							setSpeakerEmbeddingUrl(url);
 						}}
+						extractEmbedding={extractEmbedding}
 						disabled={!canGenerate || isProcessing}
 					/>
 				)}
 
-				<Button
-					onClick={handleGenerate}
-					disabled={!text.trim() || !canGenerate}
-					className="w-full gap-2"
-				>
-					{modelState.status === "processing" ? (
-						<>
-							<Loader2 className="h-4 w-4 animate-spin" />
-							Generating...
-						</>
+				<div className="flex gap-2">
+					<Button
+						onClick={handleGenerate}
+						disabled={!text.trim() || !canGenerate || isStreaming}
+						className="flex-1 gap-2"
+					>
+						{modelState.status === "processing" ? (
+							<>
+								<Loader2 className="h-4 w-4 animate-spin" />
+								Generating...
+							</>
+						) : (
+							<>
+								<Volume2 className="h-4 w-4" />
+								Generate Speech
+							</>
+						)}
+					</Button>
+					{isStreaming ? (
+						<Button
+							onClick={stopStream}
+							variant="destructive"
+							className="gap-2"
+						>
+							<Square className="h-4 w-4" />
+							Stop
+						</Button>
 					) : (
-						<>
-							<Volume2 className="h-4 w-4" />
-							Generate Speech
-						</>
+						<Button
+							onClick={handleStream}
+							disabled={!text.trim() || !canGenerate || isProcessing}
+							variant="outline"
+							className="gap-2"
+						>
+							<Radio className="h-4 w-4" />
+							Stream
+						</Button>
 					)}
-				</Button>
+				</div>
 			</div>
+
+			{isStreaming && (
+				<StreamingVisualizer analyser={analyser} isActive={isStreaming} />
+			)}
 
 			{audioUrl && (
 				<div className="space-y-2">

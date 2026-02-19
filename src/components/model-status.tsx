@@ -7,6 +7,7 @@ import {
 	Download,
 	Loader2,
 	RotateCcw,
+	Volume2,
 	X,
 	Zap,
 } from "lucide-react";
@@ -44,6 +45,13 @@ export type ModelState =
 				rtf?: number;
 				backend: "webgpu" | "wasm";
 			};
+	  }
+	| {
+			status: "streaming";
+			elapsed: number;
+			chunksReady: number;
+			totalChunks: number;
+			currentSentence: string;
 	  }
 	| {
 			status: "error";
@@ -321,6 +329,44 @@ function ResultState({
 	);
 }
 
+function StreamingState({
+	elapsed,
+	chunksReady,
+	totalChunks,
+	currentSentence,
+}: {
+	elapsed: number;
+	chunksReady: number;
+	totalChunks: number;
+	currentSentence: string;
+}) {
+	const progress =
+		totalChunks > 0 ? Math.round((chunksReady / totalChunks) * 100) : 0;
+
+	return (
+		<div className="space-y-2">
+			<div className="flex items-center gap-3">
+				<StatusDot color="bg-primary" pulse />
+				<div className="flex flex-1 items-center gap-2">
+					<Volume2 className="h-4 w-4 animate-pulse text-primary" />
+					<span className="text-sm font-medium">
+						Streaming... ({chunksReady}/{totalChunks})
+					</span>
+				</div>
+				<span className="text-xs tabular-nums text-muted-foreground">
+					{formatMs(elapsed)}
+				</span>
+			</div>
+			<Progress value={progress} max={100} />
+			{currentSentence && (
+				<p className="truncate text-xs italic text-muted-foreground">
+					{currentSentence}
+				</p>
+			)}
+		</div>
+	);
+}
+
 function ErrorState({
 	code,
 	message,
@@ -392,6 +438,15 @@ export function ModelStatus({
 					elapsed={state.elapsed}
 					type={state.type}
 					progress={state.progress}
+				/>
+			)}
+
+			{state.status === "streaming" && (
+				<StreamingState
+					elapsed={state.elapsed}
+					chunksReady={state.chunksReady}
+					totalChunks={state.totalChunks}
+					currentSentence={state.currentSentence}
 				/>
 			)}
 

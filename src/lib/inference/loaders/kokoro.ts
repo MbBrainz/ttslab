@@ -68,6 +68,11 @@ export class KokoroLoader implements ModelLoader {
 		return this.session;
 	}
 
+	// NOTE: kokoro-js's tts.stream() is broken — its internal TextSplitterStream
+	// never calls close(), so the last sentence always hangs. We intentionally
+	// omit synthesizeStream here so the worker uses the fallback path
+	// (splitIntoSentences + sequential generate() calls), which works reliably.
+
 	async synthesize(text: string, voice: string): Promise<AudioResult> {
 		if (!this.tts) throw new Error("Model not loaded");
 

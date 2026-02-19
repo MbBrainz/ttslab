@@ -11,6 +11,22 @@ import type {
 	WorkerResponse,
 } from "./types";
 
+export interface StreamCallbacks {
+	onChunk: (data: {
+		audio: Float32Array;
+		sampleRate: number;
+		chunkIndex: number;
+		totalChunks: number;
+		sentenceText: string;
+	}) => void;
+	onEnd: (data: {
+		totalMs: number;
+		sampleRate: number;
+		totalChunks: number;
+	}) => void;
+	onError: (error: Error) => void;
+}
+
 /** Result returned by loadModel once the worker finishes loading. */
 export interface LoadedResult {
 	backend: "webgpu" | "wasm";
@@ -28,8 +44,10 @@ export function useInferenceWorker() {
 	const onProgressRef = useRef<
 		((progress: DownloadProgress) => void) | null
 	>(null);
+	const streamCallbacksRef = useRef<StreamCallbacks | null>(null);
 	const [isLoading, setIsLoading] = useState(false);
 	const [isGenerating, setIsGenerating] = useState(false);
+	const [isStreaming, setIsStreaming] = useState(false);
 
 	const getWorker = useCallback(() => {
 		if (!workerRef.current) {
@@ -69,14 +87,40 @@ export function useInferenceWorker() {
 						pendingRef.current = null;
 						break;
 
+					case "embedding":
+						setIsGenerating(false);
+						pendingRef.current?.resolve(msg.url);
+						pendingRef.current = null;
+						break;
+
 					case "disposed":
 						pendingRef.current?.resolve(undefined);
 						pendingRef.current = null;
 						break;
 
+					case "audio-chunk":
+						streamCallbacksRef.current?.onChunk(msg.data);
+						break;
+
+					case "stream-end":
+						setIsStreaming(false);
+						streamCallbacksRef.current?.onEnd(msg.data);
+						streamCallbacksRef.current = null;
+						break;
+
+					case "stream-cancelled":
+						setIsStreaming(false);
+						streamCallbacksRef.current = null;
+						break;
+
 					case "error":
 						setIsLoading(false);
 						setIsGenerating(false);
+						if (streamCallbacksRef.current) {
+							setIsStreaming(false);
+							streamCallbacksRef.current.onError(new Error(msg.message));
+							streamCallbacksRef.current = null;
+						}
 						pendingRef.current?.reject(new Error(msg.message));
 						pendingRef.current = null;
 						break;
@@ -182,6 +226,56 @@ export function useInferenceWorker() {
 		[sendCommand],
 	);
 
+	const synthesizeStream = useCallback(
+		(
+			modelSlug: string,
+			text: string,
+			voice: string,
+			speakerEmbeddingUrl: string | undefined,
+			callbacks: StreamCallbacks,
+		): void => {
+			streamCallbacksRef.current = callbacks;
+			setIsStreaming(true);
+			const worker = getWorker();
+			worker.postMessage({
+				type: "synthesize-stream",
+				modelSlug,
+				text,
+				voice,
+				speakerEmbeddingUrl,
+			} satisfies WorkerCommand);
+		},
+		[getWorker],
+	);
+
+	const cancelStream = useCallback((): void => {
+		const worker = getWorker();
+		worker.postMessage({ type: "cancel-stream" } satisfies WorkerCommand);
+	}, [getWorker]);
+
+	const extractEmbedding = useCallback(
+		async (
+			audio: Float32Array,
+			sampleRate: number,
+			onProgress?: (progress: DownloadProgress) => void,
+		): Promise<string> => {
+			setIsGenerating(true);
+			onProgressRef.current = onProgress ?? null;
+			try {
+				return await sendCommand<string>(
+					{ type: "extract-embedding", audio, sampleRate },
+					[audio.buffer],
+				);
+			} catch (err) {
+				setIsGenerating(false);
+				throw err;
+			} finally {
+				onProgressRef.current = null;
+			}
+		},
+		[sendCommand],
+	);
+
 	const dispose = useCallback(
 		async (modelSlug: string): Promise<void> => {
 			await sendCommand<void>({ type: "dispose", modelSlug });
@@ -200,9 +294,13 @@ export function useInferenceWorker() {
 	return {
 		loadModel,
 		synthesize,
+		synthesizeStream,
+		cancelStream,
 		transcribe,
+		extractEmbedding,
 		dispose,
 		isLoading,
 		isGenerating,
+		isStreaming,
 	};
 }

@@ -4,10 +4,16 @@ import { Loader2, Mic, Upload, X } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { extractSpeakerEmbedding } from "@/lib/inference/speaker-embedding";
+import { decodeAudioToPCM } from "@/lib/inference/speaker-embedding";
 
 type VoiceCloneUploadProps = {
+	/** Called with the embedding blob URL when ready, or null when cleared. */
 	onEmbeddingReady: (embeddingUrl: string | null) => void;
+	/** Extract embedding via the inference worker (runs ONNX in worker thread). */
+	extractEmbedding: (
+		audio: Float32Array,
+		sampleRate: number,
+	) => Promise<string>;
 	disabled?: boolean;
 };
 
@@ -19,6 +25,7 @@ type State =
 
 export function VoiceCloneUpload({
 	onEmbeddingReady,
+	extractEmbedding,
 	disabled,
 }: VoiceCloneUploadProps) {
 	const [state, setState] = useState<State>({ status: "idle" });
@@ -30,17 +37,21 @@ export function VoiceCloneUpload({
 			setState({
 				status: "processing",
 				fileName: file.name,
-				progress: "Loading speaker model...",
+				progress: "Decoding audio...",
 			});
 
 			try {
-				const url = await extractSpeakerEmbedding(file, (p) => {
-					setState((prev) =>
-						prev.status === "processing"
-							? { ...prev, progress: p.status }
-							: prev,
-					);
-				});
+				// 1. Decode audio to PCM on main thread (AudioContext)
+				const { audio, sampleRate } = await decodeAudioToPCM(file);
+
+				setState((prev) =>
+					prev.status === "processing"
+						? { ...prev, progress: "Extracting speaker embedding..." }
+						: prev,
+				);
+
+				// 2. Extract embedding in the inference worker (ONNX WASM)
+				const url = await extractEmbedding(audio, sampleRate);
 
 				// Revoke previous embedding URL if any
 				if (embeddingUrlRef.current) {
@@ -59,7 +70,7 @@ export function VoiceCloneUpload({
 				});
 			}
 		},
-		[onEmbeddingReady],
+		[onEmbeddingReady, extractEmbedding],
 	);
 
 	const handleClear = useCallback(() => {

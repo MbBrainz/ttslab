@@ -67,6 +67,15 @@ export interface ModelLoader {
 	getLanguages(): string[];
 	getSupportedBackends(): ("webgpu" | "wasm")[];
 	getPreferredBackend?(): "webgpu" | "wasm" | "auto";
+
+	synthesizeStream?(
+		text: string,
+		voice: string,
+	): AsyncGenerator<
+		{ text: string; audio: Float32Array; sampleRate: number },
+		void,
+		void
+	>;
 }
 
 // Worker message types
@@ -79,7 +88,20 @@ export type WorkerCommand =
 			audio: Float32Array;
 			sampleRate: number;
 	  }
-	| { type: "dispose"; modelSlug: string };
+	| { type: "dispose"; modelSlug: string }
+	| {
+			type: "synthesize-stream";
+			modelSlug: string;
+			text: string;
+			voice: string;
+			speakerEmbeddingUrl?: string;
+	  }
+	| { type: "cancel-stream" }
+	| {
+			type: "extract-embedding";
+			audio: Float32Array;
+			sampleRate: number;
+	  };
 
 export type WorkerResponse =
 	| { type: "progress"; data: DownloadProgress }
@@ -87,4 +109,20 @@ export type WorkerResponse =
 	| { type: "audio"; data: AudioResult }
 	| { type: "transcript"; data: TranscribeResult }
 	| { type: "error"; code: string; message: string }
-	| { type: "disposed" };
+	| { type: "disposed" }
+	| {
+			type: "audio-chunk";
+			data: {
+				audio: Float32Array;
+				sampleRate: number;
+				chunkIndex: number;
+				totalChunks: number;
+				sentenceText: string;
+			};
+	  }
+	| {
+			type: "stream-end";
+			data: { totalMs: number; sampleRate: number; totalChunks: number };
+	  }
+	| { type: "stream-cancelled" }
+	| { type: "embedding"; url: string };
