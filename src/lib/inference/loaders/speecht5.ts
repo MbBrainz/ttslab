@@ -11,6 +11,28 @@ import type {
 const SPEAKER_EMBEDDINGS_URL =
 	"https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/speaker_embeddings.bin";
 
+/**
+ * Patch _postprocess_waveform to handle 1D vocoder output tensors.
+ * SpeechT5's HifiGan vocoder returns a 1D tensor [num_frames], but
+ * _postprocess_waveform expects 2D [batch_size, waveform_length].
+ * Without this patch, the audio is empty (0 samples).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function patchPostprocessWaveform(pipelineInstance: any): void {
+	const orig = pipelineInstance._postprocess_waveform;
+	if (!orig) return;
+	pipelineInstance._postprocess_waveform = function (
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		...args: any[]
+	) {
+		const waveform = args[1];
+		if (waveform?.dims?.length === 1) {
+			args[1] = waveform.view(1, waveform.dims[0]);
+		}
+		return orig.apply(this, args);
+	};
+}
+
 export class SpeechT5Loader implements ModelLoader {
 	slug = "speecht5";
 	type = "tts" as const;
@@ -25,34 +47,53 @@ export class SpeechT5Loader implements ModelLoader {
 	}
 
 	async load(options: LoadOptions): Promise<ModelSession> {
-		const { env, pipeline } = await import("@huggingface/transformers");
+		const { env, pipeline, AutoModel } = await import(
+			"@huggingface/transformers"
+		);
 		const { configureOnnxWasmPaths } = await import("../onnx-config");
 		configureOnnxWasmPaths(env);
+
+		const progressCallback = options.onProgress
+			? (progress: {
+					status: string;
+					file?: string;
+					loaded?: number;
+					total?: number;
+				}) => {
+					if (progress.status === "progress" && progress.file != null) {
+						options.onProgress?.({
+							status: "downloading",
+							file: progress.file,
+							loaded: progress.loaded ?? 0,
+							total: progress.total ?? 0,
+						});
+					}
+				}
+			: undefined;
 
 		const synthesizer = await pipeline(
 			"text-to-speech",
 			"Xenova/speecht5_tts",
 			{
 				device: "wasm",
-				progress_callback: options.onProgress
-					? (progress: {
-							status: string;
-							file?: string;
-							loaded?: number;
-							total?: number;
-						}) => {
-							if (progress.status === "progress" && progress.file != null) {
-								options.onProgress?.({
-									status: "downloading",
-									file: progress.file,
-									loaded: progress.loaded ?? 0,
-									total: progress.total ?? 0,
-								});
-							}
-						}
-					: undefined,
+				progress_callback: progressCallback,
 			},
 		);
+
+		// Pre-load vocoder during model load instead of lazy-loading during
+		// first synthesis (which causes a "No vocoder specified" console warning
+		// and an unexpected delay).
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		(synthesizer as any).vocoder = await AutoModel.from_pretrained(
+			"Xenova/speecht5_hifigan",
+			{
+				dtype: "fp32",
+				device: "wasm",
+				progress_callback: progressCallback,
+			},
+		);
+
+		patchPostprocessWaveform(synthesizer);
 
 		this.pipeline = synthesizer;
 		this.session = {
@@ -79,6 +120,12 @@ export class SpeechT5Loader implements ModelLoader {
 				this.customSpeakerEmbeddingUrl ?? SPEAKER_EMBEDDINGS_URL,
 		});
 		const totalMs = performance.now() - start;
+
+		if (!result.audio || result.audio.length === 0) {
+			throw new Error(
+				"Model returned empty audio data. Try reloading the model.",
+			);
+		}
 
 		const duration = result.audio.length / result.sampling_rate;
 

@@ -22,6 +22,30 @@ const VOICES: Voice[] = [
 	{ id: "M5", name: "Storyteller", gender: "male" },
 ];
 
+/**
+ * Patch _postprocess_waveform to handle unexpected tensor shapes from the
+ * voice decoder ONNX model (1D or 3D instead of expected 2D).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function patchPostprocessWaveform(pipelineInstance: any): void {
+	const orig = pipelineInstance._postprocess_waveform;
+	if (!orig) return;
+	pipelineInstance._postprocess_waveform = function (
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		...args: any[]
+	) {
+		const waveform = args[1];
+		if (waveform?.dims?.length === 1) {
+			// 1D [num_frames] → 2D [1, num_frames]
+			args[1] = waveform.view(1, waveform.dims[0]);
+		} else if (waveform?.dims?.length === 3 && waveform.dims[1] === 1) {
+			// 3D [batch, 1, time] → 2D [batch, time]
+			args[1] = waveform.view(waveform.dims[0], waveform.dims[2]);
+		}
+		return orig.apply(this, args);
+	};
+}
+
 export class SupertonicLoader implements ModelLoader {
 	slug = "supertonic-2";
 	type = "tts" as const;
@@ -63,6 +87,8 @@ export class SupertonicLoader implements ModelLoader {
 			},
 		);
 
+		patchPostprocessWaveform(synthesizer);
+
 		this.pipeline = synthesizer;
 		this.session = {
 			dispose: () => {
@@ -83,17 +109,38 @@ export class SupertonicLoader implements ModelLoader {
 
 		const synthesizer = this.pipeline as (
 			text: string,
-			options: { speaker_embeddings: string },
+			options: {
+				speaker_embeddings: string;
+				num_inference_steps?: number;
+				speed?: number;
+			},
 		) => Promise<{ audio: Float32Array; sampling_rate: number }>;
 
 		const start = performance.now();
 		const result = await synthesizer(text, {
 			speaker_embeddings: embeddingUrl,
+			num_inference_steps: 10,
 		});
 		const totalMs = performance.now() - start;
 
 		if (!result.audio || result.audio.length === 0) {
 			throw new Error("Model returned empty audio data. Try reloading the model.");
+		}
+
+		// Debug: log audio stats to help diagnose quality issues
+		if (typeof console !== "undefined") {
+			let min = Infinity;
+			let max = -Infinity;
+			for (let i = 0; i < result.audio.length; i++) {
+				if (result.audio[i] < min) min = result.audio[i];
+				if (result.audio[i] > max) max = result.audio[i];
+			}
+			console.log(
+				`[Supertonic] audio: ${result.audio.length} samples, ` +
+					`${result.sampling_rate}Hz, ` +
+					`range [${min.toFixed(4)}, ${max.toFixed(4)}], ` +
+					`duration ${(result.audio.length / result.sampling_rate).toFixed(2)}s`,
+			);
 		}
 
 		const duration = result.audio.length / result.sampling_rate;
