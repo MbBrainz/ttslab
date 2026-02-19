@@ -9,9 +9,8 @@ import { Select, SelectOption } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { float32ToWav } from "@/lib/audio-utils";
 import type { Model } from "@/lib/db/schema";
-import { selectBackend } from "@/lib/inference/backend-select";
-import { getLoader } from "@/lib/inference/registry";
-import type { ModelLoader, Voice } from "@/lib/inference/types";
+import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
+import type { Voice } from "@/lib/inference/types";
 
 type EmbedTtsDemoProps = {
 	model: Model;
@@ -26,9 +25,10 @@ export function EmbedTtsDemo({ model }: EmbedTtsDemoProps) {
 		status: "not_loaded",
 	});
 	const [audioUrl, setAudioUrl] = useState<string | null>(null);
+	const [voices, setVoices] = useState<Voice[]>([]);
 
-	const loaderRef = useRef<ModelLoader | null>(null);
-	const voicesRef = useRef<Voice[]>([]);
+	const { loadModel, synthesize, dispose } = useInferenceWorker();
+
 	const backendRef = useRef<"webgpu" | "wasm">("wasm");
 	const modelReadyRef = useRef(false);
 	const loadingRef = useRef(false);
@@ -42,63 +42,30 @@ export function EmbedTtsDemo({ model }: EmbedTtsDemoProps) {
 		};
 	}, [audioUrl]);
 
-	const voices: { id: string; name: string }[] = voicesRef.current.map(
-		(v) => ({
-			id: v.id,
-			name: v.name,
-		}),
-	);
+	const displayVoices = voices.map((v) => ({ id: v.id, name: v.name }));
 
 	const handleDownload = useCallback(async () => {
 		if (loadingRef.current) return;
 		loadingRef.current = true;
+
+		const estimatedBytes = (model.sizeMb ?? 0) * 1024 * 1024;
+		let lastDisplayTime = 0;
+		let smoothSpeed = 0;
+		const fileMap = new Map<string, { loaded: number; total: number }>();
+
+		setModelState({
+			status: "downloading",
+			progress: 0,
+			speed: 0,
+			total: estimatedBytes,
+			downloaded: 0,
+		});
+
+		const loadStart = performance.now();
+
 		try {
-			const loader = await getLoader(model.slug);
-			if (!loader) {
-				setModelState({
-					status: "error",
-					code: "LOADER_NOT_FOUND",
-					message: `No loader registered for ${model.slug}`,
-					recoverable: false,
-				});
-				return;
-			}
-
-			loaderRef.current = loader;
-
-			if (loader.getVoices) {
-				const v = loader.getVoices();
-				voicesRef.current = v;
-				if (v.length > 0) {
-					setVoice(v[0].id);
-				}
-			}
-
-			const loaderBackends = loader.getSupportedBackends?.() ?? ["wasm"];
-			const preferred = loader.getPreferredBackend?.() ?? "auto";
-			const backend = await selectBackend(
-				loaderBackends.includes("webgpu"),
-				loaderBackends.includes("wasm"),
-				preferred,
-			);
-
-			const estimatedBytes = (model.sizeMb ?? 0) * 1024 * 1024;
-			let lastDisplayTime = 0;
-			let smoothSpeed = 0;
-			const fileMap = new Map<string, { loaded: number; total: number }>();
-
-			setModelState({
-				status: "downloading",
-				progress: 0,
-				speed: 0,
-				total: estimatedBytes,
-				downloaded: 0,
-			});
-
-			const loadStart = performance.now();
-
-			await loader.load({
-				backend,
+			const result = await loadModel(model.slug, {
+				backend: "auto",
 				onProgress: (progress) => {
 					fileMap.set(progress.file, {
 						loaded: progress.loaded,
@@ -146,13 +113,18 @@ export function EmbedTtsDemo({ model }: EmbedTtsDemoProps) {
 			setModelState({ status: "initializing" });
 			await new Promise((r) => setTimeout(r, 200));
 
-			backendRef.current = backend;
+			backendRef.current = result.backend;
 			modelReadyRef.current = true;
+
+			setVoices(result.voices);
+			if (result.voices.length > 0) {
+				setVoice(result.voices[0].id);
+			}
 
 			setModelState({
 				status: "ready",
-				backend,
-				loadTime: Math.round(performance.now() - loadStart),
+				backend: result.backend,
+				loadTime: result.loadTime,
 			});
 		} catch (err) {
 			setModelState({
@@ -164,12 +136,10 @@ export function EmbedTtsDemo({ model }: EmbedTtsDemoProps) {
 		} finally {
 			loadingRef.current = false;
 		}
-	}, [model.slug, model.sizeMb]);
+	}, [model.slug, model.sizeMb, loadModel]);
 
 	const handleGenerate = useCallback(async () => {
-		if (generatingRef.current) return;
-		const loader = loaderRef.current;
-		if (!text.trim() || !loader?.synthesize) return;
+		if (generatingRef.current || !text.trim()) return;
 		generatingRef.current = true;
 
 		setModelState({
@@ -190,7 +160,7 @@ export function EmbedTtsDemo({ model }: EmbedTtsDemoProps) {
 		}, 100);
 
 		try {
-			const result = await loader.synthesize(text, voice);
+			const result = await synthesize(model.slug, text, voice);
 
 			clearInterval(timer);
 
@@ -227,29 +197,29 @@ export function EmbedTtsDemo({ model }: EmbedTtsDemoProps) {
 		} finally {
 			generatingRef.current = false;
 		}
-	}, [text, voice, audioUrl]);
+	}, [text, voice, audioUrl, model.slug, synthesize]);
 
 	const handleRetry = useCallback(() => {
-		if (modelReadyRef.current && loaderRef.current) {
+		if (modelReadyRef.current) {
 			setModelState({
 				status: "ready",
 				backend: backendRef.current,
 				loadTime: 0,
 			});
 		} else {
-			loaderRef.current = null;
-			voicesRef.current = [];
+			dispose(model.slug);
+			setVoices([]);
 			modelReadyRef.current = false;
 			setModelState({ status: "not_loaded" });
 		}
-	}, []);
+	}, [model.slug, dispose]);
 
 	const isReady =
 		modelState.status === "ready" || modelState.status === "result";
 	const isProcessing = modelState.status === "processing";
 	const canGenerate =
 		isReady || (modelState.status === "error" && modelReadyRef.current);
-	const showVoiceSelect = voices.length > 0 && (canGenerate || isProcessing);
+	const showVoiceSelect = displayVoices.length > 0 && (canGenerate || isProcessing);
 
 	return (
 		<div className="mx-auto max-w-lg space-y-3">
@@ -277,7 +247,7 @@ export function EmbedTtsDemo({ model }: EmbedTtsDemoProps) {
 					onChange={(e) => setVoice(e.target.value)}
 					disabled={isProcessing}
 				>
-					{voices.map((v) => (
+					{displayVoices.map((v) => (
 						<SelectOption key={v.id} value={v.id}>
 							{v.name}
 						</SelectOption>

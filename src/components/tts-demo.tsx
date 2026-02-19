@@ -1,7 +1,7 @@
 "use client";
 
 import { Download, Loader2, Volume2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	addToHistory,
 	GenerationHistory,
@@ -19,9 +19,8 @@ import { WaveformPlayer } from "@/components/waveform-player";
 import { trackModelLoad, trackTTSGeneration } from "@/lib/analytics";
 import { float32ToWav } from "@/lib/audio-utils";
 import type { Model } from "@/lib/db/schema";
-import { selectBackend } from "@/lib/inference/backend-select";
-import { getLoader } from "@/lib/inference/registry";
-import type { ModelLoader, Voice } from "@/lib/inference/types";
+import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
+import type { Voice } from "@/lib/inference/types";
 import { getShareParams } from "@/lib/share-params";
 
 type TtsDemoProps = {
@@ -39,9 +38,11 @@ export function TtsDemo({ model }: TtsDemoProps) {
 	});
 	const [audioUrl, setAudioUrl] = useState<string | null>(null);
 	const [historyKey, setHistoryKey] = useState(0);
+	const [voices, setVoices] = useState<Voice[]>([]);
+	const [speakerEmbeddingUrl, setSpeakerEmbeddingUrl] = useState<string | null>(null);
 
-	const loaderRef = useRef<ModelLoader | null>(null);
-	const voicesRef = useRef<Voice[]>([]);
+	const { loadModel, synthesize, dispose } = useInferenceWorker();
+
 	const backendRef = useRef<"webgpu" | "wasm">("wasm");
 	const loadTimeRef = useRef(0);
 	const modelReadyRef = useRef(false);
@@ -64,67 +65,42 @@ export function TtsDemo({ model }: TtsDemoProps) {
 		if (params.voice) setVoice(params.voice);
 	}, []);
 
-	const voices: { id: string; name: string }[] = voicesRef.current.map((v) => ({
-		id: v.id,
-		name: v.name,
-	}));
+	// Add "Custom Voice" option when a speaker embedding is uploaded (SpeechT5)
+	const displayVoices = useMemo(() => {
+		const base = voices.map((v) => ({ id: v.id, name: v.name }));
+		if (model.slug === "speecht5" && speakerEmbeddingUrl) {
+			return [...base, { id: "custom", name: "Custom Voice" }];
+		}
+		return base;
+	}, [voices, model.slug, speakerEmbeddingUrl]);
 
 	const getVoiceName = useCallback((voiceId: string): string => {
-		const found = voicesRef.current.find((v) => v.id === voiceId);
+		const found = voices.find((v) => v.id === voiceId);
 		return found?.name ?? voiceId;
-	}, []);
+	}, [voices]);
 
 	const handleDownload = useCallback(async () => {
 		if (loadingRef.current) return;
 		loadingRef.current = true;
+
+		const estimatedBytes = (model.sizeMb ?? 0) * 1024 * 1024;
+		let lastDisplayTime = 0;
+		let smoothSpeed = 0;
+		const fileMap = new Map<string, { loaded: number; total: number }>();
+
+		setModelState({
+			status: "downloading",
+			progress: 0,
+			speed: 0,
+			total: estimatedBytes,
+			downloaded: 0,
+		});
+
+		const loadStart = performance.now();
+
 		try {
-			const loader = await getLoader(model.slug);
-			if (!loader) {
-				setModelState({
-					status: "error",
-					code: "LOADER_NOT_FOUND",
-					message: `No loader registered for ${model.slug}`,
-					recoverable: false,
-				});
-				return;
-			}
-
-			loaderRef.current = loader;
-
-			// Get loader voices
-			if (loader.getVoices) {
-				const v = loader.getVoices();
-				voicesRef.current = v;
-				if (v.length > 0) {
-					setVoice(v[0].id);
-				}
-			}
-
-			const loaderBackends = loader.getSupportedBackends?.() ?? ["wasm"];
-			const preferred = loader.getPreferredBackend?.() ?? "auto";
-			const backend = await selectBackend(
-				loaderBackends.includes("webgpu"),
-				loaderBackends.includes("wasm"),
-				preferred,
-			);
-
-			const estimatedBytes = (model.sizeMb ?? 0) * 1024 * 1024;
-			let lastDisplayTime = 0;
-			let smoothSpeed = 0;
-			const fileMap = new Map<string, { loaded: number; total: number }>();
-
-			setModelState({
-				status: "downloading",
-				progress: 0,
-				speed: 0,
-				total: estimatedBytes,
-				downloaded: 0,
-			});
-
-			const loadStart = performance.now();
-
-			await loader.load({
-				backend,
+			const result = await loadModel(model.slug, {
+				backend: "auto",
 				onProgress: (progress) => {
 					fileMap.set(progress.file, {
 						loaded: progress.loaded,
@@ -140,7 +116,6 @@ export function TtsDemo({ model }: TtsDemoProps) {
 					if (totalBytes === 0) totalBytes = estimatedBytes;
 
 					// When download completes, show initializing immediately
-					// instead of staying stuck at "Downloading 100%"
 					if (downloadedBytes >= totalBytes && totalBytes > 0) {
 						setModelState({ status: "initializing" });
 						return;
@@ -173,22 +148,23 @@ export function TtsDemo({ model }: TtsDemoProps) {
 			});
 
 			setModelState({ status: "initializing" });
-
-			// Small delay to show initializing state
 			await new Promise((r) => setTimeout(r, 200));
 
-			const loadTime = Math.round(performance.now() - loadStart);
-
-			backendRef.current = backend;
-			loadTimeRef.current = loadTime;
+			backendRef.current = result.backend;
+			loadTimeRef.current = result.loadTime;
 			modelReadyRef.current = true;
 
-			trackModelLoad(model.slug, backend, loadTime);
+			setVoices(result.voices);
+			if (result.voices.length > 0) {
+				setVoice(result.voices[0].id);
+			}
+
+			trackModelLoad(model.slug, result.backend, result.loadTime);
 
 			setModelState({
 				status: "ready",
-				backend,
-				loadTime,
+				backend: result.backend,
+				loadTime: result.loadTime,
 			});
 		} catch (err) {
 			setModelState({
@@ -200,12 +176,10 @@ export function TtsDemo({ model }: TtsDemoProps) {
 		} finally {
 			loadingRef.current = false;
 		}
-	}, [model.slug, model.supportsWebgpu, model.supportsWasm, model.sizeMb]);
+	}, [model.slug, model.sizeMb, loadModel]);
 
 	const handleGenerate = useCallback(async () => {
-		if (generatingRef.current) return;
-		const loader = loaderRef.current;
-		if (!text.trim() || !loader?.synthesize) return;
+		if (generatingRef.current || !text.trim()) return;
 		generatingRef.current = true;
 
 		addRecentText(text);
@@ -229,7 +203,12 @@ export function TtsDemo({ model }: TtsDemoProps) {
 		}, 100);
 
 		try {
-			const result = await loader.synthesize(text, voice);
+			const result = await synthesize(
+				model.slug,
+				text,
+				voice,
+				speakerEmbeddingUrl ?? undefined,
+			);
 
 			clearInterval(timer);
 
@@ -291,24 +270,22 @@ export function TtsDemo({ model }: TtsDemoProps) {
 		} finally {
 			generatingRef.current = false;
 		}
-	}, [text, voice, audioUrl, model.slug, getVoiceName]);
+	}, [text, voice, audioUrl, model.slug, speakerEmbeddingUrl, synthesize, getVoiceName]);
 
 	const handleRetry = useCallback(() => {
-		// If the model was successfully loaded, return to ready state
-		if (modelReadyRef.current && loaderRef.current) {
+		if (modelReadyRef.current) {
 			setModelState({
 				status: "ready",
 				backend: backendRef.current,
 				loadTime: loadTimeRef.current,
 			});
 		} else {
-			// Full reset for load errors
-			loaderRef.current = null;
-			voicesRef.current = [];
+			dispose(model.slug);
+			setVoices([]);
 			modelReadyRef.current = false;
 			setModelState({ status: "not_loaded" });
 		}
-	}, []);
+	}, [model.slug, dispose]);
 
 	const handleSelectRecentText = useCallback((selected: string) => {
 		setText(selected);
@@ -320,7 +297,7 @@ export function TtsDemo({ model }: TtsDemoProps) {
 	const isProcessing = modelState.status === "processing";
 	const canGenerate =
 		isReady || (modelState.status === "error" && modelReadyRef.current);
-	const showVoiceSelect = voices.length > 0 && (canGenerate || isProcessing);
+	const showVoiceSelect = displayVoices.length > 0 && (canGenerate || isProcessing);
 
 	return (
 		<div className="space-y-6">
@@ -376,7 +353,7 @@ export function TtsDemo({ model }: TtsDemoProps) {
 							onChange={(e) => setVoice(e.target.value)}
 							disabled={isProcessing}
 						>
-							{voices.map((v) => (
+							{displayVoices.map((v) => (
 								<SelectOption key={v.id} value={v.id}>
 									{v.name}
 								</SelectOption>
@@ -388,10 +365,7 @@ export function TtsDemo({ model }: TtsDemoProps) {
 				{model.slug === "speecht5" && (
 					<VoiceCloneUpload
 						onEmbeddingReady={(url) => {
-							const loader = loaderRef.current;
-							if (loader && "setSpeakerEmbedding" in loader) {
-								(loader as { setSpeakerEmbedding: (url: string | null) => void }).setSpeakerEmbedding(url);
-							}
+							setSpeakerEmbeddingUrl(url);
 						}}
 						disabled={!canGenerate || isProcessing}
 					/>
@@ -469,4 +443,3 @@ export function TtsDemo({ model }: TtsDemoProps) {
 		</div>
 	);
 }
-

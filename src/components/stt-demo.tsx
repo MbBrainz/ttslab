@@ -6,9 +6,7 @@ import { type ModelState, ModelStatus } from "@/components/model-status";
 import { Button } from "@/components/ui/button";
 import { trackModelLoad, trackSTTTranscription } from "@/lib/analytics";
 import type { Model } from "@/lib/db/schema";
-import { selectBackend } from "@/lib/inference/backend-select";
-import { getLoader } from "@/lib/inference/registry";
-import type { ModelLoader } from "@/lib/inference/types";
+import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
 import { cn } from "@/lib/utils";
 
 type SttDemoProps = {
@@ -24,8 +22,12 @@ export function SttDemo({ model }: SttDemoProps) {
 	const [transcript, setTranscript] = useState("");
 	const [recordingDuration, setRecordingDuration] = useState(0);
 
-	const loaderRef = useRef<ModelLoader | null>(null);
+	const { loadModel, transcribe, dispose } = useInferenceWorker();
+
 	const backendRef = useRef<"webgpu" | "wasm">("wasm");
+	const loadTimeRef = useRef(0);
+	const modelReadyRef = useRef(false);
+	const loadingRef = useRef(false);
 	const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 	const audioChunksRef = useRef<Blob[]>([]);
@@ -49,45 +51,27 @@ export function SttDemo({ model }: SttDemoProps) {
 	}, []);
 
 	const handleDownload = useCallback(async () => {
+		if (loadingRef.current) return;
+		loadingRef.current = true;
+
+		let totalBytes = (model.sizeMb ?? 0) * 1024 * 1024;
+		let downloadedBytes = 0;
+		let lastDisplayTime = 0;
+		let smoothSpeed = 0;
+
+		setModelState({
+			status: "downloading",
+			progress: 0,
+			speed: 0,
+			total: totalBytes,
+			downloaded: 0,
+		});
+
+		const loadStart = performance.now();
+
 		try {
-			const loader = await getLoader(model.slug);
-			if (!loader) {
-				setModelState({
-					status: "error",
-					code: "LOADER_NOT_FOUND",
-					message: `No loader registered for ${model.slug}`,
-					recoverable: false,
-				});
-				return;
-			}
-
-			loaderRef.current = loader;
-
-			const preferred = loader.getPreferredBackend?.() ?? "auto";
-			const backend = await selectBackend(
-				model.supportsWebgpu ?? false,
-				model.supportsWasm ?? false,
-				preferred,
-			);
-			backendRef.current = backend;
-
-			let totalBytes = (model.sizeMb ?? 0) * 1024 * 1024;
-			let downloadedBytes = 0;
-			let lastDisplayTime = 0;
-			let smoothSpeed = 0;
-
-			setModelState({
-				status: "downloading",
-				progress: 0,
-				speed: 0,
-				total: totalBytes,
-				downloaded: 0,
-			});
-
-			const loadStart = performance.now();
-
-			await loader.load({
-				backend,
+			const result = await loadModel(model.slug, {
+				backend: "auto",
 				onProgress: (progress) => {
 					if (progress.total > 0) {
 						totalBytes = progress.total;
@@ -128,14 +112,16 @@ export function SttDemo({ model }: SttDemoProps) {
 			setModelState({ status: "initializing" });
 			await new Promise((r) => setTimeout(r, 200));
 
-			const loadTime = Math.round(performance.now() - loadStart);
+			backendRef.current = result.backend;
+			loadTimeRef.current = result.loadTime;
+			modelReadyRef.current = true;
 
-			trackModelLoad(model.slug, backend, loadTime);
+			trackModelLoad(model.slug, result.backend, result.loadTime);
 
 			setModelState({
 				status: "ready",
-				backend,
-				loadTime,
+				backend: result.backend,
+				loadTime: result.loadTime,
 			});
 		} catch (err) {
 			setModelState({
@@ -144,13 +130,20 @@ export function SttDemo({ model }: SttDemoProps) {
 				message: err instanceof Error ? err.message : "Failed to load model",
 				recoverable: true,
 			});
+		} finally {
+			loadingRef.current = false;
 		}
-	}, [model.slug, model.supportsWebgpu, model.supportsWasm, model.sizeMb]);
+	}, [model.slug, model.sizeMb, loadModel]);
 
 	const handleRetry = useCallback(() => {
-		loaderRef.current = null;
-		setModelState({ status: "not_loaded" });
-	}, []);
+		if (modelReadyRef.current) {
+			setModelState({ status: "ready", backend: backendRef.current, loadTime: loadTimeRef.current });
+		} else {
+			dispose(model.slug);
+			modelReadyRef.current = false;
+			setModelState({ status: "not_loaded" });
+		}
+	}, [model.slug, dispose]);
 
 	const startRecording = useCallback(async () => {
 		try {
@@ -240,9 +233,6 @@ export function SttDemo({ model }: SttDemoProps) {
 			streamRef.current = null;
 		}
 
-		// Transcribe
-		if (!loaderRef.current?.transcribe) return;
-
 		const startTime = performance.now();
 
 		setModelState({
@@ -268,7 +258,7 @@ export function SttDemo({ model }: SttDemoProps) {
 			const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 			const pcm = audioBuffer.getChannelData(0);
 
-			const result = await loaderRef.current.transcribe(pcm, 16000);
+			const result = await transcribe(model.slug, pcm, 16000);
 
 			clearInterval(timer);
 
@@ -305,7 +295,7 @@ export function SttDemo({ model }: SttDemoProps) {
 				recoverable: true,
 			});
 		}
-	}, []);
+	}, [model.slug, transcribe]);
 
 	const toggleRecording = useCallback(() => {
 		if (isRecording) {

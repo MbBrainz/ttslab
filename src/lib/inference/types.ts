@@ -72,7 +72,7 @@ export interface ModelLoader {
 // Worker message types
 export type WorkerCommand =
 	| { type: "load"; modelSlug: string; options: LoadOptions }
-	| { type: "synthesize"; modelSlug: string; text: string; voice: string }
+	| { type: "synthesize"; modelSlug: string; text: string; voice: string; speakerEmbeddingUrl?: string }
 	| {
 			type: "transcribe";
 			modelSlug: string;
@@ -83,7 +83,7 @@ export type WorkerCommand =
 
 export type WorkerResponse =
 	| { type: "progress"; data: DownloadProgress }
-	| { type: "loaded"; backend: "webgpu" | "wasm"; loadTime: number }
+	| { type: "loaded"; backend: "webgpu" | "wasm"; loadTime: number; voices: Voice[] }
 	| { type: "audio"; data: AudioResult }
 	| { type: "transcript"; data: TranscribeResult }
 	| { type: "error"; code: string; message: string }

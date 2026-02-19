@@ -3,7 +3,6 @@ import { getLoader } from "./registry";
 import type {
 	ModelLoader,
 	ModelSession,
-	Voice,
 	WorkerCommand,
 	WorkerResponse,
 } from "./types";
@@ -52,15 +51,9 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 				sessions.set(cmd.modelSlug, session);
 
 				const loadTime = Math.round(performance.now() - loadStart);
-				const voices: Voice[] = loader.getVoices?.() ?? [];
+				const voices = loader.getVoices?.() ?? [];
 
-				// Post loaded response with extra voices data for the hook
-				self.postMessage({
-					type: "loaded",
-					backend,
-					loadTime,
-					voices,
-				} satisfies WorkerResponse & { voices: Voice[] });
+				post({ type: "loaded", backend, loadTime, voices });
 				break;
 			}
 
@@ -73,6 +66,11 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 						message: "Model not loaded or does not support synthesis",
 					});
 					return;
+				}
+
+				// Forward speaker embedding URL to SpeechT5 loader
+				if (cmd.speakerEmbeddingUrl != null && "setSpeakerEmbedding" in loader) {
+					(loader as { setSpeakerEmbedding: (url: string | null) => void }).setSpeakerEmbedding(cmd.speakerEmbeddingUrl);
 				}
 
 				const result = await loader.synthesize(cmd.text, cmd.voice);

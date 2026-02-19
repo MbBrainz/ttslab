@@ -12,9 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { WaveformPlayer } from "@/components/waveform-player";
 import { float32ToWav } from "@/lib/audio-utils";
 import type { Model } from "@/lib/db/schema";
-import { selectBackend } from "@/lib/inference/backend-select";
-import { getLoader } from "@/lib/inference/registry";
-import type { ModelLoader, Voice } from "@/lib/inference/types";
+import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
+import type { Voice } from "@/lib/inference/types";
 import { getShareParams } from "@/lib/share-params";
 
 type TtsCompareProps = {
@@ -50,15 +49,16 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 	const [panelA, setPanelA] = useState<PanelState>(createInitialPanel);
 	const [panelB, setPanelB] = useState<PanelState>(createInitialPanel);
 
+	// Each model gets its own worker (parallel synthesis needs separate pending refs)
+	const workerA = useInferenceWorker();
+	const workerB = useInferenceWorker();
+
 	// Pre-fill from share URL params on mount
 	useEffect(() => {
 		const params = getShareParams();
 		if (params.text) setText(params.text);
 	}, []);
 
-	// Refs for mutable state that shouldn't trigger re-renders
-	const loaderARef = useRef<ModelLoader | null>(null);
-	const loaderBRef = useRef<ModelLoader | null>(null);
 	const backendARef = useRef<"webgpu" | "wasm">("wasm");
 	const backendBRef = useRef<"webgpu" | "wasm">("wasm");
 	const loadTimeARef = useRef(0);
@@ -86,59 +86,28 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 	const handleDownloadA = useCallback(async () => {
 		if (loadingARef.current) return;
 		loadingARef.current = true;
+
+		const estimatedBytesA = (modelA.sizeMb ?? 0) * 1024 * 1024;
+		let lastDisplayTime = 0;
+		let smoothSpeed = 0;
+		const fileMap = new Map<string, { loaded: number; total: number }>();
+
+		setPanelA((p) => ({
+			...p,
+			modelState: {
+				status: "downloading",
+				progress: 0,
+				speed: 0,
+				total: estimatedBytesA,
+				downloaded: 0,
+			},
+		}));
+
+		const loadStart = performance.now();
+
 		try {
-			const loader = await getLoader(modelA.slug);
-			if (!loader) {
-				setPanelA((p) => ({
-					...p,
-					modelState: {
-						status: "error",
-						code: "LOADER_NOT_FOUND",
-						message: `No loader registered for ${modelA.slug}`,
-						recoverable: false,
-					},
-				}));
-				return;
-			}
-			loaderARef.current = loader;
-
-			if (loader.getVoices) {
-				const v = loader.getVoices();
-				setPanelA((p) => ({
-					...p,
-					voices: v,
-					voice: v.length > 0 ? v[0].id : "default",
-				}));
-			}
-
-			const loaderBackends = loader.getSupportedBackends?.() ?? ["wasm"];
-			const preferred = loader.getPreferredBackend?.() ?? "auto";
-			const backend = await selectBackend(
-				loaderBackends.includes("webgpu"),
-				loaderBackends.includes("wasm"),
-				preferred,
-			);
-
-			const estimatedBytesA = (modelA.sizeMb ?? 0) * 1024 * 1024;
-			let lastDisplayTime = 0;
-			let smoothSpeed = 0;
-			const fileMap = new Map<string, { loaded: number; total: number }>();
-
-			setPanelA((p) => ({
-				...p,
-				modelState: {
-					status: "downloading",
-					progress: 0,
-					speed: 0,
-					total: estimatedBytesA,
-					downloaded: 0,
-				},
-			}));
-
-			const loadStart = performance.now();
-
-			await loader.load({
-				backend,
+			const result = await workerA.loadModel(modelA.slug, {
+				backend: "auto",
 				onProgress: (progress) => {
 					fileMap.set(progress.file, {
 						loaded: progress.loaded,
@@ -189,14 +158,15 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 			setPanelA((p) => ({ ...p, modelState: { status: "initializing" } }));
 			await new Promise((r) => setTimeout(r, 200));
 
-			const loadTime = Math.round(performance.now() - loadStart);
-			backendARef.current = backend;
-			loadTimeARef.current = loadTime;
+			backendARef.current = result.backend;
+			loadTimeARef.current = result.loadTime;
 			modelReadyARef.current = true;
 
 			setPanelA((p) => ({
 				...p,
-				modelState: { status: "ready", backend, loadTime },
+				voices: result.voices,
+				voice: result.voices.length > 0 ? result.voices[0].id : "default",
+				modelState: { status: "ready", backend: result.backend, loadTime: result.loadTime },
 			}));
 		} catch (err) {
 			setPanelA((p) => ({
@@ -212,64 +182,33 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 		} finally {
 			loadingARef.current = false;
 		}
-	}, [modelA.slug, modelA.supportsWebgpu, modelA.supportsWasm, modelA.sizeMb]);
+	}, [modelA.slug, modelA.sizeMb, workerA]);
 
 	const handleDownloadB = useCallback(async () => {
 		if (loadingBRef.current) return;
 		loadingBRef.current = true;
+
+		const estimatedBytesB = (modelB.sizeMb ?? 0) * 1024 * 1024;
+		let lastDisplayTime = 0;
+		let smoothSpeed = 0;
+		const fileMap = new Map<string, { loaded: number; total: number }>();
+
+		setPanelB((p) => ({
+			...p,
+			modelState: {
+				status: "downloading",
+				progress: 0,
+				speed: 0,
+				total: estimatedBytesB,
+				downloaded: 0,
+			},
+		}));
+
+		const loadStart = performance.now();
+
 		try {
-			const loader = await getLoader(modelB.slug);
-			if (!loader) {
-				setPanelB((p) => ({
-					...p,
-					modelState: {
-						status: "error",
-						code: "LOADER_NOT_FOUND",
-						message: `No loader registered for ${modelB.slug}`,
-						recoverable: false,
-					},
-				}));
-				return;
-			}
-			loaderBRef.current = loader;
-
-			if (loader.getVoices) {
-				const v = loader.getVoices();
-				setPanelB((p) => ({
-					...p,
-					voices: v,
-					voice: v.length > 0 ? v[0].id : "default",
-				}));
-			}
-
-			const loaderBackends = loader.getSupportedBackends?.() ?? ["wasm"];
-			const preferred = loader.getPreferredBackend?.() ?? "auto";
-			const backend = await selectBackend(
-				loaderBackends.includes("webgpu"),
-				loaderBackends.includes("wasm"),
-				preferred,
-			);
-
-			const estimatedBytesB = (modelB.sizeMb ?? 0) * 1024 * 1024;
-			let lastDisplayTime = 0;
-			let smoothSpeed = 0;
-			const fileMap = new Map<string, { loaded: number; total: number }>();
-
-			setPanelB((p) => ({
-				...p,
-				modelState: {
-					status: "downloading",
-					progress: 0,
-					speed: 0,
-					total: estimatedBytesB,
-					downloaded: 0,
-				},
-			}));
-
-			const loadStart = performance.now();
-
-			await loader.load({
-				backend,
+			const result = await workerB.loadModel(modelB.slug, {
+				backend: "auto",
 				onProgress: (progress) => {
 					fileMap.set(progress.file, {
 						loaded: progress.loaded,
@@ -320,14 +259,15 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 			setPanelB((p) => ({ ...p, modelState: { status: "initializing" } }));
 			await new Promise((r) => setTimeout(r, 200));
 
-			const loadTime = Math.round(performance.now() - loadStart);
-			backendBRef.current = backend;
-			loadTimeBRef.current = loadTime;
+			backendBRef.current = result.backend;
+			loadTimeBRef.current = result.loadTime;
 			modelReadyBRef.current = true;
 
 			setPanelB((p) => ({
 				...p,
-				modelState: { status: "ready", backend, loadTime },
+				voices: result.voices,
+				voice: result.voices.length > 0 ? result.voices[0].id : "default",
+				modelState: { status: "ready", backend: result.backend, loadTime: result.loadTime },
 			}));
 		} catch (err) {
 			setPanelB((p) => ({
@@ -343,10 +283,10 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 		} finally {
 			loadingBRef.current = false;
 		}
-	}, [modelB.slug, modelB.supportsWebgpu, modelB.supportsWasm, modelB.sizeMb]);
+	}, [modelB.slug, modelB.sizeMb, workerB]);
 
 	const handleRetryA = useCallback(() => {
-		if (modelReadyARef.current && loaderARef.current) {
+		if (modelReadyARef.current) {
 			setPanelA((p) => ({
 				...p,
 				modelState: {
@@ -356,7 +296,7 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 				},
 			}));
 		} else {
-			loaderARef.current = null;
+			workerA.dispose(modelA.slug);
 			modelReadyARef.current = false;
 			setPanelA((p) => ({
 				...p,
@@ -364,10 +304,10 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 				modelState: { status: "not_loaded" },
 			}));
 		}
-	}, []);
+	}, [modelA.slug, workerA]);
 
 	const handleRetryB = useCallback(() => {
-		if (modelReadyBRef.current && loaderBRef.current) {
+		if (modelReadyBRef.current) {
 			setPanelB((p) => ({
 				...p,
 				modelState: {
@@ -377,7 +317,7 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 				},
 			}));
 		} else {
-			loaderBRef.current = null;
+			workerB.dispose(modelB.slug);
 			modelReadyBRef.current = false;
 			setPanelB((p) => ({
 				...p,
@@ -385,21 +325,20 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 				modelState: { status: "not_loaded" },
 			}));
 		}
-	}, []);
+	}, [modelB.slug, workerB]);
 
-	const generateForModel = useCallback(
+	const generateForPanel = useCallback(
 		async (
 			panel: "A" | "B",
 			textToSpeak: string,
 		) => {
-			const loaderRef = panel === "A" ? loaderARef : loaderBRef;
 			const generatingRef = panel === "A" ? generatingARef : generatingBRef;
 			const backendRef = panel === "A" ? backendARef : backendBRef;
 			const setPanel = panel === "A" ? setPanelA : setPanelB;
+			const worker = panel === "A" ? workerA : workerB;
+			const model = panel === "A" ? modelA : modelB;
 
 			if (generatingRef.current) return;
-			const loader = loaderRef.current;
-			if (!loader?.synthesize) return;
 			generatingRef.current = true;
 
 			// Read current voice from state
@@ -408,14 +347,6 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 				currentVoice = p.voice;
 				return p;
 			});
-
-			// Resolve "default" to the first available voice from the loader
-			if (currentVoice === "default" && loader.getVoices) {
-				const voices = loader.getVoices();
-				if (voices.length > 0) {
-					currentVoice = voices[0].id;
-				}
-			}
 
 			setPanel((p) => ({
 				...p,
@@ -438,7 +369,7 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 			}, 100);
 
 			try {
-				const result = await loader.synthesize(textToSpeak, currentVoice);
+				const result = await worker.synthesize(model.slug, textToSpeak, currentVoice);
 				clearInterval(timer);
 
 				const wavBlob = float32ToWav(result.audio, result.sampleRate);
@@ -483,7 +414,7 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 				generatingRef.current = false;
 			}
 		},
-		[],
+		[workerA, workerB, modelA, modelB],
 	);
 
 	const handleGenerate = useCallback(async () => {
@@ -492,10 +423,10 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 
 		// Generate for both models in parallel
 		await Promise.allSettled([
-			generateForModel("A", text),
-			generateForModel("B", text),
+			generateForPanel("A", text),
+			generateForPanel("B", text),
 		]);
-	}, [text, generateForModel]);
+	}, [text, generateForPanel]);
 
 	const handleSelectRecentText = useCallback((selected: string) => {
 		setText(selected);
@@ -734,4 +665,3 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 		</div>
 	);
 }
-

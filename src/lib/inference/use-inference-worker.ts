@@ -18,11 +18,6 @@ export interface LoadedResult {
 	voices: Voice[];
 }
 
-/** Extended loaded response that includes voices sent by the worker. */
-type LoadedMessage = Extract<WorkerResponse, { type: "loaded" }> & {
-	voices?: Voice[];
-};
-
 export function useInferenceWorker() {
 	const workerRef = useRef<Worker | null>(null);
 	const pendingRef = useRef<{
@@ -52,11 +47,10 @@ export function useInferenceWorker() {
 
 					case "loaded": {
 						setIsLoading(false);
-						const loaded = msg as LoadedMessage;
 						const result: LoadedResult = {
-							backend: loaded.backend,
-							loadTime: loaded.loadTime,
-							voices: loaded.voices ?? [],
+							backend: msg.backend,
+							loadTime: msg.loadTime,
+							voices: msg.voices,
 						};
 						pendingRef.current?.resolve(result);
 						pendingRef.current = null;
@@ -149,6 +143,7 @@ export function useInferenceWorker() {
 			modelSlug: string,
 			text: string,
 			voice: string,
+			speakerEmbeddingUrl?: string,
 		): Promise<AudioResult> => {
 			setIsGenerating(true);
 			try {
@@ -157,6 +152,7 @@ export function useInferenceWorker() {
 					modelSlug,
 					text,
 					voice,
+					speakerEmbeddingUrl,
 				});
 			} catch (err) {
 				setIsGenerating(false);

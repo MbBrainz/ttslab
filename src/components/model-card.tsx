@@ -1,5 +1,6 @@
 import {
 	ArrowRight,
+	BadgeCheck,
 	Check,
 	ChevronUp,
 	Clock,
@@ -23,6 +24,8 @@ import {
 } from "@/components/ui/card";
 import type { Model } from "@/lib/db/schema";
 import { cn } from "@/lib/utils";
+
+const VERIFIED_SLUGS = new Set(["kokoro-82m", "piper-en-us-lessac-medium"]);
 
 type ModelCardProps = {
 	model: Model;
@@ -65,8 +68,16 @@ export function ModelCard({ model, upvoteCount }: ModelCardProps) {
 							<span>{upvoteCount}</span>
 						</div>
 					</div>
-					<CardTitle className="mt-2 group-hover:text-primary transition-colors">
+					<CardTitle className="mt-2 flex items-center gap-1.5 group-hover:text-primary transition-colors">
 						{model.name}
+						{VERIFIED_SLUGS.has(model.slug) && (
+							<span
+								title="Verified by the ttslab.dev team to work well on TTSLab"
+								className="inline-flex cursor-help"
+							>
+								<BadgeCheck className="h-4 w-4 text-primary" />
+							</span>
+						)}
 					</CardTitle>
 					{model.description && (
 						<p className="text-sm text-muted-foreground line-clamp-2">

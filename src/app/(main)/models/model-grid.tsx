@@ -121,6 +121,17 @@ export function ModelGrid({ models }: ModelGridProps) {
 				break;
 		}
 
+		// Pin verified models to the top: Kokoro first, then Piper
+		const pinOrder = ["kokoro-82m", "piper-en-us-lessac-medium"];
+		result.sort((a, b) => {
+			const aPin = pinOrder.indexOf(a.slug);
+			const bPin = pinOrder.indexOf(b.slug);
+			if (aPin !== -1 && bPin !== -1) return aPin - bPin;
+			if (aPin !== -1) return -1;
+			if (bPin !== -1) return 1;
+			return 0;
+		});
+
 		return result;
 	}, [models, search, typeFilter, statusFilter, sort]);
 
