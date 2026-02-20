@@ -18,8 +18,8 @@ import { SubscribeForm } from "@/components/subscribe-form";
 import { APP_NAME } from "@/lib/constants";
 
 export const metadata: Metadata = {
-	title: "Benchmarks",
-	description: `Automated, reproducible benchmarks for TTS and STT models on ${APP_NAME}. Run standardized test suites in your browser and compare results.`,
+	title: "TTS & STT Benchmarks — In-Browser Performance Comparison",
+	description: `Automated, reproducible benchmarks for text-to-speech and speech-to-text models. Run standardized test suites in your browser with WebGPU and compare latency, quality, and real-time factor.`,
 };
 
 export default function BenchmarkPage() {

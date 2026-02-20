@@ -21,14 +21,12 @@ const DEFAULT_VOICES: Voice[] = [
 export function VoiceAgentDemo() {
 	const [selectedLlm, setSelectedLlm] = useState<LlmModel>(LLM_MODELS[0]);
 	const [selectedVoice, setSelectedVoice] = useState("af_heart");
-	const [useCloudLlm, setUseCloudLlm] = useState(false);
 
 	const agent = useVoiceAgent({
 		sttModel: "whisper-tiny.en",
 		ttsModel: "kokoro-82m",
 		ttsVoice: selectedVoice,
 		llmModel: selectedLlm,
-		useCloudLlm,
 	});
 
 	const isStreaming = agent.phase === "thinking" || agent.phase === "speaking";
@@ -41,7 +39,7 @@ export function VoiceAgentDemo() {
 				llmState={agent.llmState}
 				ttsState={agent.ttsState}
 				sttSizeMb={39}
-				llmSizeMb={useCloudLlm ? 0 : selectedLlm.sizeMb}
+				llmSizeMb={selectedLlm.sizeMb}
 				ttsSizeMb={82}
 				onLoadStt={() => agent.loadStt()}
 				onLoadLlm={() => agent.loadLlm()}
@@ -80,8 +78,6 @@ export function VoiceAgentDemo() {
 				onVoiceChange={setSelectedVoice}
 				selectedLlm={selectedLlm}
 				onLlmChange={setSelectedLlm}
-				useCloud={useCloudLlm}
-				onCloudToggle={() => setUseCloudLlm((v) => !v)}
 				onStart={agent.startConversation}
 				onStop={agent.stopConversation}
 			/>

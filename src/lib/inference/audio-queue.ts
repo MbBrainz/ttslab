@@ -35,7 +35,7 @@ export class AudioQueue {
 	 * Schedule a chunk of audio for playback immediately after any
 	 * previously-enqueued chunks finish.
 	 */
-	enqueue(audioData: Float32Array, sampleRate: number): void {
+	enqueue(audioData: Float32Array, sampleRate: number, onChunkEnded?: () => void): void {
 		if (this._disposed) return;
 
 		// Ensure AudioContext is running (Chrome suspends by default)
@@ -66,6 +66,7 @@ export class AudioQueue {
 		source.onended = () => {
 			const idx = this.sources.indexOf(source);
 			if (idx !== -1) this.sources.splice(idx, 1);
+			onChunkEnded?.();
 			if (this.sources.length === 0) {
 				this._isPlaying = false;
 				this.onAllEnded?.();

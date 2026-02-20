@@ -47,16 +47,25 @@ export async function generateMetadata({
 		return { title: "Model Not Found" };
 	}
 
+	const specs = [
+		model.sizeMb ? `${model.sizeMb} MB` : null,
+		model.paramsMillions ? `${model.paramsMillions}M params` : null,
+		model.voices ? `${model.voices} voices` : null,
+		model.supportsWebgpu ? "WebGPU" : null,
+		model.supportsWasm ? "WASM" : null,
+	]
+		.filter(Boolean)
+		.join(" · ");
+
+	const title = `${model.name} — Browser ${model.type.toUpperCase()} Demo & Specs`;
+	const description = `Test ${model.name} ${model.type.toUpperCase()} model directly in your browser. ${specs ? `${specs}. ` : ""}No server, no data collection. Powered by WebGPU & WASM.`;
+
 	return {
-		title: model.name,
-		description:
-			model.description ??
-			`Test ${model.name} ${model.type.toUpperCase()} model in your browser.`,
+		title,
+		description,
 		openGraph: {
 			title: `${model.name} | ${APP_NAME}`,
-			description:
-				model.description ??
-				`Test ${model.name} ${model.type.toUpperCase()} model in your browser.`,
+			description,
 			url: `${APP_URL}/models/${model.slug}`,
 			siteName: APP_NAME,
 			type: "website",
@@ -92,10 +101,22 @@ export default async function ModelPage({ params }: PageProps) {
 		description: model.description,
 		applicationCategory: "MultimediaApplication",
 		operatingSystem: "Web Browser",
+		url: `${APP_URL}/models/${model.slug}`,
+		...(model.sizeMb && {
+			fileSize: `${model.sizeMb} MB`,
+		}),
+		...(model.license && {
+			license: model.license,
+		}),
 		offers: {
 			"@type": "Offer",
 			price: "0",
 			priceCurrency: "USD",
+		},
+		author: {
+			"@type": "Organization",
+			name: APP_NAME,
+			url: APP_URL,
 		},
 	};
 

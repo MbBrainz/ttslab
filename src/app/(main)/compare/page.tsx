@@ -9,8 +9,9 @@ import { getAllComparisonsWithModels } from "@/lib/db/queries";
 import type { ComparisonWithModels } from "@/lib/db/types";
 
 export const metadata: Metadata = {
-	title: "Compare Models",
-	description: "Compare TTS and STT models side by side in your browser.",
+	title: "Compare TTS & STT Models Side by Side — Browser Benchmarks",
+	description:
+		"Compare text-to-speech and speech-to-text models side by side in your browser. Listen to demos, view specs, and benchmark performance with WebGPU. No server required.",
 };
 
 export default async function ComparePage() {

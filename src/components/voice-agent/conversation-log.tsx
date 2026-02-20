@@ -52,6 +52,11 @@ export function ConversationLog({ turns, streamingText, isStreaming }: Conversat
 						)}
 					>
 						{turn.content}
+						{turn.interrupted && (
+							<span className="ml-1 text-xs text-muted-foreground italic">
+								(interrupted)
+							</span>
+						)}
 					</div>
 					{turn.metrics && (
 						<div className="flex gap-2 text-[10px] text-muted-foreground">

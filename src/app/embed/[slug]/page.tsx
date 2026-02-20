@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { EmbedTtsDemo } from "@/components/embed-tts-demo";
+import { TtsDemo } from "@/components/tts-demo";
 import { APP_NAME } from "@/lib/constants";
 import { getAllModelSlugs, getModelBySlug } from "@/lib/db/queries";
 
@@ -37,5 +37,5 @@ export default async function EmbedPage({ params }: PageProps) {
 		notFound();
 	}
 
-	return <EmbedTtsDemo model={model} />;
+	return <TtsDemo model={model} variant="compact" />;
 }

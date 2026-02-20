@@ -6,9 +6,9 @@ import type { ModelWithUpvotes } from "@/lib/db/types";
 import { ModelGrid } from "./model-grid";
 
 export const metadata: Metadata = {
-	title: "Model Directory",
+	title: "TTS & STT Model Directory — Browse Browser-Based Speech Models",
 	description:
-		"Browse and test TTS and STT models that run directly in your browser.",
+		"Browse and test open-source text-to-speech and speech-to-text models that run directly in your browser with WebGPU & WASM. No server, no data collection.",
 };
 
 export default async function ModelsPage() {

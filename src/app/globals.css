@@ -2,31 +2,31 @@
 
 /*
  * TTSLab Design System
- * Dark-first theme with semantic color tokens.
+ * Dark-first theme with vibrant blue-purple tinted palette.
  * Uses oklch color space for perceptual uniformity.
  */
 
 :root {
-  --background: oklch(0.15 0 0);
-  --foreground: oklch(0.95 0 0);
+  --background: oklch(0.13 0.012 275);
+  --foreground: oklch(0.95 0.01 275);
 
-  --card: oklch(0.18 0 0);
-  --card-foreground: oklch(0.95 0 0);
+  --card: oklch(0.16 0.015 275);
+  --card-foreground: oklch(0.95 0.01 275);
 
-  --popover: oklch(0.18 0 0);
-  --popover-foreground: oklch(0.95 0 0);
+  --popover: oklch(0.16 0.015 275);
+  --popover-foreground: oklch(0.95 0.01 275);
 
-  --primary: oklch(0.62 0.19 260);
+  --primary: oklch(0.68 0.22 270);
   --primary-foreground: oklch(0.98 0 0);
 
-  --secondary: oklch(0.22 0 0);
+  --secondary: oklch(0.20 0.02 275);
   --secondary-foreground: oklch(0.9 0 0);
 
-  --muted: oklch(0.22 0 0);
-  --muted-foreground: oklch(0.7 0 0);
+  --muted: oklch(0.20 0.015 275);
+  --muted-foreground: oklch(0.65 0.02 275);
 
-  --accent: oklch(0.25 0.02 260);
-  --accent-foreground: oklch(0.95 0 0);
+  --accent: oklch(0.23 0.04 270);
+  --accent-foreground: oklch(0.95 0.01 275);
 
   --destructive: oklch(0.55 0.2 25);
   --destructive-foreground: oklch(0.98 0 0);
@@ -37,70 +37,37 @@
   --warning: oklch(0.75 0.15 85);
   --warning-foreground: oklch(0.15 0 0);
 
-  --border: oklch(0.25 0 0);
-  --input: oklch(0.25 0 0);
-  --ring: oklch(0.62 0.19 260);
+  --border: oklch(0.23 0.025 275);
+  --input: oklch(0.23 0.025 275);
+  --ring: oklch(0.68 0.22 270);
 
   --radius: 0.5rem;
-}
 
-.dark {
-  --background: oklch(0.15 0 0);
-  --foreground: oklch(0.95 0 0);
-
-  --card: oklch(0.18 0 0);
-  --card-foreground: oklch(0.95 0 0);
-
-  --popover: oklch(0.18 0 0);
-  --popover-foreground: oklch(0.95 0 0);
-
-  --primary: oklch(0.62 0.19 260);
-  --primary-foreground: oklch(0.98 0 0);
-
-  --secondary: oklch(0.22 0 0);
-  --secondary-foreground: oklch(0.9 0 0);
-
-  --muted: oklch(0.22 0 0);
-  --muted-foreground: oklch(0.7 0 0);
-
-  --accent: oklch(0.25 0.02 260);
-  --accent-foreground: oklch(0.95 0 0);
-
-  --destructive: oklch(0.55 0.2 25);
-  --destructive-foreground: oklch(0.98 0 0);
-
-  --success: oklch(0.6 0.18 145);
-  --success-foreground: oklch(0.98 0 0);
-
-  --warning: oklch(0.75 0.15 85);
-  --warning-foreground: oklch(0.15 0 0);
-
-  --border: oklch(0.25 0 0);
-  --input: oklch(0.25 0 0);
-  --ring: oklch(0.62 0.19 260);
+  --gradient-from: oklch(0.60 0.25 280);
+  --gradient-to: oklch(0.65 0.20 230);
 }
 
 .light {
-  --background: oklch(0.98 0 0);
-  --foreground: oklch(0.15 0 0);
+  --background: oklch(0.98 0.005 275);
+  --foreground: oklch(0.15 0.01 275);
 
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.15 0 0);
+  --card: oklch(1 0.003 275);
+  --card-foreground: oklch(0.15 0.01 275);
 
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.15 0 0);
+  --popover: oklch(1 0.003 275);
+  --popover-foreground: oklch(0.15 0.01 275);
 
-  --primary: oklch(0.55 0.2 260);
+  --primary: oklch(0.50 0.22 270);
   --primary-foreground: oklch(0.98 0 0);
 
-  --secondary: oklch(0.93 0 0);
-  --secondary-foreground: oklch(0.2 0 0);
+  --secondary: oklch(0.93 0.01 275);
+  --secondary-foreground: oklch(0.2 0.01 275);
 
-  --muted: oklch(0.93 0 0);
-  --muted-foreground: oklch(0.45 0 0);
+  --muted: oklch(0.93 0.008 275);
+  --muted-foreground: oklch(0.45 0.02 275);
 
-  --accent: oklch(0.93 0.01 260);
-  --accent-foreground: oklch(0.2 0 0);
+  --accent: oklch(0.93 0.02 270);
+  --accent-foreground: oklch(0.2 0.01 275);
 
   --destructive: oklch(0.55 0.2 25);
   --destructive-foreground: oklch(0.98 0 0);
@@ -111,9 +78,9 @@
   --warning: oklch(0.8 0.15 85);
   --warning-foreground: oklch(0.15 0 0);
 
-  --border: oklch(0.88 0 0);
-  --input: oklch(0.88 0 0);
-  --ring: oklch(0.55 0.2 260);
+  --border: oklch(0.88 0.01 275);
+  --input: oklch(0.88 0.01 275);
+  --ring: oklch(0.50 0.22 270);
 }
 
 @theme inline {
@@ -150,6 +117,9 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  --color-gradient-from: var(--gradient-from);
+  --color-gradient-to: var(--gradient-to);
 
   --radius-sm: calc(var(--radius) - 0.125rem);
   --radius-md: var(--radius);

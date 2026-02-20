@@ -106,6 +106,7 @@ const nextConfig: NextConfig = {
 			config.ignoreWarnings = [
 				...(config.ignoreWarnings ?? []),
 				{ message: /Accessing import\.meta directly is unsupported/ },
+				{ message: /Critical dependency: require function is used/ },
 			];
 		}
 		return config;

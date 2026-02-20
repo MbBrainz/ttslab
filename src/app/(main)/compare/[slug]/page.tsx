@@ -52,14 +52,15 @@ export async function generateMetadata({
 		return { title: "Comparison Not Found" };
 	}
 
-	const title = `${modelA.name} vs ${modelB.name}`;
-	const description = `Compare ${modelA.name} and ${modelB.name} side by side in your browser. No server, no data collection.`;
+	const type = modelA.type === modelB.type ? modelA.type.toUpperCase() : "Speech AI";
+	const title = `${modelA.name} vs ${modelB.name} — In-Browser ${type} Comparison`;
+	const description = `Compare ${modelA.name} and ${modelB.name} side by side in your browser with WebGPU. Listen to demos, compare specs, and benchmark performance. No server required.`;
 
 	return {
 		title,
 		description,
 		openGraph: {
-			title: `${title} | ${APP_NAME}`,
+			title: `${modelA.name} vs ${modelB.name} | ${APP_NAME}`,
 			description,
 			url: `${APP_URL}/compare/${slug}`,
 			siteName: APP_NAME,

@@ -14,8 +14,8 @@ import { SubscribeForm } from "@/components/subscribe-form";
 import { APP_NAME } from "@/lib/constants";
 
 export const metadata: Metadata = {
-	title: "Contribute a Model",
-	description: `Submit your ONNX-exported TTS or STT model to ${APP_NAME} and make it available for browser-based testing.`,
+	title: "Contribute a TTS or STT Model — Add Your Model to TTSLab",
+	description: `Submit your ONNX-exported text-to-speech or speech-to-text model to ${APP_NAME}. Make it available for in-browser testing and comparison. Open source, MIT licensed.`,
 };
 
 export default function ContributePage() {

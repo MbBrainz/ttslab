@@ -7,8 +7,9 @@ import { Separator } from "@/components/ui/separator";
 import { APP_NAME } from "@/lib/constants";
 
 export const metadata: Metadata = {
-	title: "About",
-	description: `Learn about ${APP_NAME}, how it works, and how to contribute.`,
+	title: "About TTSLab — Open-Source Browser TTS & STT Testing Platform",
+	description:
+		"TTSLab is an open-source tool for testing text-to-speech and speech-to-text models in your browser with WebGPU. MIT licensed. Zero data collection. Contribute on GitHub.",
 };
 
 export default function AboutPage() {

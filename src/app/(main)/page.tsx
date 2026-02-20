@@ -1,125 +1,55 @@
 import {
 	ArrowRight,
-	BarChart3,
-	ChevronRight,
 	Download,
 	Shield,
-	Volume2,
 	Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { AudioSamples } from "@/components/audio-samples";
+import { TtsDemo } from "@/components/tts-demo";
 import { ModelCard } from "@/components/model-card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
 	Card,
 	CardContent,
-	CardDescription,
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import { UpvoteButton } from "@/components/upvote-button";
-import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
-import {
-	getAllModelsWithUpvotes,
-	getPopularComparisons,
-} from "@/lib/db/queries";
-import type { ComparisonWithModels, ModelWithUpvotes } from "@/lib/db/types";
+import { APP_DESCRIPTION } from "@/lib/constants";
+import { getAllModelsWithUpvotes } from "@/lib/db/queries";
+import type { ModelWithUpvotes } from "@/lib/db/types";
 
 async function getHomeData() {
 	try {
-		const [allModels, popularComparisons] = await Promise.all([
-			getAllModelsWithUpvotes(),
-			getPopularComparisons(4),
-		]);
-
-		return { allModels, popularComparisons };
+		const allModels = await getAllModelsWithUpvotes();
+		return { allModels };
 	} catch {
-		return {
-			allModels: [] as ModelWithUpvotes[],
-			popularComparisons: [] as ComparisonWithModels[],
-		};
+		return { allModels: [] as ModelWithUpvotes[] };
 	}
 }
 
 export default async function HomePage() {
-	const { allModels, popularComparisons } = await getHomeData();
+	const { allModels } = await getHomeData();
 
 	const supportedModels = allModels
 		.filter((m) => m.model.status === "supported")
 		.slice(0, 4);
 
-	const unsupportedModels = allModels
-		.filter((m) => m.model.status !== "supported")
-		.sort((a, b) => b.upvoteCount - a.upvoteCount)
-		.slice(0, 6);
-
-	const totalModels = allModels.length;
-	const supportedCount = allModels.filter(
-		(m) => m.model.status === "supported",
-	).length;
-	const ttsCount = allModels.filter((m) => m.model.type === "tts").length;
-	const sttCount = allModels.filter((m) => m.model.type === "stt").length;
+	const kokoroModel = allModels.find(
+		(m) => m.model.slug === "kokoro-82m",
+	)?.model;
 
 	return (
 		<div className="space-y-20">
-			{/* Hero Section */}
-			<section className="flex flex-col items-center gap-8 pt-12 text-center">
-				<Badge variant="secondary" className="gap-1.5">
-					<Zap className="h-3 w-3" />
-					Powered by WebGPU
-				</Badge>
-				<h1 className="max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
-					{APP_NAME}
+			{/* Hero: Live TTS Demo */}
+			<section className="flex flex-col items-center gap-6 pt-8">
+				<h1 className="max-w-3xl text-4xl font-bold tracking-tight bg-gradient-to-r from-gradient-from to-gradient-to bg-clip-text text-transparent sm:text-5xl">
+					Test Speech AI In Your Browser
 				</h1>
-				<p className="max-w-2xl text-lg text-muted-foreground sm:text-xl">
+				<p className="max-w-xl text-center text-muted-foreground">
 					{APP_DESCRIPTION}
 				</p>
-				<div className="flex flex-wrap justify-center gap-4">
-					<Link
-						href="/models"
-						className={`${buttonVariants({ size: "lg" })} gap-2`}
-					>
-						<Volume2 className="h-5 w-5" />
-						Browse Models
-					</Link>
-					<Link
-						href="/compare"
-						className={`${buttonVariants({ variant: "outline", size: "lg" })} gap-2`}
-					>
-						<BarChart3 className="h-5 w-5" />
-						Compare Models
-					</Link>
-				</div>
-				{totalModels > 0 && (
-					<div className="flex gap-8 text-sm text-muted-foreground">
-						<span>
-							<strong className="text-foreground">{totalModels}</strong> models
-						</span>
-						<span>
-							<strong className="text-foreground">{supportedCount}</strong>{" "}
-							supported
-						</span>
-						<span>
-							<strong className="text-foreground">{ttsCount}</strong> TTS
-						</span>
-						<span>
-							<strong className="text-foreground">{sttCount}</strong> STT
-						</span>
-					</div>
-				)}
-			</section>
-
-			{/* Audio Samples */}
-			<section className="space-y-6">
-				<div className="text-center space-y-2">
-					<h2 className="text-2xl font-semibold">Hear It In Action</h2>
-					<p className="text-muted-foreground">
-						Listen to samples generated entirely in the browser.
-					</p>
-				</div>
-				<AudioSamples />
+				{kokoroModel && <TtsDemo model={kokoroModel} variant="compact" />}
 			</section>
 
 			{/* Featured Models */}
@@ -147,40 +77,66 @@ export default async function HomePage() {
 				</section>
 			)}
 
-			{/* Popular Comparisons */}
-			{popularComparisons.length > 0 && (
-				<section className="space-y-6">
-					<div className="flex items-center justify-between">
-						<h2 className="text-2xl font-semibold">Popular Comparisons</h2>
+			{/* Voice Agent Preview */}
+			<section className="space-y-6">
+				<Card className="border-primary/20 bg-gradient-to-r from-gradient-from/5 to-gradient-to/5">
+					<CardContent className="flex items-center justify-between p-6">
+						<div>
+							<div className="flex items-center gap-2">
+								<h2 className="text-lg font-semibold">Voice Agent</h2>
+								<Badge variant="secondary">Preview</Badge>
+							</div>
+							<p className="mt-1 text-sm text-muted-foreground">
+								Talk to an AI assistant running entirely in your browser.
+							</p>
+						</div>
 						<Link
-							href="/compare"
-							className="flex items-center gap-1 text-sm text-primary hover:underline"
+							href="/voice-agent"
+							className={buttonVariants({ variant: "outline" })}
 						>
-							View all
-							<ArrowRight className="h-4 w-4" />
+							Try it
 						</Link>
-					</div>
-					<div className="grid gap-4 sm:grid-cols-2">
-						{popularComparisons.map((c) => (
-							<Link
-								key={c.comparison.id}
-								href={`/compare/${c.comparison.slug}`}
-							>
-								<Card className="transition-colors hover:border-primary/50">
-									<CardContent className="flex items-center justify-between p-6">
-										<div className="flex items-center gap-3">
-											<span className="font-medium">{c.modelA.name}</span>
-											<span className="text-sm text-muted-foreground">vs</span>
-											<span className="font-medium">{c.modelB.name}</span>
-										</div>
-										<ChevronRight className="h-4 w-4 text-muted-foreground" />
-									</CardContent>
-								</Card>
-							</Link>
-						))}
-					</div>
-				</section>
-			)}
+					</CardContent>
+				</Card>
+			</section>
+
+			{/* Text-to-Speech in the Browser */}
+			<section className="space-y-4">
+				<h2 className="text-2xl font-semibold">Text-to-Speech in the Browser</h2>
+				<div className="max-w-3xl space-y-3 text-muted-foreground">
+					<p>
+						TTSLab lets you run text-to-speech models directly in your browser
+						using WebGPU and WASM. No server-side processing, no API keys, no
+						queue times. Models like Kokoro 82M, SpeechT5, and Piper generate
+						natural-sounding speech in real time, right on your device.
+					</p>
+					<p>
+						Each model is downloaded once and cached locally for instant reuse.
+						Whether you are a developer evaluating TTS options, a researcher
+						benchmarking model quality, or a product team comparing voices,
+						TTSLab provides a fast, standardized environment.
+					</p>
+				</div>
+			</section>
+
+			{/* Why Privacy Matters */}
+			<section className="space-y-4">
+				<h2 className="text-2xl font-semibold">Why On-Device Speech AI Matters</h2>
+				<div className="max-w-3xl space-y-3 text-muted-foreground">
+					<p>
+						Cloud-based TTS services require sending your text to external
+						servers. For sensitive content — medical notes, legal documents,
+						personal messages — that creates privacy and compliance risks.
+						On-device inference eliminates this entirely: your text and audio
+						never leave your browser.
+					</p>
+					<p>
+						WebGPU-accelerated inference also removes latency from network round
+						trips, making real-time applications like voice agents and live
+						captioning practical without a backend.
+					</p>
+				</div>
+			</section>
 
 			{/* How It Works */}
 			<section className="space-y-6">
@@ -231,37 +187,6 @@ export default async function HomePage() {
 					))}
 				</div>
 			</section>
-
-			{/* Most Requested */}
-			{unsupportedModels.length > 0 && (
-				<section className="space-y-6">
-					<div className="text-center space-y-2">
-						<h2 className="text-2xl font-semibold">Most Requested</h2>
-						<p className="text-muted-foreground">
-							Upvote the models you want to see supported next.
-						</p>
-					</div>
-					<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-						{unsupportedModels.map(({ model, upvoteCount }) => (
-							<Card key={model.id}>
-								<CardHeader>
-									<div className="flex items-center justify-between">
-										<CardTitle>{model.name}</CardTitle>
-										<Badge variant="outline">{model.type.toUpperCase()}</Badge>
-									</div>
-									<CardDescription>{model.description}</CardDescription>
-								</CardHeader>
-								<CardContent>
-									<UpvoteButton
-										modelSlug={model.slug}
-										initialCount={upvoteCount}
-									/>
-								</CardContent>
-							</Card>
-						))}
-					</div>
-				</section>
-			)}
 
 			{/* Open Source CTA */}
 			<section className="rounded-xl border border-border bg-card p-8 text-center sm:p-12">

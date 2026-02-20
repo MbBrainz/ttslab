@@ -1,4 +1,6 @@
 export const APP_NAME = "TTSLab";
+export const APP_TITLE =
+	"TTSLab — Test Text-to-Speech & STT Models in Your Browser (WebGPU, On-Device)";
 export const APP_DESCRIPTION =
 	"Test TTS & STT models in your browser. No server. No data collection. Powered by WebGPU.";
 export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://ttslab.dev";

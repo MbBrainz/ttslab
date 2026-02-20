@@ -26,7 +26,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 			priority: 0.8,
 		},
 		{
+			url: `${APP_URL}/voice-agent`,
+			lastModified: new Date(),
+			changeFrequency: "monthly",
+			priority: 0.7,
+		},
+		{
+			url: `${APP_URL}/benchmark`,
+			lastModified: new Date(),
+			changeFrequency: "monthly",
+			priority: 0.6,
+		},
+		{
 			url: `${APP_URL}/about`,
+			lastModified: new Date(),
+			changeFrequency: "monthly",
+			priority: 0.5,
+		},
+		{
+			url: `${APP_URL}/contribute`,
 			lastModified: new Date(),
 			changeFrequency: "monthly",
 			priority: 0.5,

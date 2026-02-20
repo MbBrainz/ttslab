@@ -29,12 +29,15 @@ import { cn } from "@/lib/utils";
 
 type TtsDemoProps = {
 	model: Model;
+	variant?: "full" | "compact";
 };
 
 const DEFAULT_PLACEHOLDER = "Type or paste text here to convert to speech...";
-const MAX_TEXT_LENGTH = 5000;
 
-export function TtsDemo({ model }: TtsDemoProps) {
+export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
+	const compact = variant === "compact";
+	const maxTextLength = compact ? 2000 : 5000;
+
 	const [text, setText] = useState("");
 	const [voice, setVoice] = useState("default");
 	const [modelState, setModelState] = useState<ModelState>({
@@ -65,19 +68,21 @@ export function TtsDemo({ model }: TtsDemoProps) {
 			if (audioUrl) URL.revokeObjectURL(audioUrl);
 			setAudioUrl(url);
 
-			addToHistory(model.slug, {
-				id: crypto.randomUUID(),
-				text: text.slice(0, 200),
-				voice,
-				voiceName: voices.find((v) => v.id === voice)?.name ?? voice,
-				audioUrl: url,
-				generationTimeMs: 0,
-				backend: backendRef.current,
-				timestamp: Date.now(),
-			});
-			setHistoryKey((k) => k + 1);
+			if (!compact) {
+				addToHistory(model.slug, {
+					id: crypto.randomUUID(),
+					text: text.slice(0, 200),
+					voice,
+					voiceName: voices.find((v) => v.id === voice)?.name ?? voice,
+					audioUrl: url,
+					generationTimeMs: 0,
+					backend: backendRef.current,
+					timestamp: Date.now(),
+				});
+				setHistoryKey((k) => k + 1);
+			}
 		},
-		[audioUrl, model.slug, text, voice, voices],
+		[audioUrl, model.slug, text, voice, voices, compact],
 	);
 
 	const {
@@ -103,21 +108,22 @@ export function TtsDemo({ model }: TtsDemoProps) {
 		};
 	}, [audioUrl]);
 
-	// Pre-fill from share URL params on mount
+	// Pre-fill from share URL params on mount (full variant only)
 	useEffect(() => {
+		if (compact) return;
 		const params = getShareParams();
 		if (params.text) setText(params.text);
 		if (params.voice) setVoice(params.voice);
-	}, []);
+	}, [compact]);
 
 	// Add "Custom Voice" option when a speaker embedding is uploaded (SpeechT5)
 	const displayVoices = useMemo(() => {
 		const base = voices.map((v) => ({ id: v.id, name: v.name }));
-		if (model.slug === "speecht5" && speakerEmbeddingUrl) {
+		if (!compact && model.slug === "speecht5" && speakerEmbeddingUrl) {
 			return [...base, { id: "custom", name: "Custom Voice" }];
 		}
 		return base;
-	}, [voices, model.slug, speakerEmbeddingUrl]);
+	}, [voices, model.slug, speakerEmbeddingUrl, compact]);
 
 	const getVoiceName = useCallback((voiceId: string): string => {
 		const found = voices.find((v) => v.id === voiceId);
@@ -160,7 +166,9 @@ export function TtsDemo({ model }: TtsDemoProps) {
 				setVoice(result.voices[0].id);
 			}
 
-			trackModelLoad(model.slug, result.backend, result.loadTime);
+			if (!compact) {
+				trackModelLoad(model.slug, result.backend, result.loadTime);
+			}
 
 			setModelState({
 				status: "ready",
@@ -177,13 +185,13 @@ export function TtsDemo({ model }: TtsDemoProps) {
 		} finally {
 			loadingRef.current = false;
 		}
-	}, [model.slug, model.sizeMb, loadModel]);
+	}, [model.slug, model.sizeMb, loadModel, compact]);
 
 	const handleGenerate = useCallback(async () => {
 		if (generatingRef.current || !text.trim()) return;
 		generatingRef.current = true;
 
-		addRecentText(text);
+		if (!compact) addRecentText(text);
 
 		setModelState({
 			status: "processing",
@@ -229,13 +237,15 @@ export function TtsDemo({ model }: TtsDemoProps) {
 					? result.metrics.totalMs / 1000 / result.duration
 					: undefined;
 
-			trackTTSGeneration(
-				model.slug,
-				result.metrics.backend ?? backendRef.current,
-				text.length,
-				result.metrics.totalMs,
-				rtf,
-			);
+			if (!compact) {
+				trackTTSGeneration(
+					model.slug,
+					result.metrics.backend ?? backendRef.current,
+					text.length,
+					result.metrics.totalMs,
+					rtf,
+				);
+			}
 
 			setModelState({
 				status: "result",
@@ -247,18 +257,20 @@ export function TtsDemo({ model }: TtsDemoProps) {
 				},
 			});
 
-			// Add to generation history
-			addToHistory(model.slug, {
-				id: crypto.randomUUID(),
-				text: text.slice(0, 200),
-				voice,
-				voiceName: getVoiceName(voice),
-				audioUrl: url,
-				generationTimeMs: result.metrics.totalMs,
-				backend: result.metrics.backend ?? backendRef.current,
-				timestamp: Date.now(),
-			});
-			setHistoryKey((k) => k + 1);
+			// Add to generation history (full variant only)
+			if (!compact) {
+				addToHistory(model.slug, {
+					id: crypto.randomUUID(),
+					text: text.slice(0, 200),
+					voice,
+					voiceName: getVoiceName(voice),
+					audioUrl: url,
+					generationTimeMs: result.metrics.totalMs,
+					backend: result.metrics.backend ?? backendRef.current,
+					timestamp: Date.now(),
+				});
+				setHistoryKey((k) => k + 1);
+			}
 		} catch (err) {
 			clearInterval(timer);
 			setModelState({
@@ -271,13 +283,13 @@ export function TtsDemo({ model }: TtsDemoProps) {
 		} finally {
 			generatingRef.current = false;
 		}
-	}, [text, voice, audioUrl, model.slug, speakerEmbeddingUrl, synthesize, getVoiceName]);
+	}, [text, voice, audioUrl, model.slug, speakerEmbeddingUrl, synthesize, getVoiceName, compact]);
 
 	const handleStream = useCallback(() => {
 		if (!text.trim() || isStreaming) return;
-		addRecentText(text);
+		if (!compact) addRecentText(text);
 		startStream(text, voice, speakerEmbeddingUrl ?? undefined);
-	}, [text, voice, speakerEmbeddingUrl, isStreaming, startStream]);
+	}, [text, voice, speakerEmbeddingUrl, isStreaming, startStream, compact]);
 
 	const handleRetry = useCallback(() => {
 		if (modelReadyRef.current) {
@@ -307,7 +319,7 @@ export function TtsDemo({ model }: TtsDemoProps) {
 	const showVoiceSelect = displayVoices.length > 0 && (canGenerate || isProcessing || isStreaming);
 
 	return (
-		<div className="space-y-6">
+		<div className={compact ? "mx-auto max-w-lg space-y-3" : "space-y-6"}>
 			<ModelStatus
 				state={modelState}
 				modelName={model.name}
@@ -316,46 +328,45 @@ export function TtsDemo({ model }: TtsDemoProps) {
 				onRetry={handleRetry}
 			/>
 
-			<div className="space-y-4">
-				<div className="space-y-2">
-					<div className="flex items-center gap-1.5">
-						<label
-							htmlFor={`tts-text-${model.slug}`}
-							className="text-sm font-medium text-foreground"
-						>
-							Text to speak
-						</label>
-						<SSMLHints modelSlug={model.slug} />
-					</div>
+			<div className={compact ? "space-y-3" : "space-y-4"}>
+				<div className={compact ? undefined : "space-y-2"}>
+					{!compact && (
+						<div className="flex items-center gap-1.5">
+							<label
+								htmlFor={`tts-text-${model.slug}`}
+								className="text-sm font-medium text-foreground"
+							>
+								Text to speak
+							</label>
+							<SSMLHints modelSlug={model.slug} />
+						</div>
+					)}
 					<Textarea
 						id={`tts-text-${model.slug}`}
-						placeholder={DEFAULT_PLACEHOLDER}
+						placeholder={compact ? "Type text to convert to speech..." : DEFAULT_PLACEHOLDER}
 						value={text}
-						onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT_LENGTH))}
-						rows={4}
+						onChange={(e) => setText(e.target.value.slice(0, maxTextLength))}
+						rows={compact ? 2 : 4}
 						className="resize-none"
-						maxLength={MAX_TEXT_LENGTH}
+						maxLength={maxTextLength}
 						disabled={isProcessing}
 					/>
-					<div className="flex items-center justify-between text-xs text-muted-foreground">
-						<span>
-							{text.length} / {MAX_TEXT_LENGTH}
-						</span>
-						{wordCount > 0 && <span>~{wordCount} words</span>}
-					</div>
-					<TextPresets onSelect={setText} disabled={isProcessing} />
+					{!compact && (
+						<>
+							<div className="flex items-center justify-between text-xs text-muted-foreground">
+								<span>
+									{text.length} / {maxTextLength}
+								</span>
+								{wordCount > 0 && <span>~{wordCount} words</span>}
+							</div>
+							<TextPresets onSelect={setText} disabled={isProcessing} />
+						</>
+					)}
 				</div>
 
 				{showVoiceSelect && (
-					<div className="space-y-2">
-						<label
-							htmlFor={`tts-voice-${model.slug}`}
-							className="text-sm font-medium text-foreground"
-						>
-							Voice
-						</label>
+					compact ? (
 						<Select
-							id={`tts-voice-${model.slug}`}
 							value={voice}
 							onChange={(e) => setVoice(e.target.value)}
 							disabled={isProcessing}
@@ -366,10 +377,31 @@ export function TtsDemo({ model }: TtsDemoProps) {
 								</SelectOption>
 							))}
 						</Select>
-					</div>
+					) : (
+						<div className="space-y-2">
+							<label
+								htmlFor={`tts-voice-${model.slug}`}
+								className="text-sm font-medium text-foreground"
+							>
+								Voice
+							</label>
+							<Select
+								id={`tts-voice-${model.slug}`}
+								value={voice}
+								onChange={(e) => setVoice(e.target.value)}
+								disabled={isProcessing}
+							>
+								{displayVoices.map((v) => (
+									<SelectOption key={v.id} value={v.id}>
+										{v.name}
+									</SelectOption>
+								))}
+							</Select>
+						</div>
+					)
 				)}
 
-				{model.slug === "speecht5" && (
+				{!compact && model.slug === "speecht5" && (
 					<VoiceCloneUpload
 						onEmbeddingReady={(url) => {
 							setSpeakerEmbeddingUrl(url);
@@ -425,18 +457,23 @@ export function TtsDemo({ model }: TtsDemoProps) {
 			)}
 
 			{audioUrl && (
-				<div className="space-y-2">
+				<div className={compact ? "space-y-1" : "space-y-2"}>
 					<div className="flex items-center justify-between">
-						<h3 className="text-sm font-medium text-foreground">Output</h3>
+						<h3 className={cn("font-medium text-foreground", compact ? "text-xs" : "text-sm")}>Output</h3>
 						<div className="flex items-center gap-1">
-							<ShareButton modelSlug={model.slug} text={text} voice={voice} />
+							{!compact && <ShareButton modelSlug={model.slug} text={text} voice={voice} />}
 							<a
 								href={audioUrl}
 								download={`${model.slug}-${Date.now()}.wav`}
-								className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+								className={cn(
+									"inline-flex items-center text-muted-foreground transition-colors hover:text-foreground",
+									compact
+										? "gap-1 text-xs"
+										: "gap-1.5 rounded-md px-2.5 py-1 text-xs hover:bg-secondary",
+								)}
 							>
-								<Download className="h-3.5 w-3.5" />
-								Download audio
+								<Download className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
+								{compact ? "Download" : "Download audio"}
 							</a>
 						</div>
 					</div>
@@ -444,7 +481,7 @@ export function TtsDemo({ model }: TtsDemoProps) {
 				</div>
 			)}
 
-			{modelState.status === "result" && (
+			{!compact && modelState.status === "result" && (
 				<div className={cn(
 					"grid gap-4 rounded-lg border border-border bg-secondary/30 p-4",
 					modelState.metrics.ttfaMs != null ? "grid-cols-4" : "grid-cols-3",
@@ -484,9 +521,9 @@ export function TtsDemo({ model }: TtsDemoProps) {
 				</div>
 			)}
 
-			<RecentTexts onSelect={handleSelectRecentText} currentText={text} />
+			{!compact && <RecentTexts onSelect={handleSelectRecentText} currentText={text} />}
 
-			<GenerationHistory key={historyKey} modelSlug={model.slug} />
+			{!compact && <GenerationHistory key={historyKey} modelSlug={model.slug} />}
 		</div>
 	);
 }

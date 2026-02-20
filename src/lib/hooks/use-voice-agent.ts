@@ -27,6 +27,7 @@ export interface ConversationTurn {
 	role: "user" | "assistant";
 	content: string;
 	timestamp: number;
+	interrupted?: boolean;
 	metrics?: {
 		sttMs?: number;
 		llmMs?: number;
@@ -46,7 +47,6 @@ interface UseVoiceAgentOptions {
 	ttsModel: string;
 	ttsVoice: string;
 	llmModel: LlmModel;
-	useCloudLlm: boolean;
 }
 
 export function useVoiceAgent({
@@ -54,7 +54,6 @@ export function useVoiceAgent({
 	ttsModel,
 	ttsVoice,
 	llmModel,
-	useCloudLlm,
 }: UseVoiceAgentOptions) {
 	const [phase, setPhase] = useState<AgentPhase>("idle");
 	const [conversation, setConversation] = useState<ConversationTurn[]>([]);
@@ -83,6 +82,12 @@ export function useVoiceAgent({
 	const ttsChainRef = useRef<Promise<void>>(Promise.resolve());
 	// Track which LLM model is currently loaded in the worker
 	const loadedLlmIdRef = useRef<string | null>(null);
+
+	// Barge-in: track enqueued sentences and how many finished playing
+	const enqueuedSentencesRef = useRef<string[]>([]);
+	const playedSentenceCountRef = useRef(0);
+	// Generation counter — incremented on each new pipeline run and on interrupt
+	const generationRef = useRef(0);
 
 	// Keep phaseRef in sync
 	useEffect(() => {
@@ -121,11 +126,6 @@ export function useVoiceAgent({
 
 	const loadLlm = useCallback(
 		async (onProgress?: (p: DownloadProgress) => void) => {
-			if (useCloudLlm) {
-				loadedLlmIdRef.current = "cloud";
-				setLlmState({ status: "ready", backend: "wasm", loadTime: 0 });
-				return { backend: "wasm" as const, loadTime: 0 };
-			}
 			setLlmState({ status: "initializing" });
 			const tracker = createDownloadTracker();
 			try {
@@ -152,7 +152,7 @@ export function useVoiceAgent({
 				throw err;
 			}
 		},
-		[llmLoad, llmModel, useCloudLlm],
+		[llmLoad, llmModel],
 	);
 
 	const loadTts = useCallback(
@@ -188,12 +188,11 @@ export function useVoiceAgent({
 	}, [loadStt, loadLlm, loadTts]);
 
 	// Auto-reload LLM when model selection changes while already loaded
-	const targetLlmId = useCloudLlm ? "cloud" : llmModel.id;
 	useEffect(() => {
-		if (loadedLlmIdRef.current && loadedLlmIdRef.current !== targetLlmId) {
+		if (loadedLlmIdRef.current && loadedLlmIdRef.current !== llmModel.id) {
 			loadLlm().catch(() => {});
 		}
-	}, [targetLlmId, loadLlm]);
+	}, [llmModel.id, loadLlm]);
 
 	const allModelsReady =
 		sttState.status === "ready" &&
@@ -208,6 +207,7 @@ export function useVoiceAgent({
 	const enqueueSentence = useCallback(
 		(sentence: string) => {
 			if (!sentence.trim() || abortRef.current) return;
+			enqueuedSentencesRef.current.push(sentence);
 			// Append to the sequential chain so each synthesize() completes
 			// before the next one starts (WorkerTransport single-slot constraint).
 			ttsChainRef.current = ttsChainRef.current.then(async () => {
@@ -220,7 +220,9 @@ export function useVoiceAgent({
 					const rtf = duration > 0 ? ttsMs / 1000 / duration : null;
 					setMetrics((prev) => ({ ...prev, ttsRtf: rtf }));
 					if (!abortRef.current) {
-						queueRef.current?.enqueue(result.audio, result.sampleRate);
+						queueRef.current?.enqueue(result.audio, result.sampleRate, () => {
+							playedSentenceCountRef.current++;
+						});
 					}
 				} catch {
 					// TTS error for one sentence — continue with others
@@ -251,62 +253,6 @@ export function useVoiceAgent({
 		}
 		return null;
 	};
-
-	const runCloudLlm = useCallback(
-		async (messages: ChatMessage[]) => {
-			const response = await fetch("/api/chat", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ messages }),
-			});
-
-			if (!response.ok || !response.body) {
-				throw new Error("Cloud LLM request failed");
-			}
-
-			const reader = response.body.getReader();
-			const decoder = new TextDecoder();
-			let fullText = "";
-			let sentenceBuffer = "";
-
-			const llmStart = performance.now();
-
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done || abortRef.current) break;
-
-				const chunk = stripEmojis(decoder.decode(value, { stream: true }));
-				fullText += chunk;
-				sentenceBuffer += chunk;
-				setStreamingText(fullText);
-
-				// Extract clauses for early TTS
-				let extracted = extractClause(sentenceBuffer);
-				while (extracted) {
-					if (extracted.clause && phaseRef.current !== "idle") {
-						setPhase("speaking");
-						enqueueSentence(extracted.clause);
-					}
-					sentenceBuffer = extracted.rest;
-					extracted = extractClause(sentenceBuffer);
-				}
-			}
-
-			// Flush remaining buffer
-			if (sentenceBuffer.trim() && !abortRef.current) {
-				setPhase("speaking");
-				enqueueSentence(sentenceBuffer.trim());
-			}
-
-			const llmMs = performance.now() - llmStart;
-			setMetrics((prev) => ({ ...prev, llmTokensPerSec: null }));
-
-			// Wait for all queued TTS to complete
-			await ttsChainRef.current;
-			return { fullText, llmMs };
-		},
-		[enqueueSentence],
-	);
 
 	const runLocalLlm = useCallback(
 		(messages: ChatMessage[]): Promise<{ fullText: string; llmMs: number; tokensPerSec: number }> => {
@@ -362,6 +308,11 @@ export function useVoiceAgent({
 		async (audio: Float32Array) => {
 			if (phaseRef.current === "idle" || abortRef.current) return;
 
+			// Capture generation and reset sentence tracking for this run
+			const myGeneration = ++generationRef.current;
+			enqueuedSentencesRef.current = [];
+			playedSentenceCountRef.current = 0;
+
 			// 1. STT
 			setPhase("transcribing");
 			const sttStart = performance.now();
@@ -405,20 +356,21 @@ export function useVoiceAgent({
 			let tokensPerSec: number | null = null;
 
 			try {
-				if (useCloudLlm) {
-					const result = await runCloudLlm(conversationRef.current);
-					fullText = result.fullText;
-					llmMs = result.llmMs;
-				} else {
-					const result = await runLocalLlm(conversationRef.current);
-					fullText = result.fullText;
-					llmMs = result.llmMs;
-					tokensPerSec = result.tokensPerSec;
-				}
+				const result = await runLocalLlm(conversationRef.current);
+				fullText = result.fullText;
+				llmMs = result.llmMs;
+				tokensPerSec = result.tokensPerSec;
 			} catch (err) {
 				queueRef.current?.stop();
 				queueRef.current = null;
 				setPhase("listening");
+				return;
+			}
+
+			// If interrupted, the onSpeechStart handler already added the
+			// truncated assistant turn — bail out to avoid a duplicate.
+			if (myGeneration !== generationRef.current) {
+				setStreamingText("");
 				return;
 			}
 
@@ -459,20 +411,51 @@ export function useVoiceAgent({
 				setPhase("listening");
 			}
 		},
-		[sttWorker, sttModel, useCloudLlm, runCloudLlm, runLocalLlm],
+		[sttWorker, sttModel, runLocalLlm],
 	);
 
 	// --- VAD ---
 
 	const vad = useVad({
 		onSpeechStart: () => {
-			// Interrupt if currently speaking
-			if (phaseRef.current === "speaking") {
+			// Interrupt if currently speaking or thinking
+			if (phaseRef.current === "speaking" || phaseRef.current === "thinking") {
+				// Compute what was actually spoken before interruption
+				const sentences = enqueuedSentencesRef.current;
+				const played = playedSentenceCountRef.current;
+				// Include the currently-playing sentence (at index = played)
+				const spokenUpTo = Math.min(played + 1, sentences.length);
+				const spokenText = sentences.slice(0, spokenUpTo).join(" ");
+
+				// Invalidate the current generation so processSpeech won't add a duplicate turn
+				generationRef.current++;
+
+				// Add truncated assistant turn to context (if any text was spoken)
+				if (spokenText) {
+					conversationRef.current.push({ role: "assistant", content: spokenText });
+					setConversation(prev => [...prev, {
+						id: crypto.randomUUID(),
+						role: "assistant" as const,
+						content: spokenText,
+						timestamp: Date.now(),
+						interrupted: true,
+					}]);
+				}
+
+				// Stop everything
 				abortRef.current = true;
 				queueRef.current?.stop();
 				queueRef.current = null;
 				llmCancel();
+				ttsChainRef.current = Promise.resolve();
 				abortRef.current = false;
+
+				// Reset tracking and transition to listening
+				enqueuedSentencesRef.current = [];
+				playedSentenceCountRef.current = 0;
+				setStreamingText("");
+				setPhase("listening");
+				phaseRef.current = "listening";
 			}
 		},
 		onSpeechEnd: (audio) => {

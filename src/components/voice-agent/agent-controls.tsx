@@ -1,6 +1,6 @@
 "use client";
 
-import { Mic, MicOff, Square, Cloud, CloudOff } from "lucide-react";
+import { Mic, MicOff, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectOption } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -21,9 +21,6 @@ interface AgentControlsProps {
 	// LLM
 	selectedLlm: LlmModel;
 	onLlmChange: (model: LlmModel) => void;
-	// Cloud
-	useCloud: boolean;
-	onCloudToggle: () => void;
 	// Actions
 	onStart: () => void;
 	onStop: () => void;
@@ -39,8 +36,6 @@ export function AgentControls({
 	onVoiceChange,
 	selectedLlm,
 	onLlmChange,
-	useCloud,
-	onCloudToggle,
 	onStart,
 	onStop,
 }: AgentControlsProps) {
@@ -122,21 +117,6 @@ export function AgentControls({
 						</SelectOption>
 					))}
 				</Select>
-
-				<Button
-					variant={useCloud ? "default" : "outline"}
-					size="sm"
-					onClick={onCloudToggle}
-					disabled={isActive}
-					className="gap-1.5"
-				>
-					{useCloud ? (
-						<Cloud className="h-3.5 w-3.5" />
-					) : (
-						<CloudOff className="h-3.5 w-3.5" />
-					)}
-					Cloud LLM: {useCloud ? "On" : "Off"}
-				</Button>
 			</div>
 
 			{/* Metrics row */}
