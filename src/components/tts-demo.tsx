@@ -18,6 +18,7 @@ import { VoiceCloneUpload } from "@/components/voice-clone-upload";
 import { StreamingVisualizer } from "@/components/streaming-visualizer";
 import { WaveformPlayer } from "@/components/waveform-player";
 import { trackModelLoad, trackTTSGeneration } from "@/lib/analytics";
+import { createDownloadTracker } from "@/lib/inference/download-tracker";
 import { float32ToWav } from "@/lib/audio-utils";
 import type { Model } from "@/lib/db/schema";
 import { useStreamingTts } from "@/lib/hooks/use-streaming-tts";
@@ -128,9 +129,7 @@ export function TtsDemo({ model }: TtsDemoProps) {
 		loadingRef.current = true;
 
 		const estimatedBytes = (model.sizeMb ?? 0) * 1024 * 1024;
-		let lastDisplayTime = 0;
-		let smoothSpeed = 0;
-		const fileMap = new Map<string, { loaded: number; total: number }>();
+		const tracker = createDownloadTracker(estimatedBytes);
 
 		setModelState({
 			status: "downloading",
@@ -140,54 +139,12 @@ export function TtsDemo({ model }: TtsDemoProps) {
 			downloaded: 0,
 		});
 
-		const loadStart = performance.now();
-
 		try {
 			const result = await loadModel(model.slug, {
 				backend: "auto",
 				onProgress: (progress) => {
-					fileMap.set(progress.file, {
-						loaded: progress.loaded,
-						total: progress.total,
-					});
-
-					let downloadedBytes = 0;
-					let totalBytes = 0;
-					for (const fp of fileMap.values()) {
-						downloadedBytes += fp.loaded;
-						totalBytes += fp.total;
-					}
-					if (totalBytes === 0) totalBytes = estimatedBytes;
-
-					// When download completes, show initializing immediately
-					if (downloadedBytes >= totalBytes && totalBytes > 0) {
-						setModelState({ status: "initializing" });
-						return;
-					}
-
-					// Throttle UI updates to every 500ms
-					const now = performance.now();
-					const dt = (now - lastDisplayTime) / 1000;
-					if (dt < 0.5 && downloadedBytes < totalBytes) return;
-
-					const elapsed = (now - loadStart) / 1000;
-					const speed = elapsed > 0 ? downloadedBytes / elapsed : 0;
-					smoothSpeed =
-						smoothSpeed === 0 ? speed : smoothSpeed * 0.7 + speed * 0.3;
-					lastDisplayTime = now;
-
-					const pct =
-						totalBytes > 0
-							? Math.round((downloadedBytes / totalBytes) * 100)
-							: 0;
-
-					setModelState({
-						status: "downloading",
-						progress: pct,
-						speed: smoothSpeed,
-						total: totalBytes,
-						downloaded: downloadedBytes,
-					});
+					const state = tracker.process(progress);
+					if (state) setModelState(state);
 				},
 			});
 

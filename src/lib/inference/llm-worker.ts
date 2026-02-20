@@ -11,9 +11,15 @@ let cancelled = false;
 const SYSTEM_PROMPT =
 	"You are a helpful voice assistant having a real-time conversation. Keep responses concise — 1-3 sentences maximum. Never use markdown formatting, bullet points, or numbered lists. Never use emojis. Be natural and conversational. Remember what the user said earlier in the conversation and refer back to it when relevant.";
 
-self.onmessage = async (e: MessageEvent<LlmWorkerCommand>) => {
-	const cmd = e.data;
+// Serialize all commands — async onmessage yields at first await, which would
+// let the next message start concurrently causing race conditions.
+let commandQueue: Promise<void> = Promise.resolve();
 
+self.onmessage = (e: MessageEvent<LlmWorkerCommand>) => {
+	commandQueue = commandQueue.then(() => handleCommand(e.data));
+};
+
+async function handleCommand(cmd: LlmWorkerCommand) {
 	try {
 		switch (cmd.type) {
 			case "load": {
@@ -216,7 +222,7 @@ self.onmessage = async (e: MessageEvent<LlmWorkerCommand>) => {
 			message: err instanceof Error ? err.message : "Unknown LLM worker error",
 		});
 	}
-};
+}
 
 function post(msg: LlmWorkerResponse) {
 	self.postMessage(msg);

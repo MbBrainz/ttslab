@@ -30,6 +30,8 @@ export class LlmTransport {
 	private progressCallback: ((progress: { status: string; file: string; loaded: number; total: number }) => void) | null = null;
 	private tokenCallback: LlmTokenCallback | null = null;
 	private callbacks: LlmTransportCallbacks;
+	/** Number of "load" commands sent that haven't received "loaded" responses yet. */
+	private pendingLoads = 0;
 
 	constructor(callbacks: LlmTransportCallbacks) {
 		this.callbacks = callbacks;
@@ -55,10 +57,14 @@ export class LlmTransport {
 	private handleMessage(msg: LlmWorkerResponse): void {
 		switch (msg.type) {
 			case "progress":
-				this.progressCallback?.(msg.data);
+				// Skip progress from superseded load commands
+				if (this.pendingLoads <= 1) this.progressCallback?.(msg.data);
 				break;
 
 			case "loaded": {
+				this.pendingLoads = Math.max(0, this.pendingLoads - 1);
+				// Skip stale "loaded" from superseded load — only resolve for the latest
+				if (this.pendingLoads > 0) break;
 				this.callbacks.onStateChange({ isLoading: false });
 				const result: LlmLoadedResult = {
 					backend: msg.backend,
@@ -96,7 +102,13 @@ export class LlmTransport {
 				this.pending = null;
 				break;
 
-			case "error":
+			case "error": {
+				// If multiple loads are queued, a stale error should not reject the current pending
+				if (this.pendingLoads > 1) {
+					this.pendingLoads--;
+					break;
+				}
+				if (this.pendingLoads === 1) this.pendingLoads = 0;
 				this.callbacks.onStateChange({ isLoading: false, isGenerating: false });
 				if (this.tokenCallback) {
 					this.tokenCallback.onError(new Error(msg.message));
@@ -105,6 +117,7 @@ export class LlmTransport {
 				this.pending?.reject(new Error(msg.message));
 				this.pending = null;
 				break;
+			}
 		}
 	}
 
@@ -120,6 +133,9 @@ export class LlmTransport {
 
 	sendCommand<T>(cmd: LlmWorkerCommand): Promise<T> {
 		return new Promise<T>((resolve, reject) => {
+			// Reject any in-flight command before overwriting
+			this.pending?.reject(new Error("Cancelled by new command"));
+			if (cmd.type === "load") this.pendingLoads++;
 			this.pending = { resolve, reject };
 			const worker = this.ensureWorker();
 			worker.postMessage(cmd);

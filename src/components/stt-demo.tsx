@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { type ModelState, ModelStatus } from "@/components/model-status";
 import { Button } from "@/components/ui/button";
 import { trackModelLoad, trackSTTTranscription } from "@/lib/analytics";
+import { createDownloadTracker } from "@/lib/inference/download-tracker";
 import type { Model } from "@/lib/db/schema";
 import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
 import { cn } from "@/lib/utils";
@@ -54,58 +55,23 @@ export function SttDemo({ model }: SttDemoProps) {
 		if (loadingRef.current) return;
 		loadingRef.current = true;
 
-		let totalBytes = (model.sizeMb ?? 0) * 1024 * 1024;
-		let downloadedBytes = 0;
-		let lastDisplayTime = 0;
-		let smoothSpeed = 0;
+		const estimatedBytes = (model.sizeMb ?? 0) * 1024 * 1024;
+		const tracker = createDownloadTracker(estimatedBytes);
 
 		setModelState({
 			status: "downloading",
 			progress: 0,
 			speed: 0,
-			total: totalBytes,
+			total: estimatedBytes,
 			downloaded: 0,
 		});
-
-		const loadStart = performance.now();
 
 		try {
 			const result = await loadModel(model.slug, {
 				backend: "auto",
 				onProgress: (progress) => {
-					if (progress.total > 0) {
-						totalBytes = progress.total;
-					}
-					downloadedBytes = progress.loaded;
-
-					if (downloadedBytes >= totalBytes && totalBytes > 0) {
-						setModelState({ status: "initializing" });
-						return;
-					}
-
-					// Throttle UI updates to every 500ms
-					const now = performance.now();
-					const dt = (now - lastDisplayTime) / 1000;
-					if (dt < 0.5 && downloadedBytes < totalBytes) return;
-
-					const elapsed = (now - loadStart) / 1000;
-					const speed = elapsed > 0 ? downloadedBytes / elapsed : 0;
-					smoothSpeed =
-						smoothSpeed === 0 ? speed : smoothSpeed * 0.7 + speed * 0.3;
-					lastDisplayTime = now;
-
-					const pct =
-						totalBytes > 0
-							? Math.round((downloadedBytes / totalBytes) * 100)
-							: 0;
-
-					setModelState({
-						status: "downloading",
-						progress: pct,
-						speed: smoothSpeed,
-						total: totalBytes,
-						downloaded: downloadedBytes,
-					});
+					const state = tracker.process(progress);
+					if (state) setModelState(state);
 				},
 			});
 

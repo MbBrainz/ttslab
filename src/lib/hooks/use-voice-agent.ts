@@ -6,8 +6,14 @@ import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
 import { useLlmWorker } from "@/lib/hooks/use-llm-worker";
 import { useVad } from "@/lib/hooks/use-vad";
 import type { ChatMessage, LlmModel } from "@/lib/inference/llm-types";
+import { createDownloadTracker } from "@/lib/inference/download-tracker";
 import type { DownloadProgress } from "@/lib/inference/types";
 import type { ModelState } from "@/components/model-status";
+
+/** Strip emoji characters so TTS doesn't attempt to speak them. */
+function stripEmojis(text: string): string {
+	return text.replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, "").replace(/  +/g, " ");
+}
 
 export type AgentPhase =
 	| "idle"
@@ -66,7 +72,7 @@ export function useVoiceAgent({
 
 	const sttWorker = useInferenceWorker();
 	const ttsWorker = useInferenceWorker();
-	const llm = useLlmWorker();
+	const { loadModel: llmLoad, generate: llmGenerate, cancel: llmCancel } = useLlmWorker();
 
 	const queueRef = useRef<AudioQueue | null>(null);
 	const conversationRef = useRef<ChatMessage[]>([]);
@@ -88,17 +94,13 @@ export function useVoiceAgent({
 	const loadStt = useCallback(
 		async (onProgress?: (p: DownloadProgress) => void) => {
 			setSttState({ status: "initializing" });
+			const tracker = createDownloadTracker();
 			try {
 				const result = await sttWorker.loadModel(sttModel, {
 					backend: "wasm",
 					onProgress: (p) => {
-						setSttState({
-							status: "downloading",
-							progress: p.total > 0 ? (p.loaded / p.total) * 100 : 0,
-							speed: 0,
-							total: p.total,
-							downloaded: p.loaded,
-						});
+						const state = tracker.process(p);
+						if (state) setSttState(state);
 						onProgress?.(p);
 					},
 				});
@@ -125,17 +127,13 @@ export function useVoiceAgent({
 				return { backend: "wasm" as const, loadTime: 0 };
 			}
 			setLlmState({ status: "initializing" });
+			const tracker = createDownloadTracker();
 			try {
-				const result = await llm.loadModel(llmModel.id, llmModel.hfId, {
+				const result = await llmLoad(llmModel.id, llmModel.hfId, {
 					backend: "auto",
 					onProgress: (p) => {
-						setLlmState({
-							status: "downloading",
-							progress: p.total > 0 ? (p.loaded / p.total) * 100 : 0,
-							speed: 0,
-							total: p.total,
-							downloaded: p.loaded,
-						});
+						const state = tracker.process(p);
+						if (state) setLlmState(state);
 						onProgress?.(p);
 					},
 				});
@@ -143,6 +141,8 @@ export function useVoiceAgent({
 				setLlmState({ status: "ready", backend: result.backend, loadTime: result.loadTime });
 				return result;
 			} catch (err) {
+				// Ignore cancellation from model-switch (transport rejects the old command)
+				if (err instanceof Error && err.message === "Cancelled by new command") return;
 				setLlmState({
 					status: "error",
 					code: "LOAD_FAILED",
@@ -152,23 +152,19 @@ export function useVoiceAgent({
 				throw err;
 			}
 		},
-		[llm, llmModel, useCloudLlm],
+		[llmLoad, llmModel, useCloudLlm],
 	);
 
 	const loadTts = useCallback(
 		async (onProgress?: (p: DownloadProgress) => void) => {
 			setTtsState({ status: "initializing" });
+			const tracker = createDownloadTracker();
 			try {
 				const result = await ttsWorker.loadModel(ttsModel, {
 					backend: "auto",
 					onProgress: (p) => {
-						setTtsState({
-							status: "downloading",
-							progress: p.total > 0 ? (p.loaded / p.total) * 100 : 0,
-							speed: 0,
-							total: p.total,
-							downloaded: p.loaded,
-						});
+						const state = tracker.process(p);
+						if (state) setTtsState(state);
 						onProgress?.(p);
 					},
 				});
@@ -195,7 +191,7 @@ export function useVoiceAgent({
 	const targetLlmId = useCloudLlm ? "cloud" : llmModel.id;
 	useEffect(() => {
 		if (loadedLlmIdRef.current && loadedLlmIdRef.current !== targetLlmId) {
-			loadLlm();
+			loadLlm().catch(() => {});
 		}
 	}, [targetLlmId, loadLlm]);
 
@@ -279,7 +275,7 @@ export function useVoiceAgent({
 				const { done, value } = await reader.read();
 				if (done || abortRef.current) break;
 
-				const chunk = decoder.decode(value, { stream: true });
+				const chunk = stripEmojis(decoder.decode(value, { stream: true }));
 				fullText += chunk;
 				sentenceBuffer += chunk;
 				setStreamingText(fullText);
@@ -318,9 +314,10 @@ export function useVoiceAgent({
 				let sentenceBuffer = "";
 				let fullText = "";
 
-				llm.generate(messages, {
-					onToken: (token) => {
+				llmGenerate(messages, {
+					onToken: (rawToken) => {
 						if (abortRef.current) return;
+						const token = stripEmojis(rawToken);
 						fullText += token;
 						sentenceBuffer += token;
 						setStreamingText(fullText);
@@ -358,7 +355,7 @@ export function useVoiceAgent({
 				});
 			});
 		},
-		[llm, enqueueSentence],
+		[llmGenerate, enqueueSentence],
 	);
 
 	const processSpeech = useCallback(
@@ -474,7 +471,7 @@ export function useVoiceAgent({
 				abortRef.current = true;
 				queueRef.current?.stop();
 				queueRef.current = null;
-				llm.cancel();
+				llmCancel();
 				abortRef.current = false;
 			}
 		},
@@ -497,13 +494,13 @@ export function useVoiceAgent({
 	const stopConversation = useCallback(() => {
 		abortRef.current = true;
 		vad.stop();
-		llm.cancel();
+		llmCancel();
 		queueRef.current?.stop();
 		queueRef.current = null;
 		ttsChainRef.current = Promise.resolve();
 		setPhase("idle");
 		setStreamingText("");
-	}, [vad, llm]);
+	}, [vad, llmCancel]);
 
 	const clearConversation = useCallback(() => {
 		setConversation([]);
