@@ -6,149 +6,37 @@ import type {
 	DownloadProgress,
 	LoadOptions,
 	TranscribeResult,
-	Voice,
-	WorkerCommand,
-	WorkerResponse,
 } from "./types";
+import {
+	WorkerTransport,
+	type LoadedResult,
+	type StreamCallbacks,
+} from "./worker-transport";
 
-export interface StreamCallbacks {
-	onChunk: (data: {
-		audio: Float32Array;
-		sampleRate: number;
-		chunkIndex: number;
-		totalChunks: number;
-		sentenceText: string;
-	}) => void;
-	onEnd: (data: {
-		totalMs: number;
-		sampleRate: number;
-		totalChunks: number;
-	}) => void;
-	onError: (error: Error) => void;
-}
-
-/** Result returned by loadModel once the worker finishes loading. */
-export interface LoadedResult {
-	backend: "webgpu" | "wasm";
-	loadTime: number;
-	voices: Voice[];
-}
+// Re-export for consumers
+export type { StreamCallbacks, LoadedResult };
 
 export function useInferenceWorker() {
-	const workerRef = useRef<Worker | null>(null);
-	const pendingRef = useRef<{
-		// biome-ignore lint/suspicious/noExplicitAny: promise resolves with different types per command
-		resolve: (value: any) => void;
-		reject: (error: Error) => void;
-	} | null>(null);
-	const onProgressRef = useRef<
-		((progress: DownloadProgress) => void) | null
-	>(null);
-	const streamCallbacksRef = useRef<StreamCallbacks | null>(null);
+	const transportRef = useRef<WorkerTransport | null>(null);
 	const [isLoading, setIsLoading] = useState(false);
 	const [isGenerating, setIsGenerating] = useState(false);
 	const [isStreaming, setIsStreaming] = useState(false);
 
-	const getWorker = useCallback(() => {
-		if (!workerRef.current) {
-			workerRef.current = new Worker(
-				new URL("./inference-worker.ts", import.meta.url),
-			);
-
-			workerRef.current.onmessage = (e: MessageEvent<WorkerResponse>) => {
-				const msg = e.data;
-
-				switch (msg.type) {
-					case "progress":
-						onProgressRef.current?.(msg.data);
-						break;
-
-					case "loaded": {
-						setIsLoading(false);
-						const result: LoadedResult = {
-							backend: msg.backend,
-							loadTime: msg.loadTime,
-							voices: msg.voices,
-						};
-						pendingRef.current?.resolve(result);
-						pendingRef.current = null;
-						break;
-					}
-
-					case "audio":
-						setIsGenerating(false);
-						pendingRef.current?.resolve(msg.data);
-						pendingRef.current = null;
-						break;
-
-					case "transcript":
-						setIsGenerating(false);
-						pendingRef.current?.resolve(msg.data);
-						pendingRef.current = null;
-						break;
-
-					case "embedding":
-						setIsGenerating(false);
-						pendingRef.current?.resolve(msg.url);
-						pendingRef.current = null;
-						break;
-
-					case "disposed":
-						pendingRef.current?.resolve(undefined);
-						pendingRef.current = null;
-						break;
-
-					case "audio-chunk":
-						streamCallbacksRef.current?.onChunk(msg.data);
-						break;
-
-					case "stream-end":
-						setIsStreaming(false);
-						streamCallbacksRef.current?.onEnd(msg.data);
-						streamCallbacksRef.current = null;
-						break;
-
-					case "stream-cancelled":
-						setIsStreaming(false);
-						streamCallbacksRef.current = null;
-						break;
-
-					case "error":
-						setIsLoading(false);
-						setIsGenerating(false);
-						if (streamCallbacksRef.current) {
-							setIsStreaming(false);
-							streamCallbacksRef.current.onError(new Error(msg.message));
-							streamCallbacksRef.current = null;
-						}
-						pendingRef.current?.reject(new Error(msg.message));
-						pendingRef.current = null;
-						break;
-				}
-			};
-
-			workerRef.current.onerror = (e) => {
-				setIsLoading(false);
-				setIsGenerating(false);
-				pendingRef.current?.reject(
-					new Error(e.message || "Worker error"),
-				);
-				pendingRef.current = null;
-			};
-		}
-		return workerRef.current;
-	}, []);
-
-	const sendCommand = useCallback(
-		<T>(cmd: WorkerCommand, transfer?: Transferable[]): Promise<T> => {
-			return new Promise<T>((resolve, reject) => {
-				pendingRef.current = { resolve, reject };
-				const worker = getWorker();
-				worker.postMessage(cmd, { transfer: transfer ?? [] });
+	const getTransport = useCallback(() => {
+		if (!transportRef.current) {
+			transportRef.current = new WorkerTransport({
+				onStateChange: (update) => {
+					if (update.isLoading !== undefined) setIsLoading(update.isLoading);
+					if (update.isGenerating !== undefined)
+						setIsGenerating(update.isGenerating);
+					if (update.isStreaming !== undefined)
+						setIsStreaming(update.isStreaming);
+				},
 			});
-		},
-		[getWorker],
-	);
+			transportRef.current.ensureWorker();
+		}
+		return transportRef.current;
+	}, []);
 
 	const loadModel = useCallback(
 		async (
@@ -160,10 +48,11 @@ export function useInferenceWorker() {
 			},
 		): Promise<LoadedResult> => {
 			setIsLoading(true);
-			onProgressRef.current = options.onProgress ?? null;
+			const transport = getTransport();
+			transport.setProgressCallback(options.onProgress ?? null);
 
 			try {
-				const result = await sendCommand<LoadedResult>({
+				const result = await transport.sendCommand<LoadedResult>({
 					type: "load",
 					modelSlug,
 					options: {
@@ -176,10 +65,10 @@ export function useInferenceWorker() {
 				setIsLoading(false);
 				throw err;
 			} finally {
-				onProgressRef.current = null;
+				transport.setProgressCallback(null);
 			}
 		},
-		[sendCommand],
+		[getTransport],
 	);
 
 	const synthesize = useCallback(
@@ -188,22 +77,24 @@ export function useInferenceWorker() {
 			text: string,
 			voice: string,
 			speakerEmbeddingUrl?: string,
+			speed?: number,
 		): Promise<AudioResult> => {
 			setIsGenerating(true);
 			try {
-				return await sendCommand<AudioResult>({
+				return await getTransport().sendCommand<AudioResult>({
 					type: "synthesize",
 					modelSlug,
 					text,
 					voice,
 					speakerEmbeddingUrl,
+					speed,
 				});
 			} catch (err) {
 				setIsGenerating(false);
 				throw err;
 			}
 		},
-		[sendCommand],
+		[getTransport],
 	);
 
 	const transcribe = useCallback(
@@ -214,7 +105,7 @@ export function useInferenceWorker() {
 		): Promise<TranscribeResult> => {
 			setIsGenerating(true);
 			try {
-				return await sendCommand<TranscribeResult>(
+				return await getTransport().sendCommand<TranscribeResult>(
 					{ type: "transcribe", modelSlug, audio, sampleRate },
 					[audio.buffer],
 				);
@@ -223,7 +114,7 @@ export function useInferenceWorker() {
 				throw err;
 			}
 		},
-		[sendCommand],
+		[getTransport],
 	);
 
 	const synthesizeStream = useCallback(
@@ -234,24 +125,23 @@ export function useInferenceWorker() {
 			speakerEmbeddingUrl: string | undefined,
 			callbacks: StreamCallbacks,
 		): void => {
-			streamCallbacksRef.current = callbacks;
+			const transport = getTransport();
+			transport.setStreamCallbacks(callbacks);
 			setIsStreaming(true);
-			const worker = getWorker();
-			worker.postMessage({
+			transport.postCommand({
 				type: "synthesize-stream",
 				modelSlug,
 				text,
 				voice,
 				speakerEmbeddingUrl,
-			} satisfies WorkerCommand);
+			});
 		},
-		[getWorker],
+		[getTransport],
 	);
 
 	const cancelStream = useCallback((): void => {
-		const worker = getWorker();
-		worker.postMessage({ type: "cancel-stream" } satisfies WorkerCommand);
-	}, [getWorker]);
+		getTransport().postCommand({ type: "cancel-stream" });
+	}, [getTransport]);
 
 	const extractEmbedding = useCallback(
 		async (
@@ -260,9 +150,10 @@ export function useInferenceWorker() {
 			onProgress?: (progress: DownloadProgress) => void,
 		): Promise<string> => {
 			setIsGenerating(true);
-			onProgressRef.current = onProgress ?? null;
+			const transport = getTransport();
+			transport.setProgressCallback(onProgress ?? null);
 			try {
-				return await sendCommand<string>(
+				return await transport.sendCommand<string>(
 					{ type: "extract-embedding", audio, sampleRate },
 					[audio.buffer],
 				);
@@ -270,26 +161,30 @@ export function useInferenceWorker() {
 				setIsGenerating(false);
 				throw err;
 			} finally {
-				onProgressRef.current = null;
+				transport.setProgressCallback(null);
 			}
 		},
-		[sendCommand],
+		[getTransport],
 	);
 
 	const dispose = useCallback(
 		async (modelSlug: string): Promise<void> => {
-			await sendCommand<void>({ type: "dispose", modelSlug });
+			await getTransport().sendCommand<void>({
+				type: "dispose",
+				modelSlug,
+			});
 		},
-		[sendCommand],
+		[getTransport],
 	);
 
-	// Terminate worker on unmount
+	// Create transport eagerly on mount, terminate on unmount
 	useEffect(() => {
+		getTransport();
 		return () => {
-			workerRef.current?.terminate();
-			workerRef.current = null;
+			transportRef.current?.terminate();
+			transportRef.current = null;
 		};
-	}, []);
+	}, [getTransport]);
 
 	return {
 		loadModel,

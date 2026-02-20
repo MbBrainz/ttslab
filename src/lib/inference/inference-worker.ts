@@ -52,8 +52,20 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 
 				sessions.set(cmd.modelSlug, session);
 
-				const loadTime = Math.round(performance.now() - loadStart);
 				const voices = loader.getVoices?.() ?? [];
+
+				// Warm up WASM JIT with a silent dummy inference so the first
+				// real generation doesn't pay the cold-start penalty (~200-500ms)
+				if (loader.synthesize) {
+					const warmupVoice = voices[0]?.id ?? "default";
+					try {
+						await loader.synthesize("warmup", warmupVoice);
+					} catch {
+						// non-critical — model still works, just first call may be slower
+					}
+				}
+
+				const loadTime = Math.round(performance.now() - loadStart);
 
 				post({ type: "loaded", backend, loadTime, voices });
 				break;
@@ -75,7 +87,7 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 					(loader as { setSpeakerEmbedding: (url: string | null) => void }).setSpeakerEmbedding(cmd.speakerEmbeddingUrl);
 				}
 
-				const result = await loader.synthesize(cmd.text, cmd.voice);
+				const result = await loader.synthesize(cmd.text, cmd.voice, { speed: cmd.speed });
 				post({ type: "audio", data: result }, [result.audio.buffer]);
 				break;
 			}

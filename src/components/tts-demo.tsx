@@ -24,6 +24,7 @@ import { useStreamingTts } from "@/lib/hooks/use-streaming-tts";
 import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
 import type { Voice } from "@/lib/inference/types";
 import { getShareParams } from "@/lib/share-params";
+import { cn } from "@/lib/utils";
 
 type TtsDemoProps = {
 	model: Model;
@@ -487,7 +488,10 @@ export function TtsDemo({ model }: TtsDemoProps) {
 			)}
 
 			{modelState.status === "result" && (
-				<div className="grid grid-cols-3 gap-4 rounded-lg border border-border bg-secondary/30 p-4">
+				<div className={cn(
+					"grid gap-4 rounded-lg border border-border bg-secondary/30 p-4",
+					modelState.metrics.ttfaMs != null ? "grid-cols-4" : "grid-cols-3",
+				)}>
 					<div className="text-center">
 						<p className="text-xs text-muted-foreground">Generation time</p>
 						<p className="text-lg font-semibold tabular-nums">
@@ -496,6 +500,16 @@ export function TtsDemo({ model }: TtsDemoProps) {
 								: `${(modelState.metrics.totalMs / 1000).toFixed(2)}s`}
 						</p>
 					</div>
+					{modelState.metrics.ttfaMs != null && (
+						<div className="text-center">
+							<p className="text-xs text-muted-foreground">First audio</p>
+							<p className="text-lg font-semibold tabular-nums">
+								{modelState.metrics.ttfaMs < 1000
+									? `${modelState.metrics.ttfaMs}ms`
+									: `${(modelState.metrics.ttfaMs / 1000).toFixed(2)}s`}
+							</p>
+						</div>
+					)}
 					{modelState.metrics.rtf != null && (
 						<div className="text-center">
 							<p className="text-xs text-muted-foreground">Real-time Factor</p>

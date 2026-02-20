@@ -17,10 +17,13 @@
 		"db:seed": "tsx scripts/seed-models.ts"
 	},
 	"dependencies": {
+		"@ai-sdk/openai": "^3.0.30",
 		"@diffusionstudio/vits-web": "^1.0.3",
 		"@huggingface/transformers": "4.0.0-next.4",
 		"@neondatabase/serverless": "^1.0.2",
+		"@ricky0123/vad-web": "^0.0.30",
 		"@vercel/analytics": "^1.6.1",
+		"ai": "^6.0.94",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
 		"drizzle-orm": "^0.45.1",
@@ -33,6 +36,11 @@
 		"resend": "^6.9.2",
 		"tailwind-merge": "^3.4.0",
 		"wavesurfer.js": "^7.12.1"
+	},
+	"pnpm": {
+		"overrides": {
+			"onnxruntime-web": "1.25.0-dev.20260212-1a71a5f46e"
+		}
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.3.15",

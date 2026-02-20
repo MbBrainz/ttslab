@@ -6,6 +6,14 @@ import type {
 	Voice,
 } from "../types";
 
+/** Minimal type for kokoro-js TextSplitterStream (not exported via package types) */
+interface TextSplitterStream {
+	push(...texts: string[]): void;
+	close(): void;
+	flush(): void;
+	[Symbol.asyncIterator](): AsyncGenerator<string, void, void>;
+}
+
 export class KokoroLoader implements ModelLoader {
 	slug = "kokoro-82m";
 	type = "tts" as const;
@@ -14,9 +22,12 @@ export class KokoroLoader implements ModelLoader {
 	private session: ModelSession | null = null;
 	private tts: unknown = null;
 	private loadedBackend: "webgpu" | "wasm" = "wasm";
+	private TextSplitterStream: (new () => TextSplitterStream) | null = null;
 
 	async load(options: LoadOptions): Promise<ModelSession> {
 		const kokoroModule = await import("kokoro-js");
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		this.TextSplitterStream = (kokoroModule as any).TextSplitterStream;
 		const { KokoroTTS } = kokoroModule;
 
 		const device = options.backend === "webgpu" ? "webgpu" : ("wasm" as const);
@@ -68,12 +79,48 @@ export class KokoroLoader implements ModelLoader {
 		return this.session;
 	}
 
-	// NOTE: kokoro-js's tts.stream() is broken — its internal TextSplitterStream
-	// never calls close(), so the last sentence always hangs. We intentionally
-	// omit synthesizeStream here so the worker uses the fallback path
-	// (splitIntoSentences + sequential generate() calls), which works reliably.
+	async *synthesizeStream(
+		text: string,
+		voice: string,
+	): AsyncGenerator<
+		{ text: string; audio: Float32Array; sampleRate: number },
+		void,
+		void
+	> {
+		if (!this.tts) throw new Error("Model not loaded");
 
-	async synthesize(text: string, voice: string): Promise<AudioResult> {
+		const resolvedVoice =
+			voice === "default" ? this.getVoices()[0]?.id ?? "af_heart" : voice;
+
+		// kokoro-js's tts.stream(string) creates a TextSplitterStream internally
+		// but never calls close(), so the last sentence hangs forever.
+		// Fix: create our own TextSplitterStream, push + close(), then pass
+		// the stream instance directly — tts.stream() accepts it as first arg.
+		const splitter = new this.TextSplitterStream!();
+		splitter.push(text);
+		splitter.close();
+
+		const tts = this.tts as {
+			stream: (
+				input: TextSplitterStream,
+				options: { voice: string },
+			) => AsyncIterable<{
+				text: string;
+				phonemes: string;
+				audio: { audio: Float32Array; sampling_rate: number };
+			}>;
+		};
+
+		for await (const chunk of tts.stream(splitter, { voice: resolvedVoice })) {
+			yield {
+				text: chunk.text,
+				audio: chunk.audio.audio,
+				sampleRate: chunk.audio.sampling_rate,
+			};
+		}
+	}
+
+	async synthesize(text: string, voice: string, options?: { speed?: number }): Promise<AudioResult> {
 		if (!this.tts) throw new Error("Model not loaded");
 
 		// Resolve "default" to the first available voice
@@ -83,11 +130,11 @@ export class KokoroLoader implements ModelLoader {
 		const tts = this.tts as {
 			generate: (
 				text: string,
-				options: { voice: string },
+				options: { voice: string; speed?: number },
 			) => Promise<{ audio: Float32Array; sampling_rate: number }>;
 		};
 		const start = performance.now();
-		const result = await tts.generate(text, { voice: resolvedVoice });
+		const result = await tts.generate(text, { voice: resolvedVoice, speed: options?.speed });
 		const totalMs = performance.now() - start;
 
 		if (!result.audio || result.audio.length === 0) {

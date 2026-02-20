@@ -28,6 +28,11 @@ loaders.set("piper-en-us-lessac-medium", async () => {
 
 // --- STT ---
 
+loaders.set("whisper-tiny.en", async () => {
+	const { WhisperLoader } = await import("./loaders/whisper");
+	return new WhisperLoader("whisper-tiny.en", "onnx-community/whisper-tiny.en");
+});
+
 loaders.set("whisper-tiny", async () => {
 	const { WhisperLoader } = await import("./loaders/whisper");
 	return new WhisperLoader("whisper-tiny", "onnx-community/whisper-tiny");

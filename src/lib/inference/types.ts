@@ -55,7 +55,7 @@ export interface ModelLoader {
 	synthesize?(
 		text: string,
 		voice: string,
-		options?: { streaming?: boolean },
+		options?: { streaming?: boolean; speed?: number },
 	): Promise<AudioResult>;
 
 	transcribe?(
@@ -81,7 +81,7 @@ export interface ModelLoader {
 // Worker message types
 export type WorkerCommand =
 	| { type: "load"; modelSlug: string; options: LoadOptions }
-	| { type: "synthesize"; modelSlug: string; text: string; voice: string; speakerEmbeddingUrl?: string }
+	| { type: "synthesize"; modelSlug: string; text: string; voice: string; speakerEmbeddingUrl?: string; speed?: number }
 	| {
 			type: "transcribe";
 			modelSlug: string;

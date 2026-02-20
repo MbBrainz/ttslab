@@ -57,6 +57,7 @@ export function useStreamingTts({
 	const chunksRef = useRef<{ audio: Float32Array; sampleRate: number }[]>([]);
 	const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 	const startTimeRef = useRef(0);
+	const ttfaRef = useRef<number | null>(null);
 	const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	const cleanup = useCallback(() => {
@@ -100,6 +101,7 @@ export function useStreamingTts({
 			queueRef.current = queue;
 			chunksRef.current = [];
 			startTimeRef.current = performance.now();
+			ttfaRef.current = null;
 
 			setIsStreaming(true);
 			setAnalyser(queue.analyserNode);
@@ -128,6 +130,13 @@ export function useStreamingTts({
 
 			const callbacks: StreamCallbacks = {
 				onChunk: (data) => {
+					// Track time-to-first-audio on first chunk
+					if (ttfaRef.current === null) {
+						ttfaRef.current = Math.round(
+							performance.now() - startTimeRef.current,
+						);
+					}
+
 					chunksRef.current.push({
 						audio: data.audio,
 						sampleRate: data.sampleRate,
@@ -148,6 +157,7 @@ export function useStreamingTts({
 							chunksReady: data.chunkIndex + 1,
 							totalChunks: data.totalChunks,
 							currentSentence: data.sentenceText,
+							ttfaMs: ttfaRef.current ?? undefined,
 						};
 					});
 				},
@@ -201,6 +211,7 @@ export function useStreamingTts({
 								audioDuration: duration,
 								rtf,
 								backend,
+								ttfaMs: ttfaRef.current ?? undefined,
 							},
 						});
 					};

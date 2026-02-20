@@ -44,6 +44,7 @@ export type ModelState =
 				audioDuration?: number;
 				rtf?: number;
 				backend: "webgpu" | "wasm";
+				ttfaMs?: number;
 			};
 	  }
 	| {
@@ -52,6 +53,7 @@ export type ModelState =
 			chunksReady: number;
 			totalChunks: number;
 			currentSentence: string;
+			ttfaMs?: number;
 	  }
 	| {
 			status: "error";
@@ -278,6 +280,7 @@ function ResultState({
 		audioDuration?: number;
 		rtf?: number;
 		backend: "webgpu" | "wasm";
+		ttfaMs?: number;
 	};
 }) {
 	return (
@@ -291,6 +294,15 @@ function ResultState({
 				<span className="text-right font-mono tabular-nums">
 					{formatMs(metrics.totalMs)}
 				</span>
+
+				{metrics.ttfaMs != null && (
+					<>
+						<span className="text-muted-foreground">Time to first audio</span>
+						<span className="text-right font-mono tabular-nums">
+							{formatMs(metrics.ttfaMs)}
+						</span>
+					</>
+				)}
 
 				{metrics.audioDuration != null && (
 					<>
@@ -334,11 +346,13 @@ function StreamingState({
 	chunksReady,
 	totalChunks,
 	currentSentence,
+	ttfaMs,
 }: {
 	elapsed: number;
 	chunksReady: number;
 	totalChunks: number;
 	currentSentence: string;
+	ttfaMs?: number;
 }) {
 	const progress =
 		totalChunks > 0 ? Math.round((chunksReady / totalChunks) * 100) : 0;
@@ -353,9 +367,14 @@ function StreamingState({
 						Streaming... ({chunksReady}/{totalChunks})
 					</span>
 				</div>
-				<span className="text-xs tabular-nums text-muted-foreground">
-					{formatMs(elapsed)}
-				</span>
+				<div className="flex items-center gap-3 text-xs tabular-nums text-muted-foreground">
+					{ttfaMs != null && (
+						<span title="Time to first audio">
+							TTFA {formatMs(ttfaMs)}
+						</span>
+					)}
+					<span>{formatMs(elapsed)}</span>
+				</div>
 			</div>
 			<Progress value={progress} max={100} />
 			{currentSentence && (
@@ -447,6 +466,7 @@ export function ModelStatus({
 					chunksReady={state.chunksReady}
 					totalChunks={state.totalChunks}
 					currentSentence={state.currentSentence}
+					ttfaMs={state.ttfaMs}
 				/>
 			)}
 

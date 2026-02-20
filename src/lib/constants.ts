@@ -20,6 +20,7 @@ export const NAV_LINKS = [
 	{ href: "/models", label: "Models" },
 	{ href: "/compare", label: "Compare" },
 	{ href: "/benchmark", label: "Benchmark" },
+	{ href: "/voice-agent", label: "Voice Agent" },
 	{ href: "/contribute", label: "Contribute" },
 	{ href: "/about", label: "About" },
 ] as const;

@@ -36,3 +36,23 @@ for (const file of files) {
 }
 
 console.log(`Copied ${files.length} ONNX WASM files to public/onnx/`);
+
+// --- Copy VAD assets (Silero ONNX models + worklet) to public/vad/ ---
+const vadDistDir = join(
+	dirname(require.resolve("@ricky0123/vad-web")),
+);
+const vadOutDir = join(dirname(import.meta.url.replace("file://", "")), "..", "public", "vad");
+
+mkdirSync(vadOutDir, { recursive: true });
+
+const vadFiles = [
+	"silero_vad_legacy.onnx",
+	"silero_vad_v5.onnx",
+	"vad.worklet.bundle.min.js",
+];
+
+for (const file of vadFiles) {
+	cpSync(join(vadDistDir, file), join(vadOutDir, file));
+}
+
+console.log(`Copied ${vadFiles.length} VAD assets to public/vad/`);
