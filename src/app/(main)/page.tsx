@@ -5,7 +5,7 @@ import {
 	Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { TtsDemo } from "@/components/tts-demo";
+import { HeroSection } from "@/components/hero-section";
 import { ModelCard } from "@/components/model-card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -15,7 +15,6 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import { APP_DESCRIPTION } from "@/lib/constants";
 import { getAllModelsWithUpvotes } from "@/lib/db/queries";
 import type { ModelWithUpvotes } from "@/lib/db/types";
 
@@ -35,22 +34,9 @@ export default async function HomePage() {
 		.filter((m) => m.model.status === "supported")
 		.slice(0, 4);
 
-	const kokoroModel = allModels.find(
-		(m) => m.model.slug === "kokoro-82m",
-	)?.model;
-
 	return (
 		<div className="space-y-20">
-			{/* Hero: Live TTS Demo */}
-			<section className="flex flex-col items-center gap-6 pt-8">
-				<h1 className="max-w-3xl text-4xl font-bold tracking-tight bg-gradient-to-r from-gradient-from to-gradient-to bg-clip-text text-transparent sm:text-5xl">
-					Test Speech AI In Your Browser
-				</h1>
-				<p className="max-w-xl text-center text-muted-foreground">
-					{APP_DESCRIPTION}
-				</p>
-				{kokoroModel && <TtsDemo model={kokoroModel} variant="compact" />}
-			</section>
+			<HeroSection />
 
 			{/* Featured Models */}
 			{supportedModels.length > 0 && (

@@ -140,3 +140,33 @@ body {
  * Utility: focus-visible ring style used across components.
  * Applied via Tailwind's focus-visible: utilities in component classes.
  */
+
+/* Hero section animations */
+@keyframes hero-blob-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(5%, -8%) scale(1.1); }
+  66% { transform: translate(-3%, 5%) scale(0.95); }
+}
+@keyframes hero-blob-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(-8%, 4%) scale(1.05); }
+  66% { transform: translate(6%, -6%) scale(1.1); }
+}
+@keyframes hero-blob-3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(10%, 3%) scale(1.08); }
+  66% { transform: translate(-5%, -8%) scale(0.92); }
+}
+@keyframes hero-cursor {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+@keyframes hero-eq {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [aria-hidden="true"] *, .hero-eq-bar {
+    animation: none !important;
+  }
+}
