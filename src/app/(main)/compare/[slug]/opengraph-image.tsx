@@ -40,129 +40,146 @@ export default async function OGImage({
 					height: "100%",
 					display: "flex",
 					flexDirection: "column",
-					justifyContent: "space-between",
-					backgroundColor: "#1a1a1a",
+					justifyContent: "center",
+					alignItems: "center",
+					backgroundColor: "#0a0a0f",
 					color: "#ffffff",
 					fontFamily: "Inter, sans-serif",
-					padding: "60px",
+					position: "relative",
+					overflow: "hidden",
 				}}
 			>
-				{/* Purple accent bar */}
+				{/* Gradient accent bar */}
 				<div
 					style={{
 						position: "absolute",
 						top: 0,
 						left: 0,
 						right: 0,
-						height: "4px",
-						background: "linear-gradient(90deg, #6366f1, #8b5cf6)",
+						height: "6px",
+						background: "linear-gradient(90deg, #6366f1, #8b5cf6, #a78bfa)",
 					}}
 				/>
 
-				{/* Content */}
+				{/* Subtle radial glow */}
+				<div
+					style={{
+						position: "absolute",
+						top: "50%",
+						left: "50%",
+						transform: "translate(-50%, -50%)",
+						width: "800px",
+						height: "800px",
+						borderRadius: "50%",
+						background:
+							"radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%)",
+					}}
+				/>
+
+				{/* Comparison layout */}
 				<div
 					style={{
 						display: "flex",
-						flexDirection: "column",
 						alignItems: "center",
-						justifyContent: "center",
-						flex: 1,
-						gap: "32px",
+						gap: "48px",
+						zIndex: 1,
 					}}
 				>
-					{/* Comparison layout */}
+					{/* Model A */}
 					<div
 						style={{
 							display: "flex",
+							flexDirection: "column",
 							alignItems: "center",
-							gap: "40px",
+							gap: "16px",
 						}}
 					>
-						{/* Model A */}
 						<div
 							style={{
-								display: "flex",
-								flexDirection: "column",
-								alignItems: "center",
-								gap: "12px",
+								padding: "8px 20px",
+								borderRadius: "20px",
+								backgroundColor:
+									modelAType === "TTS" ? "#6366f1" : "#22c55e",
+								fontSize: "20px",
+								fontWeight: 600,
 							}}
 						>
-							<div
-								style={{
-									padding: "6px 16px",
-									borderRadius: "20px",
-									backgroundColor:
-										modelAType === "TTS" ? "#6366f1" : "#22c55e",
-									fontSize: "14px",
-									fontWeight: 600,
-								}}
-							>
-								{modelAType}
-							</div>
-							<span
-								style={{
-									fontSize: "48px",
-									fontWeight: 700,
-									letterSpacing: "-1px",
-								}}
-							>
-								{modelAName}
-							</span>
+							{modelAType}
 						</div>
-
-						{/* VS */}
 						<span
 							style={{
-								fontSize: "28px",
-								color: "#71717a",
-								fontWeight: 500,
+								fontSize: "56px",
+								fontWeight: 800,
+								letterSpacing: "-2px",
+								background: "linear-gradient(135deg, #ffffff, #c4b5fd)",
+								backgroundClip: "text",
+								color: "transparent",
 							}}
 						>
-							vs
+							{modelAName}
 						</span>
+					</div>
 
-						{/* Model B */}
+					{/* VS */}
+					<span
+						style={{
+							fontSize: "34px",
+							color: "#52525b",
+							fontWeight: 600,
+						}}
+					>
+						vs
+					</span>
+
+					{/* Model B */}
+					<div
+						style={{
+							display: "flex",
+							flexDirection: "column",
+							alignItems: "center",
+							gap: "16px",
+						}}
+					>
 						<div
 							style={{
-								display: "flex",
-								flexDirection: "column",
-								alignItems: "center",
-								gap: "12px",
+								padding: "8px 20px",
+								borderRadius: "20px",
+								backgroundColor:
+									modelBType === "TTS" ? "#6366f1" : "#22c55e",
+								fontSize: "20px",
+								fontWeight: 600,
 							}}
 						>
-							<div
-								style={{
-									padding: "6px 16px",
-									borderRadius: "20px",
-									backgroundColor:
-										modelBType === "TTS" ? "#6366f1" : "#22c55e",
-									fontSize: "14px",
-									fontWeight: 600,
-								}}
-							>
-								{modelBType}
-							</div>
-							<span
-								style={{
-									fontSize: "48px",
-									fontWeight: 700,
-									letterSpacing: "-1px",
-								}}
-							>
-								{modelBName}
-							</span>
+							{modelBType}
 						</div>
+						<span
+							style={{
+								fontSize: "56px",
+								fontWeight: 800,
+								letterSpacing: "-2px",
+								background: "linear-gradient(135deg, #ffffff, #c4b5fd)",
+								backgroundClip: "text",
+								color: "transparent",
+							}}
+						>
+							{modelBName}
+						</span>
 					</div>
 				</div>
 
 				{/* Footer */}
 				<div
 					style={{
+						position: "absolute",
+						bottom: "28px",
+						left: "72px",
+						right: "72px",
 						display: "flex",
 						justifyContent: "space-between",
 						alignItems: "center",
-						fontSize: "20px",
-						color: "#71717a",
+						fontSize: "28px",
+						color: "#52525b",
+						fontWeight: 500,
 					}}
 				>
 					<span>TTSLab</span>

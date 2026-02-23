@@ -33,42 +33,65 @@ export default async function OGImage({
 					height: "100%",
 					display: "flex",
 					flexDirection: "column",
-					justifyContent: "space-between",
-					backgroundColor: "#1a1a1a",
+					justifyContent: "center",
+					backgroundColor: "#0a0a0f",
 					color: "#ffffff",
 					fontFamily: "Inter, sans-serif",
-					padding: "60px",
+					padding: "60px 72px",
+					position: "relative",
+					overflow: "hidden",
 				}}
 			>
-				{/* Purple accent bar */}
+				{/* Gradient accent bar */}
 				<div
 					style={{
 						position: "absolute",
 						top: 0,
 						left: 0,
 						right: 0,
-						height: "4px",
-						background: "linear-gradient(90deg, #6366f1, #8b5cf6)",
+						height: "6px",
+						background: "linear-gradient(90deg, #6366f1, #8b5cf6, #a78bfa)",
+					}}
+				/>
+
+				{/* Subtle radial glow */}
+				<div
+					style={{
+						position: "absolute",
+						top: "50%",
+						left: "50%",
+						transform: "translate(-50%, -50%)",
+						width: "800px",
+						height: "800px",
+						borderRadius: "50%",
+						background:
+							"radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%)",
 					}}
 				/>
 
 				{/* Content */}
-				<div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+				<div
+					style={{
+						display: "flex",
+						flexDirection: "column",
+						gap: "20px",
+						zIndex: 1,
+					}}
+				>
 					{/* Type badge */}
 					<div
 						style={{
 							display: "flex",
 							alignItems: "center",
-							gap: "12px",
 						}}
 					>
 						<div
 							style={{
-								padding: "6px 16px",
+								padding: "8px 20px",
 								borderRadius: "20px",
 								backgroundColor:
 									type === "TTS" ? "#6366f1" : "#22c55e",
-								fontSize: "16px",
+								fontSize: "20px",
 								fontWeight: 600,
 							}}
 						>
@@ -79,10 +102,13 @@ export default async function OGImage({
 					{/* Model name */}
 					<h1
 						style={{
-							fontSize: "64px",
-							fontWeight: 700,
+							fontSize: "80px",
+							fontWeight: 800,
 							margin: 0,
-							letterSpacing: "-2px",
+							letterSpacing: "-3px",
+							background: "linear-gradient(135deg, #ffffff, #c4b5fd)",
+							backgroundClip: "text",
+							color: "transparent",
 						}}
 					>
 						{name}
@@ -91,10 +117,10 @@ export default async function OGImage({
 					{/* Description */}
 					<p
 						style={{
-							fontSize: "24px",
+							fontSize: "30px",
 							color: "#a1a1aa",
 							margin: 0,
-							maxWidth: "800px",
+							maxWidth: "900px",
 							lineHeight: 1.4,
 						}}
 					>
@@ -110,8 +136,10 @@ export default async function OGImage({
 						style={{
 							display: "flex",
 							gap: "32px",
-							fontSize: "18px",
+							fontSize: "24px",
 							color: "#a1a1aa",
+							marginTop: "40px",
+							zIndex: 1,
 						}}
 					>
 						{specs.map((spec) => (
@@ -120,13 +148,13 @@ export default async function OGImage({
 								style={{
 									display: "flex",
 									alignItems: "center",
-									gap: "8px",
+									gap: "12px",
 								}}
 							>
 								<div
 									style={{
-										width: "6px",
-										height: "6px",
+										width: "10px",
+										height: "10px",
 										borderRadius: "50%",
 										backgroundColor: "#6366f1",
 									}}
@@ -140,11 +168,16 @@ export default async function OGImage({
 				{/* Footer */}
 				<div
 					style={{
+						position: "absolute",
+						bottom: "28px",
+						left: "72px",
+						right: "72px",
 						display: "flex",
 						justifyContent: "space-between",
 						alignItems: "center",
-						fontSize: "20px",
-						color: "#71717a",
+						fontSize: "28px",
+						color: "#52525b",
+						fontWeight: 500,
 					}}
 				>
 					<span>TTSLab</span>
