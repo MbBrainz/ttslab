@@ -165,7 +165,7 @@ export default async function OGImage({
 					</div>
 				)}
 
-				{/* Footer */}
+				{/* Footer — prominent TTSLab branding */}
 				<div
 					style={{
 						position: "absolute",
@@ -175,13 +175,27 @@ export default async function OGImage({
 						display: "flex",
 						justifyContent: "space-between",
 						alignItems: "center",
-						fontSize: "28px",
-						color: "#52525b",
-						fontWeight: 500,
 					}}
 				>
-					<span>TTSLab</span>
-					<span>ttslab.dev</span>
+					<span
+						style={{
+							fontSize: "40px",
+							fontWeight: 700,
+							letterSpacing: "-1px",
+							color: "#3f3f46",
+						}}
+					>
+						TTSLab
+					</span>
+					<span
+						style={{
+							fontSize: "28px",
+							color: "#52525b",
+							fontWeight: 500,
+						}}
+					>
+						ttslab.dev
+					</span>
 				</div>
 			</div>
 		),

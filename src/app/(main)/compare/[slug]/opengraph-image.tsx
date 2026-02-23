@@ -80,35 +80,23 @@ export default async function OGImage({
 				<div
 					style={{
 						display: "flex",
+						flexDirection: "column",
 						alignItems: "center",
-						gap: "48px",
+						gap: "32px",
 						zIndex: 1,
 					}}
 				>
-					{/* Model A */}
+					{/* Model names row */}
 					<div
 						style={{
 							display: "flex",
-							flexDirection: "column",
 							alignItems: "center",
-							gap: "16px",
+							gap: "40px",
 						}}
 					>
-						<div
-							style={{
-								padding: "8px 20px",
-								borderRadius: "20px",
-								backgroundColor:
-									modelAType === "TTS" ? "#6366f1" : "#22c55e",
-								fontSize: "20px",
-								fontWeight: 600,
-							}}
-						>
-							{modelAType}
-						</div>
 						<span
 							style={{
-								fontSize: "56px",
+								fontSize: "64px",
 								fontWeight: 800,
 								letterSpacing: "-2px",
 								background: "linear-gradient(135deg, #ffffff, #c4b5fd)",
@@ -118,43 +106,20 @@ export default async function OGImage({
 						>
 							{modelAName}
 						</span>
-					</div>
 
-					{/* VS */}
-					<span
-						style={{
-							fontSize: "34px",
-							color: "#52525b",
-							fontWeight: 600,
-						}}
-					>
-						vs
-					</span>
-
-					{/* Model B */}
-					<div
-						style={{
-							display: "flex",
-							flexDirection: "column",
-							alignItems: "center",
-							gap: "16px",
-						}}
-					>
-						<div
+						<span
 							style={{
-								padding: "8px 20px",
-								borderRadius: "20px",
-								backgroundColor:
-									modelBType === "TTS" ? "#6366f1" : "#22c55e",
-								fontSize: "20px",
+								fontSize: "36px",
+								color: "#52525b",
 								fontWeight: 600,
 							}}
 						>
-							{modelBType}
-						</div>
+							vs
+						</span>
+
 						<span
 							style={{
-								fontSize: "56px",
+								fontSize: "64px",
 								fontWeight: 800,
 								letterSpacing: "-2px",
 								background: "linear-gradient(135deg, #ffffff, #c4b5fd)",
@@ -165,9 +130,23 @@ export default async function OGImage({
 							{modelBName}
 						</span>
 					</div>
+
+					{/* Single type badge */}
+					<div
+						style={{
+							padding: "8px 24px",
+							borderRadius: "20px",
+							backgroundColor:
+								modelAType === "TTS" ? "#6366f1" : "#22c55e",
+							fontSize: "22px",
+							fontWeight: 600,
+						}}
+					>
+						{modelAType} Comparison
+					</div>
 				</div>
 
-				{/* Footer */}
+				{/* Footer — prominent TTSLab branding */}
 				<div
 					style={{
 						position: "absolute",
@@ -177,13 +156,27 @@ export default async function OGImage({
 						display: "flex",
 						justifyContent: "space-between",
 						alignItems: "center",
-						fontSize: "28px",
-						color: "#52525b",
-						fontWeight: 500,
 					}}
 				>
-					<span>TTSLab</span>
-					<span>ttslab.dev</span>
+					<span
+						style={{
+							fontSize: "40px",
+							fontWeight: 700,
+							letterSpacing: "-1px",
+							color: "#3f3f46",
+						}}
+					>
+						TTSLab
+					</span>
+					<span
+						style={{
+							fontSize: "28px",
+							color: "#52525b",
+							fontWeight: 500,
+						}}
+					>
+						ttslab.dev
+					</span>
 				</div>
 			</div>
 		),
