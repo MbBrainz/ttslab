@@ -60,7 +60,10 @@ export function SubscribeForm({
 
 	if (status === "success") {
 		return (
-			<div className="flex items-center gap-2 text-sm text-success">
+			<div
+				role="status"
+				className="flex items-center justify-center gap-2 text-sm text-success"
+			>
 				<Check className="h-4 w-4" />
 				<span>Subscribed! Check your email to confirm.</span>
 			</div>
@@ -80,10 +83,17 @@ export function SubscribeForm({
 					disabled={status === "loading"}
 				/>
 				{status === "error" && errorMessage && (
-					<p className="mt-1 text-xs text-destructive">{errorMessage}</p>
+					<p role="alert" className="mt-1 text-xs text-destructive">
+						{errorMessage}
+					</p>
 				)}
 			</div>
-			<Button type="submit" size="sm" disabled={status === "loading"}>
+			<Button
+				type="submit"
+				size="sm"
+				disabled={status === "loading"}
+				aria-label={status === "loading" ? "Subscribing..." : undefined}
+			>
 				{status === "loading" ? (
 					<Loader2 className="h-4 w-4 animate-spin" />
 				) : (

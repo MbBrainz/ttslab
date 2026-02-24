@@ -18,7 +18,7 @@ export default function MainLayout({
 						href="/"
 						className="text-lg font-bold tracking-tight text-foreground"
 					>
-						{APP_NAME}
+						TTSLab<span className="text-muted-foreground">.dev</span>
 					</Link>
 					<div className="flex items-center gap-4">
 						<NavLinks />

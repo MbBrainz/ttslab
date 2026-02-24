@@ -49,7 +49,7 @@ function Dialog({
 			ref={ref}
 			onClick={handleClick}
 			className={cn(
-				"w-full max-w-md rounded-lg border border-border bg-background p-0 text-foreground shadow-lg backdrop:bg-black/50",
+				"fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md rounded-lg border border-border bg-background p-0 text-foreground shadow-lg backdrop:bg-black/50",
 				className,
 			)}
 		>

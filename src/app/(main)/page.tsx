@@ -5,8 +5,11 @@ import {
 	Zap,
 } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 import { HeroSection } from "@/components/hero-section";
 import { ModelCard } from "@/components/model-card";
+import { SubscribeForm } from "@/components/subscribe-form";
+import { VerifiedDialog } from "@/components/verified-dialog";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -36,7 +39,22 @@ export default async function HomePage() {
 
 	return (
 		<div className="space-y-20">
+			<Suspense>
+				<VerifiedDialog />
+			</Suspense>
 			<HeroSection />
+
+			{/* Newsletter Signup */}
+			<section className="mx-auto max-w-xl text-center">
+				<h2 className="text-xl font-semibold">Stay in the loop</h2>
+				<p className="mt-2 text-sm text-muted-foreground">
+					Subscribe for the latest news on voice AI and text-to-speech
+					— new models, features, and benchmarks.
+				</p>
+				<div className="mt-4 mx-auto max-w-sm">
+					<SubscribeForm />
+				</div>
+			</section>
 
 			{/* Featured Models */}
 			{supportedModels.length > 0 && (
