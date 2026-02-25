@@ -433,7 +433,7 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 						<Button
 							onClick={stopStream}
 							variant="destructive"
-							className="gap-2"
+							className="flex-1 gap-2"
 						>
 							<Square className="h-4 w-4" />
 							Stop
@@ -443,7 +443,7 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 							onClick={handleStream}
 							disabled={!text.trim() || !canGenerate || isProcessing}
 							variant="outline"
-							className="gap-2"
+							className="flex-1 gap-2"
 						>
 							<Radio className="h-4 w-4" />
 							Stream

@@ -61,16 +61,19 @@ export function StreamingVisualizer({
 
 			if (fadeRef.current <= 0) return;
 
-			// Get primary color from CSS custom property
+			// Get gradient colors from CSS custom properties (matches hero visualizer)
 			const style = getComputedStyle(canvas);
-			const primaryHsl = style.getPropertyValue("--primary").trim();
+			const colorFrom =
+				style.getPropertyValue("--gradient-from").trim() ||
+				"oklch(0.60 0.25 280)";
+			const colorTo =
+				style.getPropertyValue("--gradient-to").trim() ||
+				"oklch(0.65 0.20 230)";
 
 			const barCount = 32;
 			const gap = 2;
 			const totalGaps = (barCount - 1) * gap;
 			const barWidth = Math.max(1, (w - totalGaps) / barCount);
-
-			ctx.globalAlpha = fadeRef.current;
 
 			for (let i = 0; i < barCount; i++) {
 				// Mirror: map bar index to frequency data symmetrically
@@ -85,9 +88,10 @@ export function StreamingVisualizer({
 				const x = i * (barWidth + gap);
 				const y = (h - barHeight) / 2;
 
-				ctx.fillStyle = primaryHsl
-					? `hsl(${primaryHsl} / ${0.4 + value * 0.6})`
-					: `rgba(124, 58, 237, ${0.4 + value * 0.6})`;
+				// Color: brighter at peaks, matching hero visualizer style
+				const color = value > 0.45 ? colorTo : colorFrom;
+				ctx.globalAlpha = fadeRef.current * (0.5 + value * 0.5);
+				ctx.fillStyle = color;
 				ctx.beginPath();
 				ctx.roundRect(x, y, barWidth, barHeight, 2);
 				ctx.fill();

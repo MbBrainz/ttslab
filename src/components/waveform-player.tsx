@@ -47,12 +47,21 @@ export function WaveformPlayer({ audioUrl, duration }: WaveformPlayerProps) {
 			return;
 		}
 
+		// Resolve CSS custom properties — canvas API can't handle var() references
+		const style = getComputedStyle(containerRef.current);
+		const gradientTo =
+			style.getPropertyValue("--gradient-to").trim() ||
+			"oklch(0.65 0.20 230)";
+		const mutedFg =
+			style.getPropertyValue("--muted-foreground").trim() ||
+			"oklch(0.65 0.02 275)";
+
 		const ws = WaveSurfer.create({
 			container: containerRef.current,
 			height: 48,
-			waveColor: "hsl(var(--muted-foreground) / 0.3)",
-			progressColor: "hsl(var(--primary))",
-			cursorColor: "hsl(var(--primary))",
+			waveColor: `color-mix(in oklch, ${mutedFg} 30%, transparent)`,
+			progressColor: gradientTo,
+			cursorColor: gradientTo,
 			barWidth: 2,
 			barGap: 1,
 			barRadius: 2,
