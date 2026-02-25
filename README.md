@@ -34,7 +34,7 @@
 | Framework | [Next.js 16](https://nextjs.org) |
 | Styling | [Tailwind CSS v4](https://tailwindcss.com) |
 | Database | [Neon Postgres](https://neon.tech) + [Drizzle ORM](https://orm.drizzle.team) |
-| Inference | [ONNX Runtime Web](https://onnxruntime.ai), [kokoro-js](https://github.com/niconielsen32/kokoro-js), [@xenova/transformers](https://github.com/xenova/transformers.js) |
+| Inference | [Doppler.js](https://github.com/clocksmith/doppler/)[ONNX Runtime Web](https://onnxruntime.ai), [kokoro-js](https://github.com/niconielsen32/kokoro-js), [@xenova/transformers](https://github.com/xenova/transformers.js) |
 | Analytics | [Vercel Analytics](https://vercel.com/analytics) |
 | Linter | [Biome](https://biomejs.dev) |
 
