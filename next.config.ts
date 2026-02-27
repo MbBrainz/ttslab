@@ -13,6 +13,8 @@ const ortWebDir = path.dirname(
 		],
 	}),
 );
+// Package root of onnxruntime-web (ortWebDir is …/dist, go one level up)
+const ortWebPkgRoot = path.resolve(ortWebDir, "..");
 const ortCommonPath = path.dirname(
 	require_.resolve("onnxruntime-common", { paths: [ortWebDir] }),
 );
@@ -52,6 +54,7 @@ const nextConfig: NextConfig = {
 	turbopack: {
 		resolveAlias: {
 			"onnxruntime-common": ortCommonPath,
+			"onnxruntime-web": ortWebPkgRoot,
 		},
 	},
 
@@ -84,6 +87,7 @@ const nextConfig: NextConfig = {
 				alias: {
 					...config.resolve?.alias,
 					"onnxruntime-common": ortCommonPath,
+					"onnxruntime-web$": ortWebPkgRoot,
 				},
 				conditionNames: [
 					"onnxruntime-web-use-extern-wasm",
