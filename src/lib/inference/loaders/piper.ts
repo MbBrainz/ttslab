@@ -59,6 +59,23 @@ export class PiperLoader implements ModelLoader {
 	private vits: typeof import("@diffusionstudio/vits-web") | null = null;
 
 	async load(options: LoadOptions): Promise<ModelSession> {
+		// vits-web hardcodes onnxruntime-web wasmPaths to a CDN URL for v1.18.0,
+		// but the pnpm override forces v1.25.0-dev. The version-mismatched CDN
+		// WASM files cause "Failed to fetch dynamically imported module: blob:..."
+		// on Chrome macOS. Lock wasmPaths to same-origin /onnx/ (where the correct
+		// 1.25.0-dev WASM files are served) so vits-web's overwrite is ignored.
+		const ort = await import("onnxruntime-web");
+		ort.env.wasm.wasmPaths = "/onnx/";
+		Object.defineProperty(ort.env.wasm, "wasmPaths", {
+			get() {
+				return "/onnx/";
+			},
+			set() {
+				/* prevent vits-web from overwriting to CDN */
+			},
+			configurable: true,
+		});
+
 		const vits = await import("@diffusionstudio/vits-web");
 		this.vits = vits;
 

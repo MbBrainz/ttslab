@@ -27,6 +27,8 @@ mkdirSync(outDir, { recursive: true });
 const files = [
 	"ort-wasm-simd-threaded.asyncify.mjs",
 	"ort-wasm-simd-threaded.asyncify.wasm",
+	"ort-wasm-simd-threaded.jsep.mjs",
+	"ort-wasm-simd-threaded.jsep.wasm",
 	"ort-wasm-simd-threaded.mjs",
 	"ort-wasm-simd-threaded.wasm",
 ];
