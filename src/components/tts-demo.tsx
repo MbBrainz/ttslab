@@ -40,6 +40,7 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 
 	const [text, setText] = useState("");
 	const [voice, setVoice] = useState("default");
+	const [backend, setBackend] = useState<"auto" | "webgpu" | "wasm">("auto");
 	const [modelState, setModelState] = useState<ModelState>({
 		status: "not_loaded",
 	});
@@ -147,7 +148,7 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 
 		try {
 			const result = await loadModel(model.slug, {
-				backend: "auto",
+				backend,
 				onProgress: (progress) => {
 					const state = tracker.process(progress);
 					if (state) setModelState(state);
@@ -185,7 +186,7 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 		} finally {
 			loadingRef.current = false;
 		}
-	}, [model.slug, model.sizeMb, loadModel, compact]);
+	}, [model.slug, model.sizeMb, loadModel, compact, backend]);
 
 	const handleGenerate = useCallback(async () => {
 		if (generatingRef.current || !text.trim()) return;
@@ -317,6 +318,7 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 	const canGenerate =
 		isReady || (modelState.status === "error" && modelReadyRef.current);
 	const showVoiceSelect = displayVoices.length > 0 && (canGenerate || isProcessing || isStreaming);
+	const showBackendSelect = !compact && model.supportsWebgpu && model.supportsWasm && modelState.status === "not_loaded";
 
 	return (
 		<div className={compact ? "mx-auto max-w-lg space-y-3" : "space-y-6"}>
@@ -327,6 +329,29 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 				onDownload={handleDownload}
 				onRetry={handleRetry}
 			/>
+
+			{showBackendSelect && (
+				<div className="space-y-2">
+					<label
+						htmlFor={`tts-backend-${model.slug}`}
+						className="text-sm font-medium text-foreground"
+					>
+						Backend
+					</label>
+					<Select
+						id={`tts-backend-${model.slug}`}
+						value={backend}
+						onChange={(e) => setBackend(e.target.value as "auto" | "webgpu" | "wasm")}
+					>
+						<SelectOption value="auto">Auto (recommended)</SelectOption>
+						<SelectOption value="webgpu">WebGPU</SelectOption>
+						<SelectOption value="wasm">WASM</SelectOption>
+					</Select>
+					<p className="text-xs text-muted-foreground">
+						WebGPU uses your GPU for faster inference. WASM is the reliable fallback.
+					</p>
+				</div>
+			)}
 
 			<div className={compact ? "space-y-3" : "space-y-4"}>
 				<div className={compact ? undefined : "space-y-2"}>

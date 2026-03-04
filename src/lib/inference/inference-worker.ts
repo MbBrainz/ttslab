@@ -222,10 +222,22 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 			}
 		}
 	} catch (err) {
+		const message = err instanceof Error ? err.message : "Unknown worker error";
+		const stack = err instanceof Error ? err.stack : undefined;
+
+		console.error("[inference-worker] Error:", message);
+		if (stack) console.error("[inference-worker] Stack:", stack);
+
+		// Detect WebGPU-specific errors for better UI messaging
+		const webgpuKeywords = ["webgpu", "int64", "wgsl", "shader", "gpudevice", "gpu adapter", "requestadapter"];
+		const isWebGPUError = webgpuKeywords.some((kw) =>
+			message.toLowerCase().includes(kw),
+		);
+
 		post({
 			type: "error",
-			code: "WORKER_ERROR",
-			message: err instanceof Error ? err.message : "Unknown worker error",
+			code: isWebGPUError ? "WEBGPU_ERROR" : "WORKER_ERROR",
+			message,
 		});
 	}
 };

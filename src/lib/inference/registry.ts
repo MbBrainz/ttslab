@@ -26,6 +26,20 @@ loaders.set("piper-en-us-lessac-medium", async () => {
 	return new PiperLoader();
 });
 
+loaders.set("chatterbox", async () => {
+	const { ChatterboxLoader } = await import("./loaders/chatterbox");
+	return new ChatterboxLoader();
+});
+
+loaders.set("chatterbox-turbo", async () => {
+	const { ChatterboxLoader } = await import("./loaders/chatterbox");
+	return new ChatterboxLoader(
+		"chatterbox-turbo",
+		"ResembleAI/chatterbox-turbo-ONNX",
+		true,
+	);
+});
+
 // --- STT ---
 
 loaders.set("whisper-tiny.en", async () => {
