@@ -231,12 +231,12 @@ You are testing the TTS Lab web app at http://localhost:3001. Perform an end-to-
 - **Backend is auto-selected** — `tts-demo.tsx` hardcodes `backend: "auto"`. There is no UI for users to force WebGPU.
 - **Large models take minutes** — Chatterbox Turbo (~720MB) takes ~3 minutes to download on broadband.
 
-### Verified Model Behavior (2026-02-27)
+### Verified Model Behavior (2026-03-04)
 
 | Model | WASM | WebGPU | Notes |
 |-------|------|--------|-------|
 | Kokoro 82M | PASS (249s load, 2.4s gen) | Not tested | Baseline reference |
-| Chatterbox Turbo | PASS (181s load, 6.3s gen) | BLOCKED | INT64→INT32 fix applied but untested |
+| Chatterbox Turbo | PASS (181s load, 6.3s gen) | BLOCKED — WASM-only | Browser JSEP WebGPU EP has no INT64 Cast kernel; ONNX spec requires INT64 for Shape/Unsqueeze. Unsolvable by model patching. |
 
 ### WebGPU-Specific Debugging
 
