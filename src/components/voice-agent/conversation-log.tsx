@@ -2,8 +2,6 @@
 
 import { useEffect, useRef } from "react";
 import type { ConversationTurn } from "@/lib/hooks/use-voice-agent";
-import { cn } from "@/lib/utils";
-import { formatMs } from "@/lib/format";
 
 interface ConversationLogProps {
 	turns: ConversationTurn[];
@@ -11,7 +9,13 @@ interface ConversationLogProps {
 	isStreaming: boolean;
 }
 
-export function ConversationLog({ turns, streamingText, isStreaming }: ConversationLogProps) {
+const OPACITIES = [0.3, 0.5, 1.0];
+
+export function ConversationLog({
+	turns,
+	streamingText,
+	isStreaming,
+}: ConversationLogProps) {
 	const scrollRef = useRef<HTMLDivElement>(null);
 
 	// Auto-scroll to bottom on new content
@@ -23,64 +27,50 @@ export function ConversationLog({ turns, streamingText, isStreaming }: Conversat
 	}, [turns, streamingText]);
 
 	if (turns.length === 0 && !isStreaming) {
-		return (
-			<div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
-				Start a conversation to see it appear here.
-			</div>
-		);
+		return null;
 	}
 
+	const recentTurns = turns.slice(-3);
+
 	return (
-		<div
-			ref={scrollRef}
-			className="flex h-64 flex-col gap-3 overflow-y-auto rounded-lg border border-border bg-secondary/30 p-4"
-		>
-			{turns.map((turn) => (
-				<div
-					key={turn.id}
-					className={cn(
-						"flex flex-col gap-1",
-						turn.role === "user" ? "items-end" : "items-start",
-					)}
-				>
+		<div ref={scrollRef} className="space-y-2 px-4">
+			{recentTurns.map((turn, i) => {
+				// Calculate opacity: if fewer than 3 turns, rightmost items get full opacity
+				const opacityIdx = 3 - recentTurns.length + i;
+				const opacity = OPACITIES[Math.max(0, opacityIdx)];
+
+				return (
 					<div
-						className={cn(
-							"max-w-[80%] rounded-lg px-3 py-2 text-sm",
-							turn.role === "user"
-								? "bg-primary text-primary-foreground"
-								: "bg-card text-card-foreground border border-border",
-						)}
+						key={turn.id}
+						style={{ opacity }}
+						className="transition-opacity duration-500"
 					>
-						{turn.content}
-						{turn.interrupted && (
-							<span className="ml-1 text-xs text-muted-foreground italic">
-								(interrupted)
-							</span>
-						)}
+						<span className="text-xs font-medium text-muted-foreground">
+							{turn.role === "user" ? "You" : "Agent"}
+						</span>
+						<p className="text-sm text-foreground">
+							{turn.content}
+							{turn.interrupted && (
+								<span className="text-muted-foreground italic">
+									{" "}
+									(interrupted)
+								</span>
+							)}
+						</p>
 					</div>
-					{turn.metrics && (
-						<div className="flex gap-2 text-[10px] text-muted-foreground">
-							{turn.metrics.sttMs != null && (
-								<span>STT {formatMs(turn.metrics.sttMs)}</span>
-							)}
-							{turn.metrics.llmMs != null && (
-								<span>LLM {formatMs(turn.metrics.llmMs)}</span>
-							)}
-							{turn.metrics.llmTokensPerSec != null && (
-								<span>{turn.metrics.llmTokensPerSec} tok/s</span>
-							)}
-						</div>
-					)}
-				</div>
-			))}
+				);
+			})}
 
 			{/* Streaming assistant response */}
 			{isStreaming && streamingText && (
-				<div className="flex flex-col items-start gap-1">
-					<div className="max-w-[80%] rounded-lg border border-border bg-card px-3 py-2 text-sm text-card-foreground">
+				<div className="transition-opacity duration-500">
+					<span className="text-xs font-medium text-muted-foreground">
+						Agent
+					</span>
+					<p className="text-sm text-foreground">
 						{streamingText}
 						<span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-foreground" />
-					</div>
+					</p>
 				</div>
 			)}
 		</div>
