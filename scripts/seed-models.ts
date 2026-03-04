@@ -354,7 +354,7 @@ const modelData: NewModel[] = [
 			},
 		},
 		supportsStreaming: false,
-		supportsWebgpu: true,
+		supportsWebgpu: false,
 		supportsWasm: true,
 		description:
 			"Resemble AI's expressive TTS with emotion/intensity control and zero-shot voice cloning. 0.5B Llama backbone. Large download (~1.5 GB) with q4 quantized language model.",
@@ -382,7 +382,7 @@ const modelData: NewModel[] = [
 			},
 		},
 		supportsStreaming: false,
-		supportsWebgpu: true,
+		supportsWebgpu: false,
 		supportsWasm: true,
 		description:
 			"Resemble AI's low-latency TTS optimized for voice agents. 350M params, 1-step decoder, paralinguistic tags ([laugh], [cough]). All components q4 quantized (~720 MB).",
