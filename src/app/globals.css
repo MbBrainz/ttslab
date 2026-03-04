@@ -187,3 +187,10 @@ body {
 .orb-breathe { animation: orb-breathe 3s ease-in-out infinite; }
 .orb-think { animation: orb-think 2s ease-in-out infinite alternate; }
 .orb-speak { animation: orb-speak 1.5s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .orb-breathe,
+  .orb-think,
+  .orb-speak {
+    animation: none !important;
+  }
+}

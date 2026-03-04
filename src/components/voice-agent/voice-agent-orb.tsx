@@ -83,7 +83,7 @@ export function VoiceAgentOrb({ phase, children }: VoiceAgentOrbProps) {
 			{/* Glow layer (behind, larger, blurred) */}
 			<div
 				className={cn(
-					"absolute h-48 w-48 rounded-full blur-xl transition-all duration-700 ease-out",
+					"absolute h-40 w-40 sm:h-48 sm:w-48 md:h-56 md:w-56 rounded-full blur-xl transition-all duration-700 ease-out",
 					style.scaleClass,
 					style.animationClass,
 				)}
@@ -95,7 +95,7 @@ export function VoiceAgentOrb({ phase, children }: VoiceAgentOrbProps) {
 			{/* Main orb */}
 			<div
 				className={cn(
-					"relative h-40 w-40 rounded-full transition-all duration-500 ease-out",
+					"relative h-32 w-32 sm:h-40 sm:w-40 md:h-48 md:w-48 rounded-full transition-all duration-500 ease-out",
 					style.scaleClass,
 					style.animationClass,
 				)}
