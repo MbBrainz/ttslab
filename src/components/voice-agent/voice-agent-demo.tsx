@@ -39,6 +39,8 @@ export function VoiceAgentDemo() {
 
 	return (
 		<div className="flex h-dvh flex-col">
+			<h1 className="sr-only">Voice Agent — Talk to AI</h1>
+
 			{/* Header: minimal, fades when agent is active */}
 			<header
 				className={cn(
@@ -51,12 +53,18 @@ export function VoiceAgentDemo() {
 					<span className="text-muted-foreground"> · Voice Agent</span>
 				</Link>
 				<div className="flex items-center gap-2">
-					<button type="button" onClick={() => setDrawerOpen(true)}>
-						<Settings className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+					<button
+						type="button"
+						aria-label="Open settings"
+						onClick={() => setDrawerOpen(true)}
+						className="p-2 -m-2 text-muted-foreground hover:text-foreground"
+					>
+						<Settings className="h-4 w-4" />
 					</button>
 					<Link
 						href="/"
-						className="text-muted-foreground hover:text-foreground"
+						aria-label="Close voice agent"
+						className="p-2 -m-2 text-muted-foreground hover:text-foreground"
 					>
 						<X className="h-4 w-4" />
 					</Link>
@@ -110,6 +118,7 @@ export function VoiceAgentDemo() {
 					{agent.allModelsReady && (
 						<button
 							type="button"
+							aria-label={isActive ? "Stop conversation" : "Start conversation"}
 							onClick={
 								isActive ? agent.stopConversation : agent.startConversation
 							}

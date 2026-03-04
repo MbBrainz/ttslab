@@ -54,8 +54,9 @@ export function SettingsDrawer({
 				{/* Close button */}
 				<button
 					type="button"
+					aria-label="Close settings"
 					onClick={() => onOpenChange(false)}
-					className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"
+					className="absolute right-4 top-4 p-1 text-muted-foreground hover:text-foreground"
 				>
 					<X className="h-5 w-5" />
 				</button>
@@ -65,10 +66,11 @@ export function SettingsDrawer({
 				{/* Voice & LLM selectors */}
 				<div className="space-y-4">
 					<div className="space-y-2">
-						<label className="text-sm font-medium text-muted-foreground">
+						<label htmlFor="voice-select" className="text-sm font-medium text-muted-foreground">
 							Voice
 						</label>
 						<Select
+							id="voice-select"
 							value={selectedVoice}
 							onChange={(e) =>
 								onVoiceChange(
@@ -86,10 +88,11 @@ export function SettingsDrawer({
 					</div>
 
 					<div className="space-y-2">
-						<label className="text-sm font-medium text-muted-foreground">
+						<label htmlFor="llm-model-select" className="text-sm font-medium text-muted-foreground">
 							LLM Model
 						</label>
 						<Select
+							id="llm-model-select"
 							value={selectedLlm.id}
 							onChange={(e) => {
 								const model = LLM_MODELS.find(
