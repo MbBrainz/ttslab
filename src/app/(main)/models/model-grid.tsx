@@ -139,6 +139,7 @@ export function ModelGrid({ models }: ModelGridProps) {
 		<div className="space-y-6">
 			<div className="flex flex-col gap-4 sm:flex-row">
 				<Input
+					aria-label="Search models"
 					placeholder="Search models..."
 					value={search}
 					onChange={(e) => {

@@ -55,16 +55,16 @@ export function ModelCard({ model, upvoteCount }: ModelCardProps) {
 								className="gap-1"
 							>
 								{model.type === "tts" ? (
-									<Volume2 className="h-3 w-3" />
+									<Volume2 className="h-3 w-3" aria-hidden="true" />
 								) : (
-									<Mic className="h-3 w-3" />
+									<Mic className="h-3 w-3" aria-hidden="true" />
 								)}
 								{model.type.toUpperCase()}
 							</Badge>
 							<StatusIcon status={model.status} />
 						</div>
 						<div className="flex items-center gap-1 text-sm text-muted-foreground">
-							<ChevronUp className="h-4 w-4" />
+							<ChevronUp className="h-4 w-4" aria-hidden="true" />
 							<span>{upvoteCount}</span>
 						</div>
 					</div>
@@ -90,7 +90,7 @@ export function ModelCard({ model, upvoteCount }: ModelCardProps) {
 					<div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
 						{model.sizeMb != null && (
 							<span className="flex items-center gap-1">
-								<Download className="h-3 w-3" />
+								<Download className="h-3 w-3" aria-hidden="true" />
 								{model.sizeMb < 1024
 									? `${model.sizeMb.toFixed(0)} MB`
 									: `${(model.sizeMb / 1024).toFixed(1)} GB`}
@@ -98,13 +98,13 @@ export function ModelCard({ model, upvoteCount }: ModelCardProps) {
 						)}
 						{model.paramsMillions != null && (
 							<span className="flex items-center gap-1">
-								<Hash className="h-3 w-3" />
+								<Hash className="h-3 w-3" aria-hidden="true" />
 								{model.paramsMillions}M params
 							</span>
 						)}
 						{model.voices != null && model.voices > 0 && (
 							<span className="flex items-center gap-1">
-								<FileAudio className="h-3 w-3" />
+								<FileAudio className="h-3 w-3" aria-hidden="true" />
 								{model.voices} voice{model.voices !== 1 ? "s" : ""}
 							</span>
 						)}
@@ -116,7 +116,7 @@ export function ModelCard({ model, upvoteCount }: ModelCardProps) {
 								variant="success"
 								className="gap-1 text-[10px] px-1.5 py-0"
 							>
-								<Zap className="h-2.5 w-2.5" />
+								<Zap className="h-2.5 w-2.5" aria-hidden="true" />
 								WebGPU
 							</Badge>
 						)}
@@ -125,7 +125,7 @@ export function ModelCard({ model, upvoteCount }: ModelCardProps) {
 								variant="warning"
 								className="gap-1 text-[10px] px-1.5 py-0"
 							>
-								<Cpu className="h-2.5 w-2.5" />
+								<Cpu className="h-2.5 w-2.5" aria-hidden="true" />
 								WASM
 							</Badge>
 						)}
@@ -140,7 +140,7 @@ export function ModelCard({ model, upvoteCount }: ModelCardProps) {
 								"opacity-0 translate-x-[-4px] transition-all group-hover:opacity-100 group-hover:translate-x-0",
 							)}
 						>
-							Try it <ArrowRight className="h-4 w-4" />
+							Try it <ArrowRight className="h-4 w-4" aria-hidden="true" />
 						</span>
 					</CardFooter>
 				)}

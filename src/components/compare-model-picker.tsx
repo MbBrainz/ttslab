@@ -36,7 +36,7 @@ export function CompareModelPicker({ comparisons }: CompareModelPickerProps) {
 		<>
 			<Button
 				variant="outline"
-				className="gap-2"
+				className="min-h-11 gap-2"
 				onClick={() => setOpen(true)}
 			>
 				<GitCompareArrows className="h-4 w-4" />

@@ -302,7 +302,7 @@ export default async function ModelPage({ params }: PageProps) {
 								target="_blank"
 								rel="noopener noreferrer"
 							>
-								<Button variant="outline" className="gap-2">
+								<Button variant="outline" className="min-h-11 gap-2">
 									<ExternalLink className="h-4 w-4" />
 									HuggingFace
 								</Button>
@@ -314,7 +314,7 @@ export default async function ModelPage({ params }: PageProps) {
 								target="_blank"
 								rel="noopener noreferrer"
 							>
-								<Button variant="outline" className="gap-2">
+								<Button variant="outline" className="min-h-11 gap-2">
 									<ExternalLink className="h-4 w-4" />
 									Paper
 								</Button>
@@ -326,7 +326,7 @@ export default async function ModelPage({ params }: PageProps) {
 								target="_blank"
 								rel="noopener noreferrer"
 							>
-								<Button variant="outline" className="gap-2">
+								<Button variant="outline" className="min-h-11 gap-2">
 									<ExternalLink className="h-4 w-4" />
 									Website
 								</Button>

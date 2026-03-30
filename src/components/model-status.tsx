@@ -117,7 +117,7 @@ function NotLoadedState({
 				)}
 			</div>
 			{onDownload && (
-				<Button variant="outline" size="sm" onClick={onDownload}>
+				<Button variant="outline" size="sm" className="min-h-11" onClick={onDownload}>
 					<Download className="h-4 w-4" />
 					Download
 				</Button>

@@ -12,9 +12,9 @@ export function BackendBadge({ backend, supported = true }: BackendBadgeProps) {
 		return (
 			<Badge variant="outline" className="gap-1 opacity-50">
 				{backend === "webgpu" ? (
-					<Zap className="h-3 w-3" />
+					<Zap className="h-3 w-3" aria-hidden="true" />
 				) : (
-					<Cpu className="h-3 w-3" />
+					<Cpu className="h-3 w-3" aria-hidden="true" />
 				)}
 				<span className="line-through">
 					{backend === "webgpu" ? "WebGPU" : "WASM"}
@@ -29,9 +29,9 @@ export function BackendBadge({ backend, supported = true }: BackendBadgeProps) {
 			className={cn("gap-1")}
 		>
 			{backend === "webgpu" ? (
-				<Zap className="h-3 w-3" />
+				<Zap className="h-3 w-3" aria-hidden="true" />
 			) : (
-				<Cpu className="h-3 w-3" />
+				<Cpu className="h-3 w-3" aria-hidden="true" />
 			)}
 			{backend === "webgpu" ? "WebGPU" : "WASM"}
 		</Badge>

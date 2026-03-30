@@ -7,7 +7,6 @@ import {
 	Card,
 	CardContent,
 	CardHeader,
-	CardTitle,
 } from "@/components/ui/card";
 
 type ScatterModel = {
@@ -332,7 +331,7 @@ export function ModelScatterPlotSection({ models }: ModelScatterPlotProps) {
 		<Card>
 			<CardHeader className="pb-2">
 				<div className="flex items-center justify-between">
-					<CardTitle>Model Landscape</CardTitle>
+					<h2 className="text-lg font-semibold leading-none tracking-tight">Model Landscape</h2>
 					<Button
 						variant="ghost"
 						size="sm"

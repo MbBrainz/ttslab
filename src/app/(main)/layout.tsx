@@ -102,7 +102,7 @@ export default function MainLayout({
 									href="https://github.com/MbBrainz"
 									target="_blank"
 									rel="noopener noreferrer"
-									className="text-muted-foreground transition-colors hover:text-foreground"
+									className="inline-flex min-h-6 min-w-6 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
 									aria-label="GitHub"
 								>
 									<Github className="h-4 w-4" />
@@ -111,7 +111,7 @@ export default function MainLayout({
 									href="https://linkedin.com/in/mhwbos"
 									target="_blank"
 									rel="noopener noreferrer"
-									className="text-muted-foreground transition-colors hover:text-foreground"
+									className="inline-flex min-h-6 min-w-6 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
 									aria-label="LinkedIn"
 								>
 									<Linkedin className="h-4 w-4" />
@@ -120,7 +120,7 @@ export default function MainLayout({
 									href="https://x.com/MbBrainz"
 									target="_blank"
 									rel="noopener noreferrer"
-									className="text-muted-foreground transition-colors hover:text-foreground"
+									className="inline-flex min-h-6 min-w-6 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
 									aria-label="X / Twitter"
 								>
 									<Twitter className="h-4 w-4" />
