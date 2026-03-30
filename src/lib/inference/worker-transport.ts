@@ -27,6 +27,7 @@ export interface LoadedResult {
 	backend: "webgpu" | "wasm";
 	loadTime: number;
 	voices: Voice[];
+	languages: string[];
 }
 
 export interface StateUpdate {
@@ -84,6 +85,7 @@ export class WorkerTransport {
 					backend: msg.backend,
 					loadTime: msg.loadTime,
 					voices: msg.voices,
+					languages: msg.languages,
 				};
 				this.pending?.resolve(result);
 				this.pending = null;

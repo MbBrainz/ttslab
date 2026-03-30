@@ -1,6 +1,7 @@
 "use client";
 
 import { Download, Loader2, Radio, Square, Volume2 } from "lucide-react";
+import { GpuEstimate } from "@/components/gpu-estimate";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	addToHistory,
@@ -24,6 +25,7 @@ import type { Model } from "@/lib/db/schema";
 import { useStreamingTts } from "@/lib/hooks/use-streaming-tts";
 import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
 import type { Voice } from "@/lib/inference/types";
+import { getLanguageName } from "@/lib/inference/language-names";
 import { getShareParams } from "@/lib/share-params";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +49,8 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 	const [audioUrl, setAudioUrl] = useState<string | null>(null);
 	const [historyKey, setHistoryKey] = useState(0);
 	const [voices, setVoices] = useState<Voice[]>([]);
+	const [languages, setLanguages] = useState<string[]>([]);
+	const [language, setLanguage] = useState("en");
 	const [speakerEmbeddingUrl, setSpeakerEmbeddingUrl] = useState<string | null>(null);
 
 	const {
@@ -167,6 +171,11 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 				setVoice(result.voices[0].id);
 			}
 
+			if (result.languages.length > 0) {
+				setLanguages(result.languages);
+				setLanguage(result.languages.includes("en") ? "en" : result.languages[0]);
+			}
+
 			if (!compact) {
 				trackModelLoad(model.slug, result.backend, result.loadTime);
 			}
@@ -218,6 +227,8 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 				text,
 				voice,
 				speakerEmbeddingUrl ?? undefined,
+				undefined,
+				languages.length > 1 ? language : undefined,
 			);
 
 			clearInterval(timer);
@@ -284,13 +295,13 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 		} finally {
 			generatingRef.current = false;
 		}
-	}, [text, voice, audioUrl, model.slug, speakerEmbeddingUrl, synthesize, getVoiceName, compact]);
+	}, [text, voice, audioUrl, model.slug, speakerEmbeddingUrl, synthesize, getVoiceName, compact, language, languages]);
 
 	const handleStream = useCallback(() => {
 		if (!text.trim() || isStreaming) return;
 		if (!compact) addRecentText(text);
-		startStream(text, voice, speakerEmbeddingUrl ?? undefined);
-	}, [text, voice, speakerEmbeddingUrl, isStreaming, startStream, compact]);
+		startStream(text, voice, speakerEmbeddingUrl ?? undefined, languages.length > 1 ? language : undefined);
+	}, [text, voice, speakerEmbeddingUrl, isStreaming, startStream, compact, language, languages]);
 
 	const handleRetry = useCallback(() => {
 		if (modelReadyRef.current) {
@@ -318,6 +329,7 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 	const canGenerate =
 		isReady || (modelState.status === "error" && modelReadyRef.current);
 	const showVoiceSelect = displayVoices.length > 0 && (canGenerate || isProcessing || isStreaming);
+	const showLanguageSelect = languages.length > 1 && (canGenerate || isProcessing || isStreaming);
 	const showBackendSelect = !compact && model.supportsWebgpu && model.supportsWasm && modelState.status === "not_loaded";
 
 	return (
@@ -384,7 +396,7 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 								</span>
 								{wordCount > 0 && <span>~{wordCount} words</span>}
 							</div>
-							<TextPresets onSelect={setText} disabled={isProcessing} />
+							<TextPresets onSelect={setText} disabled={isProcessing} modelSlug={model.slug} />
 						</>
 					)}
 				</div>
@@ -419,6 +431,43 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 								{displayVoices.map((v) => (
 									<SelectOption key={v.id} value={v.id}>
 										{v.name}
+									</SelectOption>
+								))}
+							</Select>
+						</div>
+					)
+				)}
+
+				{showLanguageSelect && (
+					compact ? (
+						<Select
+							value={language}
+							onChange={(e) => setLanguage(e.target.value)}
+							disabled={isProcessing}
+						>
+							{languages.map((code) => (
+								<SelectOption key={code} value={code}>
+									{getLanguageName(code)}
+								</SelectOption>
+							))}
+						</Select>
+					) : (
+						<div className="space-y-2">
+							<label
+								htmlFor={`tts-language-${model.slug}`}
+								className="text-sm font-medium text-foreground"
+							>
+								Language
+							</label>
+							<Select
+								id={`tts-language-${model.slug}`}
+								value={language}
+								onChange={(e) => setLanguage(e.target.value)}
+								disabled={isProcessing}
+							>
+								{languages.map((code) => (
+									<SelectOption key={code} value={code}>
+										{getLanguageName(code)}
 									</SelectOption>
 								))}
 							</Select>
@@ -506,45 +555,50 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 				</div>
 			)}
 
-			{!compact && modelState.status === "result" && (
-				<div className={cn(
-					"grid gap-4 rounded-lg border border-border bg-secondary/30 p-4",
-					modelState.metrics.ttfaMs != null ? "grid-cols-4" : "grid-cols-3",
-				)}>
-					<div className="text-center">
-						<p className="text-xs text-muted-foreground">Generation time</p>
-						<p className="text-lg font-semibold tabular-nums">
-							{modelState.metrics.totalMs < 1000
-								? `${modelState.metrics.totalMs}ms`
-								: `${(modelState.metrics.totalMs / 1000).toFixed(2)}s`}
-						</p>
-					</div>
-					{modelState.metrics.ttfaMs != null && (
+			{!compact && modelState.status === "result" && (() => {
+				const m = modelState.metrics;
+				const cols = 2 + (m.ttfaMs != null ? 1 : 0) + (m.rtf != null ? 1 : 0) + (m.backend === "wasm" ? 1 : 0);
+				return (
+					<div className={cn(
+						"grid gap-4 rounded-lg border border-border bg-secondary/30 p-4",
+						cols <= 3 ? "grid-cols-3" : cols === 4 ? "grid-cols-4" : "grid-cols-5",
+					)}>
 						<div className="text-center">
-							<p className="text-xs text-muted-foreground">First audio</p>
+							<p className="text-xs text-muted-foreground">Generation time</p>
 							<p className="text-lg font-semibold tabular-nums">
-								{modelState.metrics.ttfaMs < 1000
-									? `${modelState.metrics.ttfaMs}ms`
-									: `${(modelState.metrics.ttfaMs / 1000).toFixed(2)}s`}
+								{m.totalMs < 1000
+									? `${m.totalMs}ms`
+									: `${(m.totalMs / 1000).toFixed(2)}s`}
 							</p>
 						</div>
-					)}
-					{modelState.metrics.rtf != null && (
+						{m.ttfaMs != null && (
+							<div className="text-center">
+								<p className="text-xs text-muted-foreground">First audio</p>
+								<p className="text-lg font-semibold tabular-nums">
+									{m.ttfaMs < 1000
+										? `${m.ttfaMs}ms`
+										: `${(m.ttfaMs / 1000).toFixed(2)}s`}
+								</p>
+							</div>
+						)}
+						{m.rtf != null && (
+							<div className="text-center">
+								<p className="text-xs text-muted-foreground">Real-time Factor</p>
+								<p className="text-lg font-semibold tabular-nums">
+									{m.rtf.toFixed(3)}x
+								</p>
+							</div>
+						)}
 						<div className="text-center">
-							<p className="text-xs text-muted-foreground">Real-time Factor</p>
-							<p className="text-lg font-semibold tabular-nums">
-								{modelState.metrics.rtf.toFixed(3)}x
+							<p className="text-xs text-muted-foreground">Backend</p>
+							<p className="text-lg font-semibold uppercase">
+								{m.backend}
 							</p>
 						</div>
-					)}
-					<div className="text-center">
-						<p className="text-xs text-muted-foreground">Backend</p>
-						<p className="text-lg font-semibold uppercase">
-							{modelState.metrics.backend}
-						</p>
+						<GpuEstimate totalMs={m.totalMs} backend={m.backend} />
 					</div>
-				</div>
-			)}
+				);
+			})()}
 
 			{!compact && <RecentTexts onSelect={handleSelectRecentText} currentText={text} />}
 

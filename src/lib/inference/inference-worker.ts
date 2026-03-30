@@ -53,6 +53,7 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 				sessions.set(cmd.modelSlug, session);
 
 				const voices = loader.getVoices?.() ?? [];
+				const languages = loader.getLanguages?.() ?? [];
 
 				// Warm up WASM JIT with a silent dummy inference so the first
 				// real generation doesn't pay the cold-start penalty (~200-500ms)
@@ -67,7 +68,7 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 
 				const loadTime = Math.round(performance.now() - loadStart);
 
-				post({ type: "loaded", backend, loadTime, voices });
+				post({ type: "loaded", backend, loadTime, voices, languages });
 				break;
 			}
 
@@ -87,7 +88,7 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 					(loader as { setSpeakerEmbedding: (url: string | null) => void }).setSpeakerEmbedding(cmd.speakerEmbeddingUrl);
 				}
 
-				const result = await loader.synthesize(cmd.text, cmd.voice, { speed: cmd.speed });
+				const result = await loader.synthesize(cmd.text, cmd.voice, { speed: cmd.speed, language: cmd.language });
 				post({ type: "audio", data: result }, [result.audio.buffer]);
 				break;
 			}
@@ -168,7 +169,7 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 							post({ type: "stream-cancelled" });
 							return;
 						}
-						const result = await loader.synthesize(sentence, cmd.voice);
+						const result = await loader.synthesize(sentence, cmd.voice, { language: cmd.language });
 						post(
 							{
 								type: "audio-chunk",

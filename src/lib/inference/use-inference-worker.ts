@@ -78,6 +78,7 @@ export function useInferenceWorker() {
 			voice: string,
 			speakerEmbeddingUrl?: string,
 			speed?: number,
+			language?: string,
 		): Promise<AudioResult> => {
 			setIsGenerating(true);
 			try {
@@ -88,6 +89,7 @@ export function useInferenceWorker() {
 					voice,
 					speakerEmbeddingUrl,
 					speed,
+					language,
 				});
 			} catch (err) {
 				setIsGenerating(false);
@@ -124,6 +126,7 @@ export function useInferenceWorker() {
 			voice: string,
 			speakerEmbeddingUrl: string | undefined,
 			callbacks: StreamCallbacks,
+			language?: string,
 		): void => {
 			const transport = getTransport();
 			transport.setStreamCallbacks(callbacks);
@@ -134,6 +137,7 @@ export function useInferenceWorker() {
 				text,
 				voice,
 				speakerEmbeddingUrl,
+				language,
 			});
 		},
 		[getTransport],

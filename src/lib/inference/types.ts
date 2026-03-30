@@ -55,7 +55,7 @@ export interface ModelLoader {
 	synthesize?(
 		text: string,
 		voice: string,
-		options?: { streaming?: boolean; speed?: number },
+		options?: { streaming?: boolean; speed?: number; language?: string },
 	): Promise<AudioResult>;
 
 	transcribe?(
@@ -81,7 +81,7 @@ export interface ModelLoader {
 // Worker message types
 export type WorkerCommand =
 	| { type: "load"; modelSlug: string; options: LoadOptions }
-	| { type: "synthesize"; modelSlug: string; text: string; voice: string; speakerEmbeddingUrl?: string; speed?: number }
+	| { type: "synthesize"; modelSlug: string; text: string; voice: string; speakerEmbeddingUrl?: string; speed?: number; language?: string }
 	| {
 			type: "transcribe";
 			modelSlug: string;
@@ -95,6 +95,7 @@ export type WorkerCommand =
 			text: string;
 			voice: string;
 			speakerEmbeddingUrl?: string;
+			language?: string;
 	  }
 	| { type: "cancel-stream" }
 	| {
@@ -105,7 +106,7 @@ export type WorkerCommand =
 
 export type WorkerResponse =
 	| { type: "progress"; data: DownloadProgress }
-	| { type: "loaded"; backend: "webgpu" | "wasm"; loadTime: number; voices: Voice[] }
+	| { type: "loaded"; backend: "webgpu" | "wasm"; loadTime: number; voices: Voice[]; languages: string[] }
 	| { type: "audio"; data: AudioResult }
 	| { type: "transcript"; data: TranscribeResult }
 	| { type: "error"; code: string; message: string }

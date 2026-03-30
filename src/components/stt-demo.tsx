@@ -1,6 +1,7 @@
 "use client";
 
 import { Cpu, Mic, Zap } from "lucide-react";
+import { GpuEstimate } from "@/components/gpu-estimate";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type ModelState, ModelStatus } from "@/components/model-status";
 import { Button } from "@/components/ui/button";
@@ -364,7 +365,7 @@ export function SttDemo({ model }: SttDemoProps) {
 
 			{/* Metrics */}
 			{modelState.status === "result" && (
-				<div className="grid grid-cols-3 gap-4 rounded-lg border border-border bg-secondary/30 p-4">
+				<div className={`grid gap-4 rounded-lg border border-border bg-secondary/30 p-4 ${modelState.metrics.backend === "wasm" ? "grid-cols-4" : "grid-cols-3"}`}>
 					<div className="text-center">
 						<p className="text-xs text-muted-foreground">Processing time</p>
 						<p className="text-lg font-semibold tabular-nums">
@@ -397,6 +398,7 @@ export function SttDemo({ model }: SttDemoProps) {
 							)}
 						</p>
 					</div>
+					<GpuEstimate totalMs={modelState.metrics.totalMs} backend={modelState.metrics.backend} />
 				</div>
 			)}
 		</div>

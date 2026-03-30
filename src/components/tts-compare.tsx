@@ -1,6 +1,8 @@
 "use client";
 
 import { Loader2, Volume2 } from "lucide-react";
+import { GpuEstimate } from "@/components/gpu-estimate";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type ModelState, ModelStatus } from "@/components/model-status";
 import { RecentTexts, addRecentText } from "@/components/recent-texts";
@@ -14,6 +16,7 @@ import { float32ToWav } from "@/lib/audio-utils";
 import type { Model } from "@/lib/db/schema";
 import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
 import type { Voice } from "@/lib/inference/types";
+import { getLanguageName } from "@/lib/inference/language-names";
 import { getShareParams } from "@/lib/share-params";
 
 type TtsCompareProps = {
@@ -31,6 +34,8 @@ type PanelState = {
 	audioUrl: string | null;
 	voice: string;
 	voices: Voice[];
+	languages: string[];
+	language: string;
 	generating: boolean;
 };
 
@@ -40,6 +45,8 @@ function createInitialPanel(): PanelState {
 		audioUrl: null,
 		voice: "default",
 		voices: [],
+		languages: [],
+		language: "en",
 		generating: false,
 	};
 }
@@ -166,6 +173,8 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 				...p,
 				voices: result.voices,
 				voice: result.voices.length > 0 ? result.voices[0].id : "default",
+				languages: result.languages,
+				language: result.languages.includes("en") ? "en" : (result.languages[0] ?? "en"),
 				modelState: { status: "ready", backend: result.backend, loadTime: result.loadTime },
 			}));
 		} catch (err) {
@@ -267,6 +276,8 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 				...p,
 				voices: result.voices,
 				voice: result.voices.length > 0 ? result.voices[0].id : "default",
+				languages: result.languages,
+				language: result.languages.includes("en") ? "en" : (result.languages[0] ?? "en"),
 				modelState: { status: "ready", backend: result.backend, loadTime: result.loadTime },
 			}));
 		} catch (err) {
@@ -341,10 +352,12 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 			if (generatingRef.current) return;
 			generatingRef.current = true;
 
-			// Read current voice from state
+			// Read current voice and language from state
 			let currentVoice = "default";
+			let currentLanguage: string | undefined;
 			setPanel((p) => {
 				currentVoice = p.voice;
+				currentLanguage = p.languages.length > 1 ? p.language : undefined;
 				return p;
 			});
 
@@ -369,7 +382,7 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 			}, 100);
 
 			try {
-				const result = await worker.synthesize(model.slug, textToSpeak, currentVoice);
+				const result = await worker.synthesize(model.slug, textToSpeak, currentVoice, undefined, undefined, currentLanguage);
 				clearInterval(timer);
 
 				const wavBlob = float32ToWav(result.audio, result.sampleRate);
@@ -455,6 +468,14 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 		voicesB.length > 0 &&
 		(canGenerateModel(panelB.modelState, modelReadyBRef.current) ||
 			panelB.modelState.status === "processing");
+	const showLanguageA =
+		panelA.languages.length > 1 &&
+		(canGenerateModel(panelA.modelState, modelReadyARef.current) ||
+			panelA.modelState.status === "processing");
+	const showLanguageB =
+		panelB.languages.length > 1 &&
+		(canGenerateModel(panelB.modelState, modelReadyBRef.current) ||
+			panelB.modelState.status === "processing");
 
 	return (
 		<div className="space-y-6">
@@ -529,6 +550,30 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 							</Select>
 						</div>
 					)}
+					{showLanguageA && (
+						<div className="space-y-2">
+							<label
+								htmlFor="tts-compare-language-a"
+								className="text-sm font-medium text-foreground"
+							>
+								Language
+							</label>
+							<Select
+								id="tts-compare-language-a"
+								value={panelA.language}
+								onChange={(e) =>
+									setPanelA((p) => ({ ...p, language: e.target.value }))
+								}
+								disabled={panelA.generating}
+							>
+								{panelA.languages.map((code) => (
+									<SelectOption key={code} value={code}>
+										{getLanguageName(code)}
+									</SelectOption>
+								))}
+							</Select>
+						</div>
+					)}
 					{panelA.audioUrl && (
 						<div className="space-y-2">
 							<h4 className="text-sm font-medium text-foreground">Output</h4>
@@ -561,8 +606,15 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 									{panelA.modelState.metrics.backend}
 								</p>
 							</div>
+							<GpuEstimate totalMs={panelA.modelState.metrics.totalMs} backend={panelA.modelState.metrics.backend} />
 						</div>
 					)}
+					<Link
+						href={`/models/${modelA.slug}`}
+						className="mt-2 block text-right text-sm text-muted-foreground hover:text-foreground transition-colors"
+					>
+						Explore {modelA.name} →
+					</Link>
 				</div>
 
 				{/* Model B Panel */}
@@ -593,6 +645,30 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 								{voicesB.map((v) => (
 									<SelectOption key={v.id} value={v.id}>
 										{v.name}
+									</SelectOption>
+								))}
+							</Select>
+						</div>
+					)}
+					{showLanguageB && (
+						<div className="space-y-2">
+							<label
+								htmlFor="tts-compare-language-b"
+								className="text-sm font-medium text-foreground"
+							>
+								Language
+							</label>
+							<Select
+								id="tts-compare-language-b"
+								value={panelB.language}
+								onChange={(e) =>
+									setPanelB((p) => ({ ...p, language: e.target.value }))
+								}
+								disabled={panelB.generating}
+							>
+								{panelB.languages.map((code) => (
+									<SelectOption key={code} value={code}>
+										{getLanguageName(code)}
 									</SelectOption>
 								))}
 							</Select>
@@ -630,8 +706,15 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 									{panelB.modelState.metrics.backend}
 								</p>
 							</div>
+							<GpuEstimate totalMs={panelB.modelState.metrics.totalMs} backend={panelB.modelState.metrics.backend} />
 						</div>
 					)}
+					<Link
+						href={`/models/${modelB.slug}`}
+						className="mt-2 block text-right text-sm text-muted-foreground hover:text-foreground transition-colors"
+					>
+						Explore {modelB.name} →
+					</Link>
 				</div>
 			</div>
 
