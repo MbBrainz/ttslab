@@ -66,6 +66,7 @@ export class ChatterboxLoader implements ModelLoader {
 	private modelId: string;
 	/** When true, all components have quantized variants (Turbo). */
 	private allQuantized: boolean;
+	private languages: string[];
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	private model: any = null;
@@ -79,10 +80,12 @@ export class ChatterboxLoader implements ModelLoader {
 		slug = "chatterbox",
 		modelId = "onnx-community/chatterbox-ONNX",
 		allQuantized = false,
+		languages: string[] = ["en"],
 	) {
 		this.slug = slug;
 		this.modelId = modelId;
 		this.allQuantized = allQuantized;
+		this.languages = languages;
 	}
 
 	private getDtype(backend: "webgpu" | "wasm"): DtypeSpec {
@@ -243,7 +246,7 @@ export class ChatterboxLoader implements ModelLoader {
 	}
 
 	getLanguages(): string[] {
-		return ["en"];
+		return this.languages;
 	}
 
 	getSupportedBackends(): ("webgpu" | "wasm")[] {

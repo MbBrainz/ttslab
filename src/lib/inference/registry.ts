@@ -40,6 +40,16 @@ loaders.set("chatterbox-turbo", async () => {
 	);
 });
 
+loaders.set("chatterbox-multilingual", async () => {
+	const { ChatterboxLoader } = await import("./loaders/chatterbox");
+	return new ChatterboxLoader(
+		"chatterbox-multilingual",
+		"onnx-community/chatterbox-multilingual-ONNX",
+		false,
+		["ar", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "it", "ja", "ko", "ms", "nl", "no", "pl", "pt", "ru", "sv", "sw", "tr", "zh"],
+	);
+});
+
 // --- STT ---
 
 loaders.set("whisper-tiny.en", async () => {
@@ -109,6 +119,61 @@ loaders.set("moonshine-tiny-zh", async () => {
 		"moonshine-tiny-zh",
 		"onnx-community/moonshine-tiny-zh-ONNX",
 		["zh"],
+	);
+});
+
+loaders.set("moonshine-tiny-ar", async () => {
+	const { MoonshineLoader } = await import("./loaders/moonshine");
+	return new MoonshineLoader(
+		"moonshine-tiny-ar",
+		"onnx-community/moonshine-tiny-ar-ONNX",
+		["ar"],
+	);
+});
+
+loaders.set("moonshine-base-ja", async () => {
+	const { MoonshineLoader } = await import("./loaders/moonshine");
+	return new MoonshineLoader(
+		"moonshine-base-ja",
+		"onnx-community/moonshine-base-ja-ONNX",
+		["ja"],
+	);
+});
+
+loaders.set("moonshine-base-ko", async () => {
+	const { MoonshineLoader } = await import("./loaders/moonshine");
+	return new MoonshineLoader(
+		"moonshine-base-ko",
+		"onnx-community/moonshine-base-ko-ONNX",
+		["ko"],
+	);
+});
+
+loaders.set("moonshine-base-zh", async () => {
+	const { MoonshineLoader } = await import("./loaders/moonshine");
+	return new MoonshineLoader(
+		"moonshine-base-zh",
+		"onnx-community/moonshine-base-zh-ONNX",
+		["zh"],
+	);
+});
+
+loaders.set("cohere-transcribe", async () => {
+	const { CohereTranscribeLoader } = await import("./loaders/cohere-transcribe");
+	return new CohereTranscribeLoader();
+});
+
+loaders.set("granite-speech", async () => {
+	const { GraniteSpeechLoader } = await import("./loaders/granite-speech");
+	return new GraniteSpeechLoader();
+});
+
+loaders.set("lite-whisper-large-v3-turbo", async () => {
+	const { WhisperLoader } = await import("./loaders/whisper");
+	return new WhisperLoader(
+		"lite-whisper-large-v3-turbo",
+		"onnx-community/lite-whisper-large-v3-turbo-ONNX",
+		{ encoder_model: "fp32", decoder_model_merged: "q4" },
 	);
 });
 
