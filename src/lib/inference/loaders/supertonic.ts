@@ -100,7 +100,11 @@ export class SupertonicLoader implements ModelLoader {
 		return this.session;
 	}
 
-	async synthesize(text: string, voice: string): Promise<AudioResult> {
+	async synthesize(
+		text: string,
+		voice: string,
+		options?: { speed?: number; language?: string },
+	): Promise<AudioResult> {
 		if (!this.pipeline) throw new Error("Model not loaded");
 
 		const resolvedVoice =
@@ -116,10 +120,18 @@ export class SupertonicLoader implements ModelLoader {
 			},
 		) => Promise<{ audio: Float32Array; sampling_rate: number }>;
 
+		// Wrap text in language tags — required by the model for correct synthesis.
+		// Without tags the model produces garbled/repetitive output.
+		const lang = options?.language ?? "en";
+		const taggedText = `<${lang}>${text}</${lang}>`;
+
+		const speed = options?.speed ?? 1.05;
+
 		const start = performance.now();
-		const result = await synthesizer(text, {
+		const result = await synthesizer(taggedText, {
 			speaker_embeddings: embeddingUrl,
-			num_inference_steps: 10,
+			num_inference_steps: 5,
+			speed,
 		});
 		const totalMs = performance.now() - start;
 

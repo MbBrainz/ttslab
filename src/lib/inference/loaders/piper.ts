@@ -5,6 +5,39 @@ import type {
 	ModelSession,
 	Voice,
 } from "../types";
+import { splitIntoSentences } from "../streaming";
+
+/**
+ * Split text into chunks suitable for VITS synthesis.
+ *
+ * VITS models use an attention mechanism that loses alignment on long
+ * phoneme sequences, causing audio truncation. First split on sentence
+ * boundaries, then break any remaining long segments on clause-level
+ * punctuation (commas, semicolons, colons, dashes).
+ */
+function splitForVits(text: string, maxWords = 8): string[] {
+	const sentences = splitIntoSentences(text);
+	const chunks: string[] = [];
+
+	for (const sentence of sentences) {
+		if (sentence.split(/\s+/).length <= maxWords) {
+			chunks.push(sentence);
+			continue;
+		}
+		// Break on clause punctuation (keep punctuation with preceding segment)
+		const clauses = sentence
+			.split(/(?<=[,;:\u2014–-])\s+/)
+			.filter((s) => s.length > 0);
+
+		if (clauses.length > 1) {
+			chunks.push(...clauses);
+		} else {
+			chunks.push(sentence);
+		}
+	}
+
+	return chunks;
+}
 
 /** Parse a WAV blob into raw PCM Float32 data and sample rate. */
 async function decodeWavBlob(
@@ -103,13 +136,30 @@ export class PiperLoader implements ModelLoader {
 
 		const start = performance.now();
 
-		const wavBlob = await this.vits.predict({
-			text,
-			voiceId: "en_US-lessac-medium",
-		});
+		// Split into short chunks to avoid VITS attention truncation.
+		// The VITS model generates one utterance at a time; long phoneme sequences
+		// cause the attention to lose alignment and the audio gets cut short.
+		const sentences = splitForVits(text);
+		const chunks: { audio: Float32Array; sampleRate: number }[] = [];
+
+		for (const sentence of sentences) {
+			const wavBlob = await this.vits.predict({
+				text: sentence,
+				voiceId: "en_US-lessac-medium",
+			});
+			chunks.push(await decodeWavBlob(wavBlob));
+		}
+
+		const sampleRate = chunks[0]?.sampleRate ?? 22050;
+		const totalLength = chunks.reduce((sum, c) => sum + c.audio.length, 0);
+		const audio = new Float32Array(totalLength);
+		let offset = 0;
+		for (const chunk of chunks) {
+			audio.set(chunk.audio, offset);
+			offset += chunk.audio.length;
+		}
 
 		const totalMs = performance.now() - start;
-		const { audio, sampleRate } = await decodeWavBlob(wavBlob);
 		const duration = audio.length / sampleRate;
 
 		return {
