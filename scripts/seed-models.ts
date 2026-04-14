@@ -449,7 +449,7 @@ const modelData: NewModel[] = [
 		slug: "chatterbox-multilingual",
 		name: "Chatterbox Multilingual",
 		type: "tts",
-		status: "supported",
+		status: "unsupported",
 		sizeMb: 5000,
 		paramsMillions: 500,
 		architecture: "Chatterbox (Llama backbone)",
@@ -469,7 +469,7 @@ const modelData: NewModel[] = [
 		supportsWebgpu: false,
 		supportsWasm: true,
 		description:
-			"Resemble AI's multilingual TTS with 23 languages and zero-shot voice cloning. 0.5B Llama backbone. Large download (~5 GB). WASM-only due to INT64 limitations.",
+			"Resemble AI's multilingual TTS with 23 languages and zero-shot voice cloning. 0.5B Llama backbone. Currently broken — upstream HuggingFace repo (onnx-community/chatterbox-multilingual-ONNX) is missing config.json required by transformers.js.",
 		websiteUrl: "https://github.com/resemble-ai/chatterbox",
 		license: "MIT",
 	},
