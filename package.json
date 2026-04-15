@@ -19,7 +19,7 @@
 	"dependencies": {
 		"@ai-sdk/openai": "^3.0.30",
 		"@diffusionstudio/vits-web": "^1.0.3",
-		"@huggingface/transformers": "4.0.1",
+		"@huggingface/transformers": "4.1.0",
 		"@neondatabase/serverless": "^1.0.2",
 		"@ricky0123/vad-web": "^0.0.30",
 		"@vercel/analytics": "^1.6.1",
