@@ -8,6 +8,7 @@ interface BootSequenceProps {
 	sttState: ModelState;
 	llmState: ModelState;
 	ttsState: ModelState;
+	llmLabel: string;
 	onPowerOn: () => void;
 	allReady: boolean;
 }
@@ -37,6 +38,7 @@ export function BootSequence({
 	sttState,
 	llmState,
 	ttsState,
+	llmLabel,
 	onPowerOn,
 	allReady,
 }: BootSequenceProps) {
@@ -54,7 +56,7 @@ export function BootSequence({
 			{/* Model status lines */}
 			<div className="flex flex-col items-center gap-1 text-sm text-muted-foreground">
 				<span>{modelLabel(sttState, "Whisper")}</span>
-				<span>{modelLabel(llmState, "LFM2.5")}</span>
+				<span>{modelLabel(llmState, llmLabel)}</span>
 				<span>{modelLabel(ttsState, "Kokoro")}</span>
 			</div>
 

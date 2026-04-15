@@ -96,6 +96,7 @@ export function VoiceAgentDemo() {
 						sttState={agent.sttState}
 						llmState={agent.llmState}
 						ttsState={agent.ttsState}
+						llmLabel={selectedLlm.name}
 						onPowerOn={agent.loadAll}
 						allReady={agent.allModelsReady}
 					/>

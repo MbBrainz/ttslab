@@ -13,11 +13,11 @@ export interface LlmModel {
 
 export const LLM_MODELS: LlmModel[] = [
 	{
-		id: "lfm2.5-1.2b",
-		name: "LFM2.5 1.2B",
-		hfId: "LiquidAI/LFM2.5-1.2B-Instruct-ONNX",
-		isQwen3: false,
-		sizeMb: 760,
+		id: "qwen3.5-0.8b",
+		name: "Qwen3.5 0.8B",
+		hfId: "onnx-community/Qwen3.5-0.8B-Text-ONNX",
+		isQwen3: true,
+		sizeMb: 490,
 	},
 ];
 
