@@ -6,6 +6,8 @@ import type { LlmWorkerCommand, LlmWorkerResponse, ChatMessage } from "./llm-typ
 let tokenizer: any = null;
 // biome-ignore lint/suspicious/noExplicitAny: dynamically loaded transformers types
 let model: any = null;
+// biome-ignore lint/suspicious/noExplicitAny: dynamically loaded transformers types
+let pastKeyValues: any = null;
 let cancelled = false;
 
 const SYSTEM_PROMPT =
@@ -27,10 +29,12 @@ async function handleCommand(cmd: LlmWorkerCommand) {
 				if (model?.dispose) await model.dispose();
 				model = null;
 				tokenizer = null;
+				pastKeyValues = null;
 
 				const {
 					AutoTokenizer,
 					AutoModelForCausalLM,
+					DynamicCache,
 					env,
 				} = await import("@huggingface/transformers");
 
@@ -169,13 +173,20 @@ async function handleCommand(cmd: LlmWorkerCommand) {
 					},
 				});
 
-				await model.generate({
+				const output = await model.generate({
 					...inputs,
 					max_new_tokens: cmd.maxNewTokens,
 					temperature: cmd.temperature,
 					do_sample: cmd.temperature > 0,
+					past_key_values: pastKeyValues,
+					return_dict_in_generate: true,
 					streamer,
 				});
+
+				// Persist KV cache for faster follow-up turns
+				if (output.past_key_values) {
+					pastKeyValues = output.past_key_values;
+				}
 
 				if (cancelled) {
 					post({ type: "cancelled" });
@@ -211,6 +222,7 @@ async function handleCommand(cmd: LlmWorkerCommand) {
 				if (model?.dispose) await model.dispose();
 				model = null;
 				tokenizer = null;
+				pastKeyValues = null;
 				post({ type: "disposed" });
 				break;
 			}
