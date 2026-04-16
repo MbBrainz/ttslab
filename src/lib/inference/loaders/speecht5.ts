@@ -47,7 +47,7 @@ export class SpeechT5Loader implements ModelLoader {
 	}
 
 	async load(options: LoadOptions): Promise<ModelSession> {
-		const { env, pipeline, AutoModel } = await import(
+		const { env, pipeline, AutoModel, AutoProcessor } = await import(
 			"@huggingface/transformers"
 		);
 		const { configureOnnxWasmPaths } = await import("../onnx-config");
@@ -79,6 +79,15 @@ export class SpeechT5Loader implements ModelLoader {
 				dtype: "fp32",
 				progress_callback: progressCallback,
 			},
+		);
+
+		// Inject processor — the pipeline factory skips it because text-to-audio
+		// is typed as "text" (include_processor = type !== "text"), but SpeechT5
+		// needs it to route to _call_text_to_spectrogram instead of _call_text_to_waveform.
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		(synthesizer as any).processor = await AutoProcessor.from_pretrained(
+			"Xenova/speecht5_tts",
+			{ progress_callback: progressCallback },
 		);
 
 		// Pre-load vocoder during model load instead of lazy-loading during
