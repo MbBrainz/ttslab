@@ -1,7 +1,6 @@
 # Voice Agent UI Redesign — Design Document
 
 **Date**: 2026-03-04
-**Lattice Task**: TTSL-6
 **Status**: Approved
 
 ## Overview
