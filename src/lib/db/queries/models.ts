@@ -10,7 +10,7 @@ import type { ModelWithUpvotes } from "../types";
  */
 const upvoteCountSql = sql<number>`(SELECT count(*) FROM upvotes WHERE model_id = models.id)`;
 
-const CACHE_OPTIONS = { tags: ["models"], revalidate: 3600 };
+const CACHE_OPTIONS = { tags: ["models"], revalidate: false as const };
 
 /** Fetch all models with their upvote counts. */
 async function _getAllModelsWithUpvotes(): Promise<ModelWithUpvotes[]> {

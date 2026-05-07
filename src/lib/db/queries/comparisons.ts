@@ -6,7 +6,7 @@ import type { ComparisonWithModels } from "../types";
 
 const CACHE_OPTIONS = {
 	tags: ["comparisons", "models"],
-	revalidate: 3600,
+	revalidate: false as const,
 };
 
 /** Fetch all comparison slugs (for static params generation). */

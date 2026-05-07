@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import { APP_URL } from "@/lib/constants";
 import { getAllComparisons, getAllModels } from "@/lib/db/queries";
 
-export const revalidate = 86400;
+export const revalidate = false;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 	const allModels = await getAllModels();

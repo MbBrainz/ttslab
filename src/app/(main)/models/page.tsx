@@ -5,7 +5,7 @@ import { getAllModelsWithUpvotes } from "@/lib/db/queries";
 import type { ModelWithUpvotes } from "@/lib/db/types";
 import { ModelGrid } from "./model-grid";
 
-export const revalidate = 3600;
+export const revalidate = false;
 
 export const metadata: Metadata = {
 	title: "TTS & STT Model Directory — Browse Browser-Based Speech Models",

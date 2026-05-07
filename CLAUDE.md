@@ -1,5 +1,21 @@
 # ttslab
 
+## Caching strategy (tag-only, deliberate)
+
+All content pages, the sitemap, OG images, and `unstable_cache`-wrapped DB queries use `revalidate: false` — meaning **no time-based revalidation, ever**. Cache entries live until either:
+
+1. A write handler calls `revalidateTag(...)` (e.g., `/api/upvote` busts `models` + `stats`).
+2. A new deploy invalidates the build.
+
+**Why:** Model metadata is seeded — it does not drift. Upvote counts already invalidate on POST. Time-based revalidation was waking ~200 functions/hour for no real freshness benefit and was the main contributor to Vercel Fluid Compute usage (~40% of account budget at one point — see TTSL-25).
+
+**When to revisit:**
+- If you start updating model rows directly in the DB outside the API routes (manual SQL, seed re-runs against prod, an admin panel) — those writes will NOT invalidate the cache. Either route them through a handler that calls `revalidateTag`, redeploy, or reintroduce a long time-based revalidate (e.g., 7d) as a safety net.
+- If you add new write paths that affect rendered content, add the matching `revalidateTag` call to the route handler.
+- If new tags are introduced in `unstable_cache` wrappers, mirror them in the relevant write handlers.
+
+**Tags currently in use:** `models`, `comparisons`, `stats`. See `src/lib/db/queries/{models,comparisons,stats}.ts` and `src/app/api/upvote/route.ts`.
+
 ## Lattice
 
 > **MANDATORY: This project has Lattice initialized (`.lattice/` exists). You MUST use Lattice to track all work. Creating tasks, updating statuses, and following the workflow below is not optional — it is a hard requirement. Failure to track work in Lattice is a coordination failure: other agents and humans cannot see, build on, or trust untracked work. If you are about to write code and no Lattice task exists for it, stop and create one first.**

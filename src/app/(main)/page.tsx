@@ -21,7 +21,7 @@ import {
 import { getAllModelsWithUpvotes } from "@/lib/db/queries";
 import type { ModelWithUpvotes } from "@/lib/db/types";
 
-export const revalidate = 3600;
+export const revalidate = false;
 
 async function getHomeData() {
 	try {

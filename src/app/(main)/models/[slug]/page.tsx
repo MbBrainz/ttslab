@@ -28,7 +28,7 @@ import {
 	getSimilarSupportedModels,
 } from "@/lib/db/queries";
 
-export const revalidate = 3600;
+export const revalidate = false;
 
 type PageProps = {
 	params: Promise<{ slug: string }>;

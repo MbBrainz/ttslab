@@ -32,5 +32,5 @@ async function _getSiteStats(): Promise<SiteStats> {
 export const getSiteStats = unstable_cache(
 	_getSiteStats,
 	["stats:getSiteStats"],
-	{ tags: ["stats"], revalidate: 3600 },
+	{ tags: ["stats"], revalidate: false },
 );
