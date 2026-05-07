@@ -23,6 +23,8 @@ import {
 	getModelById,
 } from "@/lib/db/queries";
 
+export const revalidate = 3600;
+
 type PageProps = {
 	params: Promise<{ slug: string }>;
 };

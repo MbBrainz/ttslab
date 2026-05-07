@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 import { getComparisonBySlug, getModelById } from "@/lib/db/queries";
 
-export const runtime = "edge";
+export const revalidate = 86400;
 export const alt = "TTSLab Comparison";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";

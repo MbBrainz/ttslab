@@ -8,6 +8,8 @@ import { Separator } from "@/components/ui/separator";
 import { getAllComparisonsWithModels } from "@/lib/db/queries";
 import type { ComparisonWithModels } from "@/lib/db/types";
 
+export const revalidate = 3600;
+
 export const metadata: Metadata = {
 	title: "Compare TTS & STT Models Side by Side — Browser Benchmarks",
 	description:

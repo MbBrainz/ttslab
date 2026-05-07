@@ -1,3 +1,4 @@
+import { revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 import {
 	getModelBySlug,
@@ -67,6 +68,9 @@ export async function POST(request: Request) {
 		}
 
 		const count = await recordUpvote(model.id, fingerprint);
+
+		revalidateTag("models", { expire: 0 });
+		revalidateTag("stats", { expire: 0 });
 
 		return NextResponse.json({
 			count,

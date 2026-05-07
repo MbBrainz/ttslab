@@ -1,10 +1,11 @@
+import { unstable_cache } from "next/cache";
 import { count, eq } from "drizzle-orm";
 import { db } from "..";
 import { comparisons, models, upvotes } from "../schema";
 import type { SiteStats } from "../types";
 
 /** Fetch aggregate site statistics. */
-export async function getSiteStats(): Promise<SiteStats> {
+async function _getSiteStats(): Promise<SiteStats> {
 	const [
 		totalModelsResult,
 		supportedModelsResult,
@@ -27,3 +28,9 @@ export async function getSiteStats(): Promise<SiteStats> {
 		totalComparisons: Number(totalComparisonsResult[0].value),
 	};
 }
+
+export const getSiteStats = unstable_cache(
+	_getSiteStats,
+	["stats:getSiteStats"],
+	{ tags: ["stats"], revalidate: 3600 },
+);
