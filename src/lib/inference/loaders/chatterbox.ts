@@ -252,7 +252,7 @@ export class ChatterboxLoader implements ModelLoader {
 	getSupportedBackends(): ("webgpu" | "wasm")[] {
 		// WebGPU blocked: browser JSEP-based WebGPU EP rejects INT64 in Cast kernels,
 		// but ONNX spec requires INT64 for Shape/Unsqueeze axes. Fundamental catch-22
-		// that cannot be solved by model patching. See TTSL-5 for full investigation.
+		// that cannot be solved by model patching. See docs/webgpu-vs-wasm-model-compatibility.md.
 		return ["wasm"];
 	}
 
