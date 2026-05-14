@@ -178,7 +178,7 @@ Higher opset versions may introduce operators not yet supported by the WebGPU EP
 
 ## The Chatterbox WebGPU Investigation (Case Study)
 
-This is a detailed account of the TTSL-5 investigation, which illustrates why E2E browser testing is non-negotiable.
+This is a detailed account of the Chatterbox WebGPU investigation, which illustrates why E2E browser testing is non-negotiable.
 
 ### Timeline
 
@@ -211,7 +211,7 @@ The script successfully modified the graph structure, but the fix was fundamenta
 The investigation concluded that this is an unsolvable limitation of the current WebGPU EP:
 
 - Chatterbox marked as WASM-only (`getSupportedBackends() → ["wasm"]`)
-- Comment in loader explains the root cause and links to TTSL-5
+- Comment in loader explains the root cause and links to this doc
 - `CLAUDE.md` updated with the model compatibility matrix
 
 ### Lesson Learned
