@@ -29,6 +29,9 @@ import {
 } from "@/lib/db/queries";
 
 export const revalidate = false;
+// All model slugs are prerendered via generateStaticParams; unknown paths get a
+// static 404 instead of an on-demand render. Keeps Vercel compute near zero.
+export const dynamicParams = false;
 
 type PageProps = {
 	params: Promise<{ slug: string }>;
@@ -210,7 +213,11 @@ export default async function ModelPage({ params }: PageProps) {
 										<CardDescription>Model Size</CardDescription>
 									</CardHeader>
 									<CardContent>
-										<p className="font-medium">{model.sizeMb >= 1024 ? `${(model.sizeMb / 1024).toFixed(1)} GB` : `${model.sizeMb} MB`}</p>
+										<p className="font-medium">
+											{model.sizeMb >= 1024
+												? `${(model.sizeMb / 1024).toFixed(1)} GB`
+												: `${model.sizeMb} MB`}
+										</p>
 									</CardContent>
 								</Card>
 							)}
@@ -337,7 +344,6 @@ export default async function ModelPage({ params }: PageProps) {
 					</div>
 				</section>
 			)}
-
-			</div>
+		</div>
 	);
 }

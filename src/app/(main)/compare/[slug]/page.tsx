@@ -24,6 +24,10 @@ import {
 } from "@/lib/db/queries";
 
 export const revalidate = false;
+// Every real comparison slug is prerendered via generateStaticParams below.
+// Reject any other path with a static 404 instead of an on-demand render,
+// so crawlers probing bogus /compare/x-vs-y URLs cost zero compute.
+export const dynamicParams = false;
 
 type PageProps = {
 	params: Promise<{ slug: string }>;
@@ -54,7 +58,8 @@ export async function generateMetadata({
 		return { title: "Comparison Not Found" };
 	}
 
-	const type = modelA.type === modelB.type ? modelA.type.toUpperCase() : "Speech AI";
+	const type =
+		modelA.type === modelB.type ? modelA.type.toUpperCase() : "Speech AI";
 	const title = `${modelA.name} vs ${modelB.name} — In-Browser ${type} Comparison`;
 	const description = `Compare ${modelA.name} and ${modelB.name} side by side in your browser with WebGPU. Listen to demos, compare specs, and benchmark performance. No server required.`;
 
@@ -112,7 +117,10 @@ export default async function ComparisonPage({ params }: PageProps) {
 			{/* Side-by-side demo area */}
 			<section className="space-y-6">
 				<h2 className="text-xl font-semibold">Try Both Models</h2>
-				{modelASupported && modelBSupported && modelA.type === "tts" && modelB.type === "tts" ? (
+				{modelASupported &&
+				modelBSupported &&
+				modelA.type === "tts" &&
+				modelB.type === "tts" ? (
 					<TtsCompare modelA={modelA} modelB={modelB} comparisonSlug={slug} />
 				) : (
 					<div className="grid gap-6 md:grid-cols-2">

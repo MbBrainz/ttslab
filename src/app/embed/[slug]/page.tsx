@@ -4,6 +4,10 @@ import { TtsDemo } from "@/components/tts-demo";
 import { APP_NAME } from "@/lib/constants";
 import { getAllModelSlugs, getModelBySlug } from "@/lib/db/queries";
 
+export const revalidate = false;
+// All model slugs are prerendered; unknown embed paths get a static 404.
+export const dynamicParams = false;
+
 type PageProps = {
 	params: Promise<{ slug: string }>;
 };

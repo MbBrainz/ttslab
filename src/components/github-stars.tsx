@@ -1,4 +1,7 @@
+"use client";
+
 import { Star } from "lucide-react";
+import { useEffect, useState } from "react";
 
 const REPO = "MbBrainz/ttslab";
 
@@ -9,22 +12,17 @@ function formatCount(count: number): string {
 	return String(count);
 }
 
+// Fetched client-side on purpose: keeping this off the server keeps every page
+// statically prerenderable (honoring `revalidate = false`). A server-side fetch
+// here would set the route's effective revalidate to its own value, pulling the
+// ENTIRE site back into time-based ISR and burning Vercel compute on every
+// crawl. See CLAUDE.md "Caching strategy".
 async function getStarCount(): Promise<number | null> {
 	try {
-		const headers: HeadersInit = {
-			Accept: "application/vnd.github.v3+json",
-		};
-		if (process.env.GITHUB_TOKEN) {
-			headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
-		}
-
 		const res = await fetch(`https://api.github.com/repos/${REPO}`, {
-			headers,
-			next: { revalidate: 3600 },
+			headers: { Accept: "application/vnd.github.v3+json" },
 		});
-
 		if (!res.ok) return null;
-
 		const data = await res.json();
 		return typeof data.stargazers_count === "number"
 			? data.stargazers_count
@@ -34,8 +32,18 @@ async function getStarCount(): Promise<number | null> {
 	}
 }
 
-export async function GitHubStars() {
-	const count = await getStarCount();
+export function GitHubStars() {
+	const [count, setCount] = useState<number | null>(null);
+
+	useEffect(() => {
+		let active = true;
+		getStarCount().then((c) => {
+			if (active) setCount(c);
+		});
+		return () => {
+			active = false;
+		};
+	}, []);
 
 	return (
 		<a

@@ -1,14 +1,25 @@
 import { ImageResponse } from "next/og";
-import { getModelBySlug } from "@/lib/db/queries";
+import { getAllModelSlugs, getModelBySlug } from "@/lib/db/queries";
 
 export const revalidate = false;
+// Prerender one OG image per model at build time so social/crawler hits never
+// trigger an on-demand satori render (the most CPU-expensive function on the
+// site). Unknown slugs return a static 404.
+export const dynamicParams = false;
 export const alt = "TTSLab Model";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
+export async function generateStaticParams() {
+	const allModels = await getAllModelSlugs();
+	return allModels.map((m) => ({ slug: m.slug }));
+}
+
 export default async function OGImage({
 	params,
-}: { params: Promise<{ slug: string }> }) {
+}: {
+	params: Promise<{ slug: string }>;
+}) {
 	const { slug } = await params;
 	const model = await getModelBySlug(slug);
 
@@ -26,179 +37,176 @@ export default async function OGImage({
 	const specs = [params_m, size_mb, languages].filter(Boolean);
 
 	return new ImageResponse(
-		(
+		<div
+			style={{
+				width: "100%",
+				height: "100%",
+				display: "flex",
+				flexDirection: "column",
+				justifyContent: "center",
+				backgroundColor: "#0a0a0f",
+				color: "#ffffff",
+				fontFamily: "Inter, sans-serif",
+				padding: "60px 72px",
+				position: "relative",
+				overflow: "hidden",
+			}}
+		>
+			{/* Gradient accent bar */}
 			<div
 				style={{
-					width: "100%",
-					height: "100%",
+					position: "absolute",
+					top: 0,
+					left: 0,
+					right: 0,
+					height: "6px",
+					background: "linear-gradient(90deg, #6366f1, #8b5cf6, #a78bfa)",
+				}}
+			/>
+
+			{/* Subtle radial glow */}
+			<div
+				style={{
+					position: "absolute",
+					top: "50%",
+					left: "50%",
+					transform: "translate(-50%, -50%)",
+					width: "800px",
+					height: "800px",
+					borderRadius: "50%",
+					background:
+						"radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%)",
+				}}
+			/>
+
+			{/* Content */}
+			<div
+				style={{
 					display: "flex",
 					flexDirection: "column",
-					justifyContent: "center",
-					backgroundColor: "#0a0a0f",
-					color: "#ffffff",
-					fontFamily: "Inter, sans-serif",
-					padding: "60px 72px",
-					position: "relative",
-					overflow: "hidden",
+					gap: "20px",
+					zIndex: 1,
 				}}
 			>
-				{/* Gradient accent bar */}
-				<div
-					style={{
-						position: "absolute",
-						top: 0,
-						left: 0,
-						right: 0,
-						height: "6px",
-						background: "linear-gradient(90deg, #6366f1, #8b5cf6, #a78bfa)",
-					}}
-				/>
-
-				{/* Subtle radial glow */}
-				<div
-					style={{
-						position: "absolute",
-						top: "50%",
-						left: "50%",
-						transform: "translate(-50%, -50%)",
-						width: "800px",
-						height: "800px",
-						borderRadius: "50%",
-						background:
-							"radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%)",
-					}}
-				/>
-
-				{/* Content */}
+				{/* Type badge */}
 				<div
 					style={{
 						display: "flex",
-						flexDirection: "column",
-						gap: "20px",
-						zIndex: 1,
-					}}
-				>
-					{/* Type badge */}
-					<div
-						style={{
-							display: "flex",
-							alignItems: "center",
-						}}
-					>
-						<div
-							style={{
-								padding: "8px 20px",
-								borderRadius: "20px",
-								backgroundColor:
-									type === "TTS" ? "#6366f1" : "#22c55e",
-								fontSize: "20px",
-								fontWeight: 600,
-							}}
-						>
-							{type}
-						</div>
-					</div>
-
-					{/* Model name */}
-					<h1
-						style={{
-							fontSize: "80px",
-							fontWeight: 800,
-							margin: 0,
-							letterSpacing: "-3px",
-							background: "linear-gradient(135deg, #ffffff, #c4b5fd)",
-							backgroundClip: "text",
-							color: "transparent",
-						}}
-					>
-						{name}
-					</h1>
-
-					{/* Description */}
-					<p
-						style={{
-							fontSize: "30px",
-							color: "#a1a1aa",
-							margin: 0,
-							maxWidth: "900px",
-							lineHeight: 1.4,
-						}}
-					>
-						{description.length > 120
-							? `${description.slice(0, 120)}...`
-							: description}
-					</p>
-				</div>
-
-				{/* Specs row */}
-				{specs.length > 0 && (
-					<div
-						style={{
-							display: "flex",
-							gap: "32px",
-							fontSize: "24px",
-							color: "#a1a1aa",
-							marginTop: "40px",
-							zIndex: 1,
-						}}
-					>
-						{specs.map((spec) => (
-							<div
-								key={spec}
-								style={{
-									display: "flex",
-									alignItems: "center",
-									gap: "12px",
-								}}
-							>
-								<div
-									style={{
-										width: "10px",
-										height: "10px",
-										borderRadius: "50%",
-										backgroundColor: "#6366f1",
-									}}
-								/>
-								{spec}
-							</div>
-						))}
-					</div>
-				)}
-
-				{/* Footer — prominent TTSLab branding */}
-				<div
-					style={{
-						position: "absolute",
-						bottom: "28px",
-						left: "72px",
-						right: "72px",
-						display: "flex",
-						justifyContent: "space-between",
 						alignItems: "center",
 					}}
 				>
-					<span
+					<div
 						style={{
-							fontSize: "40px",
-							fontWeight: 700,
-							letterSpacing: "-1px",
-							color: "#3f3f46",
+							padding: "8px 20px",
+							borderRadius: "20px",
+							backgroundColor: type === "TTS" ? "#6366f1" : "#22c55e",
+							fontSize: "20px",
+							fontWeight: 600,
 						}}
 					>
-						TTSLab
-					</span>
-					<span
-						style={{
-							fontSize: "28px",
-							color: "#52525b",
-							fontWeight: 500,
-						}}
-					>
-						ttslab.dev
-					</span>
+						{type}
+					</div>
 				</div>
+
+				{/* Model name */}
+				<h1
+					style={{
+						fontSize: "80px",
+						fontWeight: 800,
+						margin: 0,
+						letterSpacing: "-3px",
+						background: "linear-gradient(135deg, #ffffff, #c4b5fd)",
+						backgroundClip: "text",
+						color: "transparent",
+					}}
+				>
+					{name}
+				</h1>
+
+				{/* Description */}
+				<p
+					style={{
+						fontSize: "30px",
+						color: "#a1a1aa",
+						margin: 0,
+						maxWidth: "900px",
+						lineHeight: 1.4,
+					}}
+				>
+					{description.length > 120
+						? `${description.slice(0, 120)}...`
+						: description}
+				</p>
 			</div>
-		),
+
+			{/* Specs row */}
+			{specs.length > 0 && (
+				<div
+					style={{
+						display: "flex",
+						gap: "32px",
+						fontSize: "24px",
+						color: "#a1a1aa",
+						marginTop: "40px",
+						zIndex: 1,
+					}}
+				>
+					{specs.map((spec) => (
+						<div
+							key={spec}
+							style={{
+								display: "flex",
+								alignItems: "center",
+								gap: "12px",
+							}}
+						>
+							<div
+								style={{
+									width: "10px",
+									height: "10px",
+									borderRadius: "50%",
+									backgroundColor: "#6366f1",
+								}}
+							/>
+							{spec}
+						</div>
+					))}
+				</div>
+			)}
+
+			{/* Footer — prominent TTSLab branding */}
+			<div
+				style={{
+					position: "absolute",
+					bottom: "28px",
+					left: "72px",
+					right: "72px",
+					display: "flex",
+					justifyContent: "space-between",
+					alignItems: "center",
+				}}
+			>
+				<span
+					style={{
+						fontSize: "40px",
+						fontWeight: 700,
+						letterSpacing: "-1px",
+						color: "#3f3f46",
+					}}
+				>
+					TTSLab
+				</span>
+				<span
+					style={{
+						fontSize: "28px",
+						color: "#52525b",
+						fontWeight: 500,
+					}}
+				>
+					ttslab.dev
+				</span>
+			</div>
+		</div>,
 		{ ...size },
 	);
 }

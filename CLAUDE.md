@@ -16,6 +16,18 @@ All content pages, the sitemap, OG images, and `unstable_cache`-wrapped DB queri
 
 **Tags currently in use:** `models`, `comparisons`, `stats`. See `src/lib/db/queries/{models,comparisons,stats}.ts` and `src/app/api/upvote/route.ts`.
 
+### Gotcha: a single server fetch can silently un-static the whole site
+
+A route's effective `revalidate` is the **minimum** of the page's setting and every server-side `fetch()` inside it (and its layouts). One `fetch(url, { next: { revalidate: 3600 } })` in a component rendered by `app/(main)/layout.tsx` (e.g. the GitHub-stars badge) overrode `revalidate = false` on **every** page, reverting the entire site to hourly ISR. With crawlers hitting ~150 model+comparison paths, that was the source of ~2–2.5 min/day of Vercel Fluid compute (TTSL-25 follow-up, fixed 2026-05-29).
+
+Rules to keep compute at ~zero:
+- **Never do a time-based `fetch` in a server component that renders inside a layout.** Cosmetic third-party data (star counts, etc.) must be fetched **client-side** (see `src/components/github-stars.tsx`) or with `cache: "force-cache"` and no `revalidate`. Default Next 15/16 fetch is `no-store` (dynamic) — omitting options makes it *worse*, not static.
+- **Dynamic segments are pinned with `export const dynamicParams = false`** on `models/[slug]`, `compare/[slug]`, `embed/[slug]`, and both `[slug]/opengraph-image.tsx`. Every real slug is prerendered via `generateStaticParams`; unknown paths return a static 404 instead of spawning an on-demand render. If you add a route whose `generateStaticParams` does NOT enumerate all valid slugs, do not set `dynamicParams = false` (it would 404 real pages).
+- **OG images need their own `generateStaticParams`** — they are separate routes from the page. Without it they satori-render on demand (the most CPU-expensive function here) on every social/crawler hit. A multi-child `<div>` in an OG image must have explicit `display: flex`, or satori throws a 500 at render time (500s are never cached → re-render every hit). Verify by running `next build` and confirming OG routes show `●` not `ƒ`.
+- **Verify after any caching/layout change:** `./node_modules/.bin/next build --webpack` and confirm the route table shows `○`/`●` for all pages and OG images; only `/api/*` should be `ƒ`. (Use the binary directly — `pnpm build` triggers a TTY-gated dep check.)
+
+**Idle dynamic routes:** `/api/models`, `/api/models/[slug]`, `/api/stats` are `ƒ` but unreferenced by the frontend — they cost compute only if hit directly. Left in place as a public API surface; delete or cache them if they ever show up in runtime logs.
+
 ## E2E TTS Model Testing
 
 ### Why This Matters
