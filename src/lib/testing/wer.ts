@@ -1,28 +1,6 @@
+import { toWords } from "./text-normalize";
 import type { Verdict, WERResult } from "./types";
 import { THRESHOLDS } from "./types";
-
-const DIGIT_WORDS: Record<string, string> = {
-	"0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
-	"5": "five", "6": "six", "7": "seven", "8": "eight", "9": "nine",
-	"10": "ten",
-};
-
-function normalizeDigits(text: string): string {
-	return text.replace(/\b\d+\b/g, (match) => DIGIT_WORDS[match] ?? match);
-}
-
-function normalize(text: string): string {
-	return normalizeDigits(text)
-		.toLowerCase()
-		.replace(/[^\w\s]/g, "")
-		.replace(/\s+/g, " ")
-		.trim();
-}
-
-function toWords(text: string): string[] {
-	const normalized = normalize(text);
-	return normalized === "" ? [] : normalized.split(" ");
-}
 
 function editDistance(ref: string[], hyp: string[]): [number, number, number] {
 	const m = ref.length;
