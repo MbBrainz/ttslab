@@ -7,6 +7,8 @@
 		"build": "next build --webpack",
 		"start": "next start",
 		"lint": "biome check .",
+		"test": "vitest run",
+		"test:watch": "vitest",
 		"format": "biome format --write .",
 		"check": "biome check --write .",
 		"db:generate": "drizzle-kit generate",
@@ -50,6 +52,7 @@
 		"puppeteer-core": "^24.38.0",
 		"tailwindcss": "^4",
 		"tsx": "^4.21.0",
-		"typescript": "^5"
+		"typescript": "^5",
+		"vitest": "^4.1.10"
 	}
 }
