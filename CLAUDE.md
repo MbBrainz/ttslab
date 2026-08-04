@@ -222,6 +222,22 @@ The piper-source transcript: *"…and after consciously **sophisticated sophisti
 
 **Consequence:** the verdict on this defect rests entirely on the STT judge. Lose the judge, mis-transcribe, or shorten the prompt enough to dilute WER, and audibly broken audio returns PASS. A future repetition detector (the spec's sustained MFCC repeat-similarity is the candidate) should be calibrated against `test-fixtures/speecht5-cloned-STUTTER-known-bad.wav`, not synthetic overlap. `known-defects.test.ts` encodes the current misses as assertions so that target is executable.
 
+### Voice cloning verified in a browser (2026-08-04) — and SpeechT5 is NONDETERMINISTIC
+
+`scripts/verify-voice-clone.mjs` drives the real UI in headless Chrome. Full numbers in `qa-artifacts/voice-clone/RESULTS.md` (gitignored; re-runnable).
+
+**Read this before comparing any two SpeechT5 renders:** five stock renders of the *identical* sentence with the *identical* voice gave **6.176 / 6.016 / 6.208 / 6.240 / 5.920 s**. Output is not reproducible run to run, so "these two renders differ" proves nothing on its own. Measure the nondeterminism band first (|log2 duration| max **0.0759** over 10 control pairs) and compare against it. Two subagents' worth of effort went into this question; without the control the result is unreadable.
+
+Verified with that band anchored:
+- **The embedding reaches the model.** Cloned vs stock: |log2 dur| **0.742** and **0.459** across two runs — 9.8× and 6.0× the band.
+- **The stale-embedding fix holds.** After switching the dropdown back to a stock voice, that render sits *inside* the stock cluster (|log2 dur| 0.0078–0.0838 vs the five controls) and 8–10× away from the clone. Mechanism: `tts-demo.tsx:133` passes an explicit `null`, and `inference-worker.ts:87` gates on `!== undefined`, so `null` reaches `setSpeakerEmbedding(null)` and clears it. **Passing `undefined` there would silently skip the call and leak the previous embedding** — do not "simplify" that null.
+- **WavLM is 101.69 MB, measured on the wire** (`onnx/model_quantized.onnx`; `model.onnx` at 402.5 MB is never requested). `device: "wasm"` with no `dtype` resolves to q8 via `DEFAULT_DEVICE_DTYPE_MAPPING`. Any earlier 350–400 MB figure was fp32 and does not apply unless someone sets `dtype`. `cachedModel` (`speaker-embedding.ts:43`) is never released — `dispose` at `inference-worker.ts:218` clears a different registry — so ~100 MB stays resident after the first clone.
+- **Malformed uploads fail cleanly.** Text-renamed-`.wav`, zero-byte, and truncated-RIFF all show "Unable to decode audio data" in 54–611 ms; page and Generate stay usable.
+
+**No file-size limit exists.** `handleFile` (`voice-clone-upload.tsx:157`) forwards straight to `decodeAudioToPCM`, which calls `await audioBlob.arrayBuffer()` (`speaker-embedding.ts:23`) unbounded. `accept="audio/*"` is a picker filter, not enforcement — drag-drop bypasses it.
+
+Harness notes: use a **persistent `--user-data-dir`** or every run re-downloads ~560 MB of SpeechT5 (with it, a full pass is ~30 s). Set the textarea **before** waiting on the Generate button — `text` starts `""` and the button is `disabled={!text.trim() || ...}`, so waiting first deadlocks.
+
 ### Live blind spots — do not trust a PASS as proof of these
 
 - **A cepstral PASS is NOT proof that there is no overlap.** Variable-speed overlap is **invisible**: a time-warped copy has no single lag, so no fixed-lag metric can see it. Measured 7.9 vs a clean 8.7 — no separation whatsoever. This is structural, not a tuning problem, and it is asserted as a test in `cepstrum.test.ts` so it cannot quietly regress into looking solved. `pauseFraction` is the only partial cover, and it is weak (clean 0.315 vs overlapped 0.242, a 23% drop versus the 2× the spec claims), which is why it is **reported but deliberately not gated** — any threshold between those two numbers would false-fail a model that simply pauses less.
