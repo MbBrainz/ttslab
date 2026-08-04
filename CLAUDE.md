@@ -255,7 +255,27 @@ An MFCC self-similarity detector was built specifically to close the cepstral ga
 
 This refines the earlier "detector gap" claim: the acoustic detectors are not missing a repetition that is present — they are correctly silent about a property this audio does not have. The spec's canonical artifact (`speecht5-1784627372628.wav`, **not in this repo**) may genuinely contain the word-level repeats the spec describes; if it is ever recovered, re-run `measureRepeatSimilarity` against it before concluding anything.
 
-**The promising lead is voicing quality, not repetition.** Median spectral flatness (energy-gated, peak-relative floor) separates at **6.2×**: negatives max **0.00900** (9 clean renders + 2 *working* clones) vs STUTTER **0.05579**, TRUNCATED **0.03081**. Deliberately **not shipped as a gate**: there is exactly **one** positive example, and the 11 negatives span 0.00008–0.00900 — a **112× internal spread** — so the false-positive tail is unbounded. Needs more positives before it becomes a threshold. `src/lib/audio-qa/repeat-similarity.ts` and `known-defects.test.ts` hold the reproducible measurements; neither is wired into `CHECK_RULES`.
+**The single most useful thing anyone learns from this fixture:** the transcript looked like repetition, and that misled three separate detectors into chasing the wrong property. The mechanism is **voicing collapse**, not a decoder loop. Check what the audio *is* before building a detector for what the transcript *implies*.
+
+### `voicing_flatness` — WARN-ONLY, and must stay that way
+
+Shipped in `CHECK_RULES` as `voicing_flatness` (`src/lib/audio-qa/voicing.ts`). Median spectral flatness over energy-gated frames, peak-relative spectral floor, so it is level-invariant. **Threshold 0.017, warn only — `THRESHOLDS.spectralFlatness` has NO `fail` key, and `CheckRule.fail` is optional precisely so that adding one is a deliberate edit rather than a tweaked number.**
+
+Measured populations:
+
+| population | median flatness |
+|---|---|
+| negatives — 9 clean real renders + **2 working file-upload clones** | max **0.00900** |
+| TRUNCATED fixture (weaker positive) | 0.03081 |
+| STUTTER fixture (stronger positive) | 0.05579 |
+
+0.017 is the geometric midpoint of the negative ceiling and the weaker positive: **1.89× headroom above the negatives**, **1.81× margin below TRUNCATED**, 3.28× below STUTTER. Both error directions are balanced by construction.
+
+**The evidence base and its weakness, together:** there is exactly **ONE** strong positive example, and the 11 negatives span **0.00008–0.00900 — a 112× internal spread**. The false-positive tail is therefore **unbounded**: a differently-voiced model (breathier, noisier, a different vocoder) could plausibly exceed 0.017 while being perfectly fine. That is why it warns and cannot fail.
+
+**DO NOT promote this to a fail gate without substantially more positive examples.** A warn costs a reader a glance; a fail on this basis would break someone's run over a voice the threshold never saw. `voicing.test.ts` asserts the no-fail-tier property structurally so the constraint survives refactors.
+
+`src/lib/audio-qa/repeat-similarity.ts` keeps the rejected MFCC measurements and is wired into nothing.
 
 ### Live blind spots — do not trust a PASS as proof of these
 

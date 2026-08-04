@@ -1,18 +1,18 @@
 import { type AudioQaMetrics, analyzeAudioQa } from "../audio-qa";
 import { measureEnergy } from "./audio-analysis";
-import { computeWER, werVerdict } from "./wer";
 import type {
-	TestVariant,
-	QualityReport,
-	PhraseResult,
-	TestConfig,
-	TestPhrase,
 	CheckFailure,
 	EnergyResult,
+	PhraseResult,
+	QualityReport,
+	TestConfig,
+	TestPhrase,
+	TestVariant,
 	Verdict,
 	WERResult,
 } from "./types";
 import { DEFAULT_PHRASES, DEFAULT_VARIANT, THRESHOLDS } from "./types";
+import { computeWER, werVerdict } from "./wer";
 
 // ── Worker API shape (duck-typed, not imported) ──────────────────────
 
@@ -152,7 +152,13 @@ interface CheckRule {
 	check: string;
 	value: (ctx: CheckContext) => number;
 	warn: number;
-	fail: number;
+	/**
+	 * Optional on purpose. A rule with no `fail` can only ever warn — which is
+	 * the right severity for a check whose evidence base cannot bound false
+	 * positives. Omitting the field means promoting such a check to a gate
+	 * requires ADDING a threshold rather than quietly editing a number.
+	 */
+	fail?: number;
 	direction: "above" | "below";
 }
 
@@ -226,6 +232,15 @@ const CHECK_RULES: CheckRule[] = [
 		direction: "below",
 	},
 	{
+		// WARN ONLY — no fail tier. Surfaces voicing collapse for diagnosis on an
+		// evidence base of ONE positive example; read voicing.ts before changing
+		// anything here, and do not add a `fail`.
+		check: "voicing_flatness",
+		value: (c) => c.qa.voicing.medianFlatness,
+		warn: THRESHOLDS.spectralFlatness.warn,
+		direction: "above",
+	},
+	{
 		check: "wer",
 		value: (c) => c.wer.wer,
 		warn: THRESHOLDS.wer.warn,
@@ -251,7 +266,7 @@ function breaches(
 
 function evaluateRule(rule: CheckRule, ctx: CheckContext): CheckFailure | null {
 	const value = rule.value(ctx);
-	if (breaches(value, rule.fail, rule.direction)) {
+	if (rule.fail !== undefined && breaches(value, rule.fail, rule.direction)) {
 		return { check: rule.check, value, threshold: rule.fail, severity: "fail" };
 	}
 	if (breaches(value, rule.warn, rule.direction)) {

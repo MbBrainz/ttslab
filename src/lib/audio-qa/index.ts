@@ -3,8 +3,10 @@ import { detectRunClipping, type RunClippingResult } from "./clipping";
 import { type DurationResult, measureDuration } from "./duration";
 import { checkIntegrity, type IntegrityResult } from "./integrity";
 import { type FrameSilenceResult, measureFrameSilence } from "./silence";
+import { measureVoicing, type VoicingResult } from "./voicing";
 
 export type {
+	VoicingResult,
 	CepstralPeakResult,
 	DurationResult,
 	FrameSilenceResult,
@@ -16,12 +18,15 @@ export { detectRunClipping } from "./clipping";
 export { measureDuration } from "./duration";
 export { checkIntegrity } from "./integrity";
 export { measureFrameSilence } from "./silence";
+export { measureVoicing } from "./voicing";
 
 export interface AudioQaMetrics {
 	integrity: IntegrityResult;
 	cepstral: CepstralPeakResult;
 	silence: FrameSilenceResult;
 	clipping: RunClippingResult;
+	/** Voicing quality. WARN-ONLY — see voicing.ts before touching it. */
+	voicing: VoicingResult;
 	/** Null when no reference text was supplied. */
 	duration: DurationResult | null;
 }
@@ -55,6 +60,7 @@ export function analyzeAudioQa(
 			: UNMEASURED_CEPSTRAL,
 		silence: measureFrameSilence(pcm, sampleRate),
 		clipping: detectRunClipping(pcm),
+		voicing: measureVoicing(pcm),
 		duration: referenceText
 			? measureDuration(pcm, sampleRate, referenceText)
 			: null,

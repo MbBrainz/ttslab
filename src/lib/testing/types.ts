@@ -203,4 +203,20 @@ export const THRESHOLDS = {
 	clippedFraction: { warn: 0, fail: 0.001 },
 	/** DC offset relative to RMS, in dB. Clean real max -43.4; DC+0.2 = -6.2. */
 	dcOffsetDb: { warn: -30, fail: -20 },
+	/**
+	 * Median spectral flatness — WARN ONLY, and deliberately has NO `fail` key.
+	 *
+	 * 0.017 sits 1.89x above the measured negatives max (0.00900, from 9 clean
+	 * real renders plus 2 WORKING file-upload clones) and 1.81x below the weaker
+	 * positive (TRUNCATED 0.03081); the stronger positive (STUTTER 0.05579) is
+	 * 3.28x clear. It is the geometric midpoint of the negative ceiling and the
+	 * weaker positive, so the two error directions are balanced.
+	 *
+	 * ONE strong positive example, and the 11 negatives span 0.00008-0.00900 —
+	 * a 112x internal spread — so the false-positive tail is UNBOUNDED and a
+	 * differently-voiced model could exceed this while being perfectly fine.
+	 * DO NOT add a `fail` key without substantially more positives. See
+	 * src/lib/audio-qa/voicing.ts.
+	 */
+	spectralFlatness: { warn: 0.017 },
 } as const;
