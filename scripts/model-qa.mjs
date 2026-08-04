@@ -38,6 +38,32 @@ const CHROME_ARGS = [
 	"--no-sandbox",
 ];
 
+/**
+ * Feeds a real WAV into a fake microphone device and auto-grants permission.
+ * Used with --clone-mic, so the capture path (getUserMedia + AGC + noise
+ * suppression) is genuinely exercised rather than bypassed by reading a file.
+ */
+function micArgs(wavPath) {
+	return [
+		"--use-fake-device-for-media-stream",
+		"--use-fake-ui-for-media-stream",
+		`--use-file-for-fake-audio-capture=${resolve(wavPath)}`,
+	];
+}
+
+/**
+ * >10 seconds of output, per the spec's repro conditions: the SpeechT5 cloning
+ * instability is length-dependent and short clips under-trigger it. At ~2.5
+ * words/sec this is ~14s.
+ */
+const LONG_PHRASE = {
+	text:
+		"The committee reviewed the sophisticated proposal at length, and after considerable discussion " +
+		"about the department budget, the union representatives agreed that the computer systems would " +
+		"need replacing before the end of the financial year.",
+	category: "long-form",
+};
+
 // ── Args ─────────────────────────────────────────────────────────────
 
 function parseArgs(argv) {
@@ -48,6 +74,9 @@ function parseArgs(argv) {
 		embedding: "",
 		streaming: false,
 		backend: "auto",
+		cloneMicWav: "",
+		cloneMicSeconds: 12,
+		longPhrase: false,
 		timeoutMs: 30 * 60 * 1000,
 		outDir: join(REPO_ROOT, "qa-artifacts"),
 	};
@@ -65,6 +94,10 @@ function parseArgs(argv) {
 		else if (arg === "--embedding") args.embedding = next();
 		else if (arg === "--streaming") args.streaming = true;
 		else if (arg === "--backend") args.backend = next();
+		else if (arg === "--clone-mic") args.cloneMicWav = next();
+		else if (arg === "--clone-mic-seconds")
+			args.cloneMicSeconds = Number(next());
+		else if (arg === "--long-phrase") args.longPhrase = true;
 		else if (arg === "--timeout") args.timeoutMs = Number(next()) * 1000;
 		else if (arg === "--out") args.outDir = resolve(next());
 		else if (arg === "--help") {
@@ -73,6 +106,9 @@ function parseArgs(argv) {
 			);
 			console.log(
 				"       [--embedding URL] [--streaming] [--backend auto|wasm|webgpu]",
+			);
+			console.log(
+				"       [--clone-mic FIXTURE.wav] [--clone-mic-seconds N] [--long-phrase]",
 			);
 			console.log("       [--timeout SEC] [--out DIR]");
 			process.exit(0);
@@ -211,7 +247,9 @@ async function main() {
 
 	const browser = await puppeteer.launch({
 		executablePath: DEFAULT_CHROME,
-		args: CHROME_ARGS,
+		args: args.cloneMicWav
+			? [...CHROME_ARGS, ...micArgs(args.cloneMicWav)]
+			: CHROME_ARGS,
 		protocolTimeout: args.timeoutMs,
 	});
 
@@ -256,7 +294,24 @@ async function main() {
 		}
 		console.log(`[qa] models     ${models.join(", ")}`);
 
-		const variants = buildVariants(args);
+		// A mic-captured embedding, not a file-loaded one: the defect is reported
+		// as source-dependent, and cloning from a file tests a milder
+		// configuration than the one it was reported under.
+		let embedding = args.embedding;
+		if (args.cloneMicWav) {
+			console.log(
+				`[qa] mic clone  capturing ${args.cloneMicSeconds}s from ${args.cloneMicWav}`,
+			);
+			embedding = await page.evaluate(
+				async (seconds) => window.__modelQA.captureMicEmbedding(seconds),
+				args.cloneMicSeconds,
+			);
+			console.log(
+				`[qa] mic clone  embedding ready (${embedding.slice(0, 32)}...)`,
+			);
+		}
+
+		const variants = buildVariants({ ...args, embedding });
 		console.log(`[qa] variants   ${variants.map((v) => v.id).join(", ")}`);
 
 		reports = await page.evaluate(
@@ -265,6 +320,7 @@ async function main() {
 				models,
 				variants,
 				backend: args.backend,
+				...(args.longPhrase ? { phrases: [LONG_PHRASE] } : {}),
 				...(args.phrases > 0 ? { phraseLimit: args.phrases } : {}),
 			},
 		);

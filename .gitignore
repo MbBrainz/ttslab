@@ -48,3 +48,6 @@ next-env.d.ts
 
 # QA harness artifacts (generated WAVs + reports)
 qa-artifacts/
+
+# Regenerable mic fixtures (see test-fixtures/README.md for the ffmpeg command)
+test-fixtures/mic-voice-source*.wav

@@ -189,6 +189,39 @@ All three real clean hero-demo renders PASS with zero failures (`cepstral` 68.7 
 2. **Cepstral fail threshold is 300, NOT the spec's 50.** At 50, **three of the six committed clean samples FAIL** (kokoro 68.7, hero-demo-1 68.7, hero-demo-2 122.2).
 3. **Frame-RMS uses a peak-relative gate (peak−40 dB), NOT the spec's absolute −45 dBFS.** An absolute gate is *more* level-dependent than the per-sample test it replaces — identical speech reads 0.235 / 0.470 / 0.990 / 1.000 at 0/−20/−34/−46 dB. Peak-relative reads 0.235 at every level. An absolute −60 dBFS floor still catches genuinely dead audio.
 
+### REFERENCE CASE: the live SpeechT5 cloning defect (2026-08-04, real model)
+
+Run under the spec's repro conditions — real SpeechT5, >10s prompt, **mic-captured** embedding (`--clone-mic`, Chrome's fake device fed a real WAV so the getUserMedia AGC chain runs). Artifacts committed in `test-fixtures/`, asserted by `known-defects.test.ts`.
+
+Two mic sources produced **two different failure modes**, so the defect is embedding-dependent:
+
+| | stock (control) | cloned, kokoro source | cloned, piper source |
+|---|---|---|---|
+| duration | 16.64s (log2 +0.291) | 6.18s (**log2 −1.139 FAIL**) | 10.98s (log2 −0.309 pass) |
+| cepstral | 9.5 | 13.3 | **19.3** (warn 200) |
+| silence | 0.242 | 0.162 | 0.153 |
+| clipping / DC | 0 / −67.6dB | 0 / −65.4dB | 0 / — |
+| WER | **0.000** | **0.706 FAIL** (S=7 D=17 I=0) | **0.706 FAIL** (S=12 D=12 I=0) |
+| I/N | 0.000 | 0.000 | 0.000 |
+| verdict | PASS | FAIL | FAIL |
+| mode | — | truncation | **stutter — the canonical defect** |
+
+The piper-source transcript: *"…and after consciously **sophisticated sophisticated sophisticated sophisticated sophisticated sophisticated sophisticated**…"* — this is the loop the spec describes.
+
+### THE DETECTOR GAP — read this before trusting an acoustic PASS
+
+**Every acoustic detector misses the stutter. Only the ASR round-trip catches it.**
+
+- `cepstral_repeat` = **19.3** against a 200 warn — an order of magnitude below, and silent in *every* 4s window (11.2–19.6). It is the detector built for repetition and it does not see the repo's actual repetition defect.
+- `insertion_rate` = **0.000**. I/N was adopted as "the primary non-termination signal" on the premise that a loop *adds* words. This loop **substitutes** them — the decoder still stops near the right length, emitting repeated words instead of the remaining text (S=12 D=12 I=0). The premise does not hold for this failure mode.
+- `duration` = −0.309, **passes**. The stutter does not lengthen the output.
+- `silence`, `clipping`, `dc_offset`, `integrity` — all pass.
+- Envelope autocorrelation does not rescue it either: defective 0.214 vs clean 0.182.
+
+**Why cepstral is blind:** the cepstrum finds *constant-lag* periodicity. Per the spec's own analysis these repeats are **re-synthesized each pass, not spliced**, so no two utterances of the word are acoustically identical and there is no fixed lag to find. The detector catches splices and overlaps; it does not catch a decoder saying a word again. This is structural, not a threshold problem — lowering the threshold to 20 would fire on the clean control at 9.5.
+
+**Consequence:** the verdict on this defect rests entirely on the STT judge. Lose the judge, mis-transcribe, or shorten the prompt enough to dilute WER, and audibly broken audio returns PASS. A future repetition detector (the spec's sustained MFCC repeat-similarity is the candidate) should be calibrated against `test-fixtures/speecht5-cloned-STUTTER-known-bad.wav`, not synthetic overlap. `known-defects.test.ts` encodes the current misses as assertions so that target is executable.
+
 ### Live blind spots — do not trust a PASS as proof of these
 
 - **A cepstral PASS is NOT proof that there is no overlap.** Variable-speed overlap is **invisible**: a time-warped copy has no single lag, so no fixed-lag metric can see it. Measured 7.9 vs a clean 8.7 — no separation whatsoever. This is structural, not a tuning problem, and it is asserted as a test in `cepstrum.test.ts` so it cannot quietly regress into looking solved. `pauseFraction` is the only partial cover, and it is weak (clean 0.315 vs overlapped 0.242, a 23% drop versus the 2× the spec claims), which is why it is **reported but deliberately not gated** — any threshold between those two numbers would false-fail a model that simply pauses less.
