@@ -299,6 +299,29 @@ describe("verdict rollup", () => {
 		expect(report.tests[0].failures.map((f) => f.check)).toContain("integrity");
 	});
 
+	it("the INTEGRITY rule itself catches an empty buffer", async () => {
+		// An empty buffer has usable:false but nanCount + infiniteCount === 0, so
+		// a sum-based rule misses it. It is caught today only because silence and
+		// energy independently tank — an accidental safety net, not the integrity
+		// gate doing its named job. Assert integrity by name.
+		const [report] = await run(fakeWorker([], { audio: new Float32Array(0) }), [
+			{ id: "n" },
+		]);
+		const checks = report.tests[0].failures.map((f) => f.check);
+
+		expect(checks).toContain("integrity");
+		expect(report.tests[0].qa.integrity.nanCount).toBe(0);
+		expect(report.tests[0].qa.integrity.infiniteCount).toBe(0);
+		expect(report.tests[0].qa.integrity.usable).toBe(false);
+	});
+
+	it("the DURATION rule itself catches a model that emitted no audio", async () => {
+		const [report] = await run(fakeWorker([], { audio: new Float32Array(0) }), [
+			{ id: "n" },
+		]);
+		expect(report.tests[0].failures.map((f) => f.check)).toContain("duration");
+	});
+
 	it("fails on a looping transcript via insertion rate", async () => {
 		const [report] = await run(
 			fakeWorker([], { transcript: `${TEXT} ${TEXT}` }),

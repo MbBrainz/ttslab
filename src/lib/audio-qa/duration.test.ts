@@ -133,10 +133,29 @@ describe("measureDuration — documented limits", () => {
 		expect(warning(result.log2Ratio)).toBe(false);
 	});
 
-	it("returns a neutral result rather than dividing by zero", () => {
-		expect(measureDuration(realistic, SR, "").ratio).toBe(0);
-		expect(measureDuration(silence(0), SR, TEXT).ratio).toBe(0);
-		expect(measureDuration(realistic, 0, TEXT).ratio).toBe(0);
+	it("is neutral only when there is no reference text to compare against", () => {
+		const result = measureDuration(realistic, SR, "");
+		expect(result.ratio).toBe(0);
+		expect(result.log2Ratio).toBe(0);
+	});
+
+	it("reports MAXIMAL severity for real text with no audio", () => {
+		// Returning a neutral 0 here would mark the most complete failure
+		// possible — a model that emitted nothing — as duration-clean. It looks
+		// caught today only because an empty buffer independently tanks the
+		// silence and energy checks.
+		for (const [label, pcm, rate] of [
+			["zero samples", silence(0), SR],
+			["unknown sample rate", realistic, 0],
+		] as Array<[string, Float32Array, number]>) {
+			const result = measureDuration(pcm, rate, TEXT);
+			expect(failing(result.log2Ratio), label).toBe(true);
+			// Finite, so it survives JSON.stringify as a number rather than null.
+			expect(Number.isFinite(result.log2Ratio), label).toBe(true);
+			expect(JSON.parse(JSON.stringify(result)).log2Ratio, label).toBe(
+				result.log2Ratio,
+			);
+		}
 	});
 
 	it("accepts an override for a model with a different speaking rate", () => {

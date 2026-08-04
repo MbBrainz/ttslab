@@ -158,10 +158,23 @@ interface CheckRule {
 
 const CHECK_RULES: CheckRule[] = [
 	{
-		// Runs first. NaN compares false against every threshold, so without an
-		// explicit count a broken tensor would sail through as a pass.
+		// Runs first. NaN compares false against every threshold, so without this
+		// a broken tensor would sail through as a pass.
+		//
+		// Gates on checkIntegrity's own `usable` flag, NOT on
+		// nanCount + infiniteCount. Those are two of the reasons a buffer is
+		// unusable, not the definition: an EMPTY buffer has usable:false with
+		// both counts at 0, so a sum-based rule does not catch it. It looks
+		// caught today only because measureFrameSilence independently returns
+		// 1.0 and measureEnergy returns -Infinity — an accidental safety net
+		// rather than the integrity gate doing its named job. A future third
+		// reason for usable:false that did not also tank silence and energy
+		// would slip straight through.
+		//
+		// The value is a flag (1 = unusable); the detail is on
+		// PhraseResult.qa.integrity.
 		check: "integrity",
-		value: (c) => c.qa.integrity.nanCount + c.qa.integrity.infiniteCount,
+		value: (c) => (c.qa.integrity.usable ? 0 : 1),
 		warn: 0,
 		fail: 0,
 		direction: "above",

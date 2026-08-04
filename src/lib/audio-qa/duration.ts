@@ -43,6 +43,15 @@ export interface DurationResult {
 const WORDS_PER_SECOND = 2.5;
 
 /**
+ * Reported when there is reference text but no audio at all. Mathematically the
+ * ratio is 0 and log2(0) is -Infinity, but that is deliberately clamped to a
+ * large FINITE value: `JSON.stringify(-Infinity)` is `null`, which would read as
+ * "not measured" in report.json rather than "maximally wrong". -20 is a
+ * millionfold shortfall — far beyond any real defect, and still a number.
+ */
+const NO_AUDIO_LOG2_RATIO = -20;
+
+/**
  * Duration plausibility, per spec Tier-1 #2. Runs PRE-ASR — it needs no model
  * and it is the only detector that can catch a sample-rate relabel.
  *
@@ -60,8 +69,25 @@ export function measureDuration(
 	const wordCount = toWords(text).length;
 	const expectedSec = wordCount / wordsPerSecond;
 
-	if (expectedSec <= 0 || actualSec <= 0) {
+	// No reference text means nothing to compare against — genuinely neutral,
+	// not a pass. This is the only case that reports 0.
+	if (expectedSec <= 0) {
 		return { actualSec, expectedSec, ratio: 0, log2Ratio: 0, wordCount };
+	}
+
+	// Real reference text but no audio: a model that emitted zero samples, or a
+	// buffer whose sample rate is unknown so its duration cannot be established.
+	// Reporting log2Ratio 0 here would mark the most complete failure possible
+	// as duration-clean. Masked today only because an empty buffer independently
+	// tanks the silence and energy checks.
+	if (actualSec <= 0) {
+		return {
+			actualSec,
+			expectedSec,
+			ratio: 0,
+			log2Ratio: NO_AUDIO_LOG2_RATIO,
+			wordCount,
+		};
 	}
 
 	const ratio = actualSec / expectedSec;
