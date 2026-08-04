@@ -35,6 +35,18 @@ function formatWer(wer: number): string {
 	return `${(wer * 100).toFixed(1)}%`;
 }
 
+/** "echo x2, wer x1" — which checks actually gated this model. */
+function summarizeFailures(report: QualityReport): string {
+	const counts = new Map<string, number>();
+	for (const test of report.tests) {
+		for (const f of test.failures) {
+			counts.set(f.check, (counts.get(f.check) ?? 0) + 1);
+		}
+	}
+	if (counts.size === 0) return "-";
+	return [...counts.entries()].map(([check, n]) => `${check} x${n}`).join(", ");
+}
+
 function buildWorkerAdapter(hook: ReturnType<typeof useInferenceWorker>): InferenceWorkerAPI {
 	return {
 		loadModel: hook.loadModel,
@@ -78,6 +90,12 @@ function ModelResultRow({ report }: { report: QualityReport }) {
 			<td className="px-3 py-2 text-sm tabular-nums">{formatMs(report.loadTimeMs)}</td>
 			<td className="px-3 py-2 text-sm tabular-nums">{formatWer(avgWer)}</td>
 			<td className="px-3 py-2 text-sm tabular-nums">{report.tests.length}</td>
+			<td
+				data-testid={`failed-checks-${report.slug}`}
+				className="px-3 py-2 font-mono text-sm text-yellow-400"
+			>
+				{summarizeFailures(report)}
+			</td>
 			<td className="px-3 py-2 text-sm text-red-400">
 				{report.errors.length > 0 ? report.errors.join("; ") : "-"}
 			</td>
@@ -197,6 +215,7 @@ export default function TtsQualityPage() {
 								<th className="px-3 py-2">Load Time</th>
 								<th className="px-3 py-2">Avg WER</th>
 								<th className="px-3 py-2">Phrases</th>
+								<th className="px-3 py-2">Failed Checks</th>
 								<th className="px-3 py-2">Errors</th>
 							</tr>
 						</thead>

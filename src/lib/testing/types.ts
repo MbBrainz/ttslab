@@ -1,3 +1,5 @@
+export type Verdict = "pass" | "warn" | "fail";
+
 export interface EchoResult {
 	detected: boolean;
 	peakDelayMs: number;
@@ -36,22 +38,38 @@ export interface WERResult {
 	refWords: number;
 }
 
+/**
+ * A single check that did not pass, with the value and threshold that decided
+ * it. This is what makes a verdict actionable: an agent can branch on
+ * `check`, and a human can see how far out the value was.
+ */
+export interface CheckFailure {
+	check: string;
+	value: number;
+	threshold: number;
+	severity: "warn" | "fail";
+}
+
 export interface PhraseResult {
 	phrase: string;
 	category: string;
 	generationMs: number;
 	audioAnalysis: AudioAnalysis;
+	/** Combined acoustic + STT verdict for this phrase. */
+	verdict: Verdict;
+	/** Every check that warned or failed. Empty when `verdict` is "pass". */
+	failures: CheckFailure[];
 	sttRoundTrip: {
 		transcription: string;
 		wer: number;
-		verdict: "pass" | "warn" | "fail";
+		verdict: Verdict;
 	};
 }
 
 export interface QualityReport {
 	slug: string;
 	timestamp: string;
-	overall: "pass" | "warn" | "fail";
+	overall: Verdict;
 	loadTimeMs: number;
 	backend: "webgpu" | "wasm";
 	tests: PhraseResult[];
