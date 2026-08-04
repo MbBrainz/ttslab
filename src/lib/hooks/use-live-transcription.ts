@@ -73,6 +73,18 @@ interface QueuedUtterance {
 	audio: Float32Array;
 }
 
+/**
+ * destroy() reads the audio graph and throws if start() never built one, so a
+ * failed start still has to release whatever `new()` managed to acquire.
+ */
+async function destroyQuietly(instance: MicVAD): Promise<void> {
+	try {
+		await instance.destroy();
+	} catch {
+		// Nothing was fully wired up — nothing to release.
+	}
+}
+
 /** Peak sample magnitude of a VAD frame, as 0..1. */
 function framePeak(frame: Float32Array): number {
 	let peak = 0;
@@ -100,12 +112,16 @@ export function useLiveTranscription({
 	const [error, setError] = useState<string | null>(null);
 
 	const vadRef = useRef<MicVAD | null>(null);
+	// Set synchronously, because vadRef only fills in several awaits into
+	// start() — without it two fast clicks build two MicVADs.
+	const startingRef = useRef(false);
 	const activeSegmentRef = useRef<string | null>(null);
 	const inputPeakRef = useRef(0);
 	// The worker transport has a single pending slot, so utterances arriving
 	// faster than transcription completes must wait rather than overlap.
 	const queueRef = useRef<QueuedUtterance[]>([]);
 	const drainingRef = useRef(false);
+	const drainPromiseRef = useRef<Promise<void> | null>(null);
 
 	// Kept in refs so fresh callback / object identities never restart the VAD
 	// and never invalidate start().
@@ -145,19 +161,28 @@ export function useLiveTranscription({
 		[patchSegment],
 	);
 
-	/** Drain the queue one utterance at a time; re-entry is a no-op. */
-	const drainQueue = useCallback(async () => {
-		if (drainingRef.current) return;
-		drainingRef.current = true;
-		try {
-			let next = queueRef.current.shift();
-			while (next) {
-				await runUtterance(next);
-				next = queueRef.current.shift();
-			}
-		} finally {
-			drainingRef.current = false;
+	/**
+	 * Drain the queue one utterance at a time. Re-entry joins the run already in
+	 * flight, so awaiting the result always means "the queue is empty".
+	 */
+	const drainQueue = useCallback((): Promise<void> => {
+		if (drainingRef.current) {
+			return drainPromiseRef.current ?? Promise.resolve();
 		}
+		drainingRef.current = true;
+		const run = (async () => {
+			try {
+				let next = queueRef.current.shift();
+				while (next) {
+					await runUtterance(next);
+					next = queueRef.current.shift();
+				}
+			} finally {
+				drainingRef.current = false;
+			}
+		})();
+		drainPromiseRef.current = run;
+		return run;
 	}, [runUtterance]);
 
 	const handleSpeechStart = useCallback(() => {
@@ -214,12 +239,15 @@ export function useLiveTranscription({
 		};
 	}, [handleSpeechStart, handleSpeechEnd, dropActiveSegment]);
 
-	const start = useCallback(async () => {
-		if (vadRef.current) return;
+	/** Resolves true once the microphone is live, false if startup failed. */
+	const start = useCallback(async (): Promise<boolean> => {
+		if (vadRef.current || startingRef.current) return false;
+		startingRef.current = true;
 		setError(null);
+		let instance: MicVAD | null = null;
 		try {
 			const { MicVAD: MicVadCtor } = await import("@ricky0123/vad-web");
-			const instance = await MicVadCtor.new({
+			instance = await MicVadCtor.new({
 				baseAssetPath: "/vad/",
 				onnxWASMBasePath: "/onnx/",
 				...DICTATION_VAD,
@@ -237,28 +265,40 @@ export function useLiveTranscription({
 			vadRef.current = instance;
 			await instance.start();
 			setIsListening(true);
+			return true;
 		} catch (err) {
 			vadRef.current = null;
+			// new() holds an ONNX session and start() may have taken the mic
+			// before throwing — abandoning the instance would leak both.
+			if (instance) await destroyQuietly(instance);
 			setIsListening(false);
 			setError(
 				err instanceof Error
 					? err.message
 					: "Could not access the microphone. Please allow microphone access.",
 			);
+			return false;
+		} finally {
+			startingRef.current = false;
 		}
 	}, []);
 
+	/** Resolves once the mic is released *and* the queue has finished draining. */
 	const stop = useCallback(async () => {
 		const instance = vadRef.current;
 		vadRef.current = null;
 		setIsListening(false);
 		setIsSpeechActive(false);
 		inputPeakRef.current = 0;
-		if (!instance) return;
-		// pause() flushes the trailing utterance through onSpeechEnd before
-		// destroy() tears the graph down; the queue drains on its own after.
-		await instance.pause();
-		await instance.destroy();
+		if (instance) {
+			// pause() flushes the trailing utterance through onSpeechEnd before
+			// destroy() tears the graph down.
+			await instance.pause();
+			await destroyQuietly(instance);
+		}
+		// Callers hand the shared worker to another capture path once this
+		// resolves, so the last transcribe() must have finished by then.
+		await drainPromiseRef.current;
 	}, []);
 
 	const clear = useCallback(() => {

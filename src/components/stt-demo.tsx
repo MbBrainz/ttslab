@@ -1,18 +1,18 @@
 "use client";
 
 import { Cpu, Loader2, Mic, Radio, Zap } from "lucide-react";
-import { GpuEstimate } from "@/components/gpu-estimate";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { GpuEstimate } from "@/components/gpu-estimate";
 import { analyserPeakReader, MicWaveform } from "@/components/mic-waveform";
 import { type ModelState, ModelStatus } from "@/components/model-status";
 import { Button } from "@/components/ui/button";
 import { trackModelLoad, trackSTTTranscription } from "@/lib/analytics";
-import { createDownloadTracker } from "@/lib/inference/download-tracker";
 import type { Model } from "@/lib/db/schema";
 import {
 	type TranscriptSegment,
 	useLiveTranscription,
 } from "@/lib/hooks/use-live-transcription";
+import { createDownloadTracker } from "@/lib/inference/download-tracker";
 import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
 import { pickRecordingMimeType } from "@/lib/recording-mime";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,9 @@ import { cn } from "@/lib/utils";
 type SttDemoProps = {
 	model: Model;
 };
+
+/** Which capture path currently owns the microphone and the worker. */
+type CaptureClaim = "record" | "live" | null;
 
 const PENDING_LABEL = {
 	listening: "Listening…",
@@ -113,6 +116,25 @@ export function SttDemo({ model }: SttDemoProps) {
 	const audioCtxRef = useRef<AudioContext | null>(null);
 	const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
+	// Both capture paths share one inference worker, whose transport keeps a
+	// single pending slot: overlapping transcribe() calls resolve each other's
+	// promises. `isRecording` and `live.isListening` only flip several awaits
+	// into startup, so the claim has to be taken synchronously on click.
+	const captureClaimRef = useRef<CaptureClaim>(null);
+	const [captureClaim, setCaptureClaim] = useState<CaptureClaim>(null);
+
+	const claimCapture = useCallback((claim: "record" | "live") => {
+		if (captureClaimRef.current) return false;
+		captureClaimRef.current = claim;
+		setCaptureClaim(claim);
+		return true;
+	}, []);
+
+	const releaseCapture = useCallback(() => {
+		captureClaimRef.current = null;
+		setCaptureClaim(null);
+	}, []);
+
 	/** Release the mic, the source node and the capture AudioContext. */
 	const teardownCapture = useCallback(() => {
 		sourceRef.current?.disconnect();
@@ -197,6 +219,7 @@ export function SttDemo({ model }: SttDemoProps) {
 	}, [model.slug, dispose]);
 
 	const startRecording = useCallback(async () => {
+		if (!claimCapture("record")) return;
 		try {
 			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 			streamRef.current = stream;
@@ -234,6 +257,7 @@ export function SttDemo({ model }: SttDemoProps) {
 			}, 100);
 		} catch (err) {
 			teardownCapture();
+			releaseCapture();
 			setModelState({
 				status: "error",
 				code: "MIC_ACCESS_DENIED",
@@ -244,7 +268,7 @@ export function SttDemo({ model }: SttDemoProps) {
 				recoverable: true,
 			});
 		}
-	}, [teardownCapture]);
+	}, [teardownCapture, claimCapture, releaseCapture]);
 
 	const stopRecording = useCallback(async () => {
 		setIsRecording(false);
@@ -257,6 +281,7 @@ export function SttDemo({ model }: SttDemoProps) {
 		const recorder = mediaRecorderRef.current;
 		if (!recorder || recorder.state === "inactive") {
 			teardownCapture();
+			releaseCapture();
 			return;
 		}
 
@@ -351,8 +376,11 @@ export function SttDemo({ model }: SttDemoProps) {
 		} finally {
 			// No-op if the success path already closed it.
 			await closeAudioContext(decodeCtx);
+			// Held until transcription is done, not just until the mic is
+			// released — the claim guards the worker as well as the microphone.
+			releaseCapture();
 		}
-	}, [model.slug, transcribe, teardownCapture]);
+	}, [model.slug, transcribe, teardownCapture, releaseCapture]);
 
 	const toggleRecording = useCallback(() => {
 		if (isRecording) {
@@ -369,13 +397,20 @@ export function SttDemo({ model }: SttDemoProps) {
 		return `${mins}:${secs.toString().padStart(2, "0")}`;
 	}
 
-	const toggleListening = useCallback(() => {
-		if (live.isListening) {
-			void live.stop();
-		} else {
-			void live.start();
+	const toggleListening = useCallback(async () => {
+		if (captureClaimRef.current === "live") {
+			// Startup is still in flight — stopping now would race it and orphan
+			// the VAD that start() is about to install.
+			if (!live.isListening) return;
+			// stop() also waits for the queue to drain, so the worker is free
+			// before the claim is handed back.
+			await live.stop();
+			releaseCapture();
+			return;
 		}
-	}, [live.isListening, live.start, live.stop]);
+		if (!claimCapture("live")) return;
+		if (!(await live.start())) releaseCapture();
+	}, [live.isListening, live.start, live.stop, claimCapture, releaseCapture]);
 
 	const clearTranscript = useCallback(() => {
 		setRecordedSegments([]);
@@ -392,6 +427,13 @@ export function SttDemo({ model }: SttDemoProps) {
 			),
 		[recordedSegments, live.segments],
 	);
+
+	// A claim is held from the click, but the capture path only reports itself
+	// live once its async startup finishes — that window is not clickable.
+	const recordStarting = captureClaim === "record" && !isRecording;
+	const liveStarting = captureClaim === "live" && !live.isListening;
+	const claimedElsewhere = (claim: "record" | "live") =>
+		captureClaim !== null && captureClaim !== claim;
 
 	const isCapturing = isRecording || live.isListening;
 	const peakReader = useMemo(
@@ -420,7 +462,11 @@ export function SttDemo({ model }: SttDemoProps) {
 						variant={isRecording ? "destructive" : "default"}
 						size="lg"
 						onClick={toggleRecording}
-						disabled={(!isReady && !isRecording) || live.isListening}
+						disabled={
+							(!isReady && !isRecording) ||
+							claimedElsewhere("record") ||
+							recordStarting
+						}
 						className={cn(
 							"relative h-20 w-20 rounded-full",
 							isRecording && "shadow-lg shadow-destructive/25",
@@ -450,13 +496,17 @@ export function SttDemo({ model }: SttDemoProps) {
 					variant={live.isListening ? "destructive" : "outline"}
 					size="sm"
 					onClick={toggleListening}
-					disabled={!isReady || isRecording}
+					disabled={!isReady || claimedElsewhere("live") || liveStarting}
 					className="min-h-11"
 				>
 					<Radio
 						className={cn("h-4 w-4", live.isListening && "animate-pulse")}
 					/>
-					{live.isListening ? "Stop Listening" : "Start Listening"}
+					{liveStarting
+						? "Starting…"
+						: live.isListening
+							? "Stop Listening"
+							: "Start Listening"}
 				</Button>
 
 				{live.error && <p className="text-sm text-destructive">{live.error}</p>}
