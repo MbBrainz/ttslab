@@ -9,6 +9,7 @@ import { trackModelLoad, trackSTTTranscription } from "@/lib/analytics";
 import { createDownloadTracker } from "@/lib/inference/download-tracker";
 import type { Model } from "@/lib/db/schema";
 import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
+import { pickRecordingMimeType } from "@/lib/recording-mime";
 import { cn } from "@/lib/utils";
 
 type SttDemoProps = {
@@ -137,7 +138,11 @@ export function SttDemo({ model }: SttDemoProps) {
 			updateLevel();
 
 			// Start MediaRecorder
-			const recorder = new MediaRecorder(stream);
+			const mimeType = pickRecordingMimeType();
+			const recorder = new MediaRecorder(
+				stream,
+				mimeType ? { mimeType } : undefined,
+			);
 			audioChunksRef.current = [];
 			recorder.ondataavailable = (e) => {
 				if (e.data.size > 0) {
@@ -186,7 +191,10 @@ export function SttDemo({ model }: SttDemoProps) {
 		// Wait for the recorder to finish
 		const audioBlob = await new Promise<Blob>((resolve) => {
 			recorder.onstop = () => {
-				const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+				const blob = new Blob(
+					audioChunksRef.current,
+					recorder.mimeType ? { type: recorder.mimeType } : undefined,
+				);
 				resolve(blob);
 			};
 			recorder.stop();

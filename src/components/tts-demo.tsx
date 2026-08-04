@@ -130,10 +130,12 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 		return base;
 	}, [voices, model.slug, speakerEmbeddingUrl, compact]);
 
+	const activeEmbeddingUrl = voice === "custom" ? speakerEmbeddingUrl : null;
+
 	const getVoiceName = useCallback((voiceId: string): string => {
-		const found = voices.find((v) => v.id === voiceId);
+		const found = displayVoices.find((v) => v.id === voiceId);
 		return found?.name ?? voiceId;
-	}, [voices]);
+	}, [displayVoices]);
 
 	const handleDownload = useCallback(async () => {
 		if (loadingRef.current) return;
@@ -226,7 +228,7 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 				model.slug,
 				text,
 				voice,
-				speakerEmbeddingUrl ?? undefined,
+				activeEmbeddingUrl,
 				undefined,
 				languages.length > 1 ? language : undefined,
 			);
@@ -295,13 +297,13 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 		} finally {
 			generatingRef.current = false;
 		}
-	}, [text, voice, audioUrl, model.slug, speakerEmbeddingUrl, synthesize, getVoiceName, compact, language, languages]);
+	}, [text, voice, audioUrl, model.slug, activeEmbeddingUrl, synthesize, getVoiceName, compact, language, languages]);
 
 	const handleStream = useCallback(() => {
 		if (!text.trim() || isStreaming) return;
 		if (!compact) addRecentText(text);
-		startStream(text, voice, speakerEmbeddingUrl ?? undefined, languages.length > 1 ? language : undefined);
-	}, [text, voice, speakerEmbeddingUrl, isStreaming, startStream, compact, language, languages]);
+		startStream(text, voice, activeEmbeddingUrl, languages.length > 1 ? language : undefined);
+	}, [text, voice, activeEmbeddingUrl, isStreaming, startStream, compact, language, languages]);
 
 	const handleRetry = useCallback(() => {
 		if (modelReadyRef.current) {
@@ -479,6 +481,7 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 					<VoiceCloneUpload
 						onEmbeddingReady={(url) => {
 							setSpeakerEmbeddingUrl(url);
+							setVoice(url ? "custom" : "default");
 						}}
 						extractEmbedding={extractEmbedding}
 						disabled={!canGenerate || isProcessing}

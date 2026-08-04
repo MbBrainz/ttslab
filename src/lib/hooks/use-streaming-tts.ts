@@ -11,7 +11,7 @@ interface UseStreamingTtsOptions {
 		modelSlug: string,
 		text: string,
 		voice: string,
-		speakerEmbeddingUrl: string | undefined,
+		speakerEmbeddingUrl: string | null | undefined,
 		callbacks: StreamCallbacks,
 		language?: string,
 	) => void;
@@ -32,7 +32,7 @@ export interface UseStreamingTtsReturn {
 	startStream: (
 		text: string,
 		voice: string,
-		speakerEmbeddingUrl?: string,
+		speakerEmbeddingUrl?: string | null,
 		language?: string,
 	) => void;
 	stopStream: () => void;
@@ -90,7 +90,7 @@ export function useStreamingTts({
 	}, [cancelStream, cleanup, setModelState, backend]);
 
 	const startStream = useCallback(
-		(text: string, voice: string, speakerEmbeddingUrl?: string, language?: string) => {
+		(text: string, voice: string, speakerEmbeddingUrl?: string | null, language?: string) => {
 			if (!text.trim()) return;
 
 			// Clean up any previous stream

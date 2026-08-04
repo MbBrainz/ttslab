@@ -84,7 +84,7 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 				}
 
 				// Forward speaker embedding URL to SpeechT5 loader
-				if (cmd.speakerEmbeddingUrl != null && "setSpeakerEmbedding" in loader) {
+				if (cmd.speakerEmbeddingUrl !== undefined && "setSpeakerEmbedding" in loader) {
 					(loader as { setSpeakerEmbedding: (url: string | null) => void }).setSpeakerEmbedding(cmd.speakerEmbeddingUrl);
 				}
 
@@ -121,7 +121,7 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 				}
 
 				// Forward speaker embedding URL to SpeechT5 loader
-				if (cmd.speakerEmbeddingUrl != null && "setSpeakerEmbedding" in loader) {
+				if (cmd.speakerEmbeddingUrl !== undefined && "setSpeakerEmbedding" in loader) {
 					(loader as { setSpeakerEmbedding: (url: string | null) => void }).setSpeakerEmbedding(cmd.speakerEmbeddingUrl);
 				}
 
@@ -204,9 +204,13 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 				const { extractEmbeddingFromPCM } = await import(
 					"./speaker-embedding"
 				);
-				const url = await extractEmbeddingFromPCM(cmd.audio, cmd.sampleRate, (p) => {
-					post({ type: "progress", data: { status: "downloading", file: p.status, loaded: 0, total: 0 } });
-				});
+				const url = await extractEmbeddingFromPCM(
+					cmd.audio,
+					cmd.sampleRate,
+					(progress) => {
+						post({ type: "progress", data: progress });
+					},
+				);
 				post({ type: "embedding", url });
 				break;
 			}

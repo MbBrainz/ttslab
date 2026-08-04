@@ -76,7 +76,7 @@ export function useInferenceWorker() {
 			modelSlug: string,
 			text: string,
 			voice: string,
-			speakerEmbeddingUrl?: string,
+			speakerEmbeddingUrl?: string | null,
 			speed?: number,
 			language?: string,
 		): Promise<AudioResult> => {
@@ -124,7 +124,7 @@ export function useInferenceWorker() {
 			modelSlug: string,
 			text: string,
 			voice: string,
-			speakerEmbeddingUrl: string | undefined,
+			speakerEmbeddingUrl: string | null | undefined,
 			callbacks: StreamCallbacks,
 			language?: string,
 		): void => {
@@ -161,10 +161,8 @@ export function useInferenceWorker() {
 					{ type: "extract-embedding", audio, sampleRate },
 					[audio.buffer],
 				);
-			} catch (err) {
-				setIsGenerating(false);
-				throw err;
 			} finally {
+				setIsGenerating(false);
 				transport.setProgressCallback(null);
 			}
 		},

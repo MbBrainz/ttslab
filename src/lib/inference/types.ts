@@ -81,7 +81,7 @@ export interface ModelLoader {
 // Worker message types
 export type WorkerCommand =
 	| { type: "load"; modelSlug: string; options: LoadOptions }
-	| { type: "synthesize"; modelSlug: string; text: string; voice: string; speakerEmbeddingUrl?: string; speed?: number; language?: string }
+	| { type: "synthesize"; modelSlug: string; text: string; voice: string; speakerEmbeddingUrl?: string | null; speed?: number; language?: string }
 	| {
 			type: "transcribe";
 			modelSlug: string;
@@ -94,7 +94,7 @@ export type WorkerCommand =
 			modelSlug: string;
 			text: string;
 			voice: string;
-			speakerEmbeddingUrl?: string;
+			speakerEmbeddingUrl?: string | null;
 			language?: string;
 	  }
 	| { type: "cancel-stream" }
