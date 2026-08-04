@@ -3,7 +3,57 @@ import { describe, expect, it } from "vitest";
 import { THRESHOLDS } from "../testing/types";
 import { computeWER } from "../testing/wer";
 import { analyzeAudioQa } from ".";
+import { fft } from "./fft";
+import { measureRepeatSimilarity } from "./repeat-similarity";
 import { decodeWav } from "./wav";
+
+/**
+ * Median spectral flatness over energy-gated frames. 1 = noise-like, 0 = voiced.
+ * The spectrum is floored RELATIVE to its peak: one empty bin would zero the
+ * geometric mean and report noisy output as perfectly tonal, so the metric would
+ * invert rather than degrade.
+ */
+function medianFlatness(pcm: Float32Array): number {
+	const WIN = 1024;
+	let peak = 0;
+	for (let i = 0; i < pcm.length; i++) peak = Math.max(peak, Math.abs(pcm[i]));
+	const gate = peak * 10 ** (-40 / 20);
+
+	const values: number[] = [];
+	const re = new Float64Array(WIN);
+	const im = new Float64Array(WIN);
+	for (let o = 0; o + WIN <= pcm.length; o += WIN / 2) {
+		let sumSq = 0;
+		for (let i = 0; i < WIN; i++) sumSq += pcm[o + i] * pcm[o + i];
+		if (Math.sqrt(sumSq / WIN) < gate) continue;
+
+		re.fill(0);
+		im.fill(0);
+		for (let i = 0; i < WIN; i++) {
+			re[i] = pcm[o + i] * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / WIN));
+		}
+		fft(re, im);
+
+		const power: number[] = [];
+		let maxPower = 0;
+		for (let k = 1; k < WIN / 2; k++) {
+			const p = re[k] * re[k] + im[k] * im[k];
+			power.push(p);
+			if (p > maxPower) maxPower = p;
+		}
+		const floor = maxPower * 1e-10;
+		let logSum = 0;
+		let linSum = 0;
+		for (const p of power) {
+			const q = Math.max(p, floor);
+			logSum += Math.log(q);
+			linSum += q;
+		}
+		values.push(Math.exp(logSum / power.length) / (linSum / power.length));
+	}
+	values.sort((a, b) => a - b);
+	return values[Math.floor(values.length / 2)] ?? 0;
+}
 
 /**
  * Real SpeechT5 cloned-voice defects, captured by scripts/model-qa.mjs against
@@ -39,6 +89,8 @@ function load(name: string) {
 	return {
 		...analyzeAudioQa(pcm, sampleRate, PROMPT),
 		durationSec: pcm.length / sampleRate,
+		pcm,
+		sampleRate,
 	};
 }
 
@@ -133,6 +185,54 @@ describe("known-bad: cloned voice STUTTERS — the live defect, and the detector
 		// dilute WER, and audibly broken audio returns PASS.
 		const wer = computeWER(PROMPT, TRANSCRIPTS.stutter);
 		expect(wer.wer).toBeGreaterThan(THRESHOLDS.wer.fail);
+	});
+
+	it("GAP CONFIRMED, NOT CLOSED: MFCC repeat-similarity does not separate it either", () => {
+		// An MFCC self-similarity detector was built specifically to close this
+		// gap — the reasoning being that MFCCs compare phonetic content and so
+		// tolerate re-synthesized repeats that the waveform-domain cepstral
+		// detector cannot see. It was measured against this fixture plus 9 clean
+		// real renders and 2 working clones. It FAILS, and inverts:
+		//
+		//   fixed-lag stripe:  clean max 0.37-0.54s | STUTTER 0.18-0.28s
+		//   template frac>=.85 clean max 0.072      | STUTTER 0.009
+		//   template run >=.85 clean max 0.720s     | STUTTER 0.060s
+		//
+		// Clean speech has MORE repeat-similarity than the defect. The detector
+		// is not mistuned; it is looking for a property this audio lacks.
+		const stutterResult = measureRepeatSimilarity(
+			stutter.pcm,
+			stutter.sampleRate,
+		);
+		const goodResult = measureRepeatSimilarity(good.pcm, good.sampleRate);
+
+		expect(stutterResult.matchedFraction).toBeLessThan(
+			goodResult.matchedFraction,
+		);
+		expect(stutterResult.longestStripeSec).toBeLessThan(
+			goodResult.longestStripeSec,
+		);
+	});
+
+	it("WHY: the audio is noise-like degradation, not word repetition", () => {
+		// The reason five independent methods all report "no repetition": the
+		// output degenerates into poorly-voiced, noise-like audio. Whisper's
+		// looping "sophisticated sophisticated ..." is its decoding of that
+		// degradation, not a transcript of clean acoustic repeats.
+		//
+		// Median spectral flatness (1 = noise, 0 = voiced), energy-gated:
+		//   negatives (9 clean + 2 working clones) max  0.00900
+		//   STUTTER                                     0.05579   = 6.2x
+		//   TRUNCATED                                   0.03081   = 3.4x
+		//
+		// This is the most promising lead for an acoustic detector here, and it
+		// is deliberately NOT a gate: one positive example, and the 11 negatives
+		// span 0.00008-0.00900, a 112x internal spread, so the false-positive
+		// tail is unbounded. Do not ship a threshold off this without more
+		// positives.
+		expect(medianFlatness(stutter.pcm)).toBeGreaterThan(
+			medianFlatness(good.pcm) * 3,
+		);
 	});
 
 	it("the stutter is NOT distinguishable from clean by envelope periodicity either", () => {

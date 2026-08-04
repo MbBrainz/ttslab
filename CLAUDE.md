@@ -240,6 +240,23 @@ Verified with that band anchored:
 
 Harness notes: use a **persistent `--user-data-dir`** or every run re-downloads ~560 MB of SpeechT5 (with it, a full pass is ~30 s). Set the textarea **before** waiting on the Generate button — `text` starts `""` and the button is `disabled={!text.trim() || ...}`, so waiting first deadlocks.
 
+### The STUTTER defect is NOT acoustic repetition — five methods agree (2026-08-04)
+
+An MFCC self-similarity detector was built specifically to close the cepstral gap, in two formulations, and **both fail with several statistics INVERTED** — clean speech scores *higher* than the defect:
+
+| metric | clean max | STUTTER | margin |
+|---|---|---|---|
+| fixed-lag stripe, longest run | 0.37–0.54s | 0.18–0.28s | 0.35–0.65× |
+| template match, median | 0.574 | 0.625 | 1.09× |
+| template match, frac ≥ 0.85 | 0.072 | 0.009 | 0.12× |
+| template match, run ≥ 0.85 | 0.720s | 0.060s | 0.08× |
+
+**Do not build a third repetition detector for this fixture.** The reason it fails is that the artifact contains no acoustic repetition to find. Five independent methods concur: cepstral (19.3 vs a 200 threshold), envelope autocorrelation (0.214 vs clean 0.182), both MFCC formulations, and speaker similarity (0.071 against its own reference). Per-second analysis shows why — spectral flatness runs **0.010–0.236** against **0.0004–0.068** for clean speech, with ZCR ~2× higher. **The output degenerates into noise-like, poorly-voiced audio.** Whisper's looping "sophisticated sophisticated …" transcript is its decoding of that degradation, not evidence of clean word repeats.
+
+This refines the earlier "detector gap" claim: the acoustic detectors are not missing a repetition that is present — they are correctly silent about a property this audio does not have. The spec's canonical artifact (`speecht5-1784627372628.wav`, **not in this repo**) may genuinely contain the word-level repeats the spec describes; if it is ever recovered, re-run `measureRepeatSimilarity` against it before concluding anything.
+
+**The promising lead is voicing quality, not repetition.** Median spectral flatness (energy-gated, peak-relative floor) separates at **6.2×**: negatives max **0.00900** (9 clean renders + 2 *working* clones) vs STUTTER **0.05579**, TRUNCATED **0.03081**. Deliberately **not shipped as a gate**: there is exactly **one** positive example, and the 11 negatives span 0.00008–0.00900 — a **112× internal spread** — so the false-positive tail is unbounded. Needs more positives before it becomes a threshold. `src/lib/audio-qa/repeat-similarity.ts` and `known-defects.test.ts` hold the reproducible measurements; neither is wired into `CHECK_RULES`.
+
 ### Live blind spots — do not trust a PASS as proof of these
 
 - **A cepstral PASS is NOT proof that there is no overlap.** Variable-speed overlap is **invisible**: a time-warped copy has no single lag, so no fixed-lag metric can see it. Measured 7.9 vs a clean 8.7 — no separation whatsoever. This is structural, not a tuning problem, and it is asserted as a test in `cepstrum.test.ts` so it cannot quietly regress into looking solved. `pauseFraction` is the only partial cover, and it is weak (clean 0.315 vs overlapped 0.242, a 23% drop versus the 2× the spec claims), which is why it is **reported but deliberately not gated** — any threshold between those two numbers would false-fail a model that simply pauses less.
