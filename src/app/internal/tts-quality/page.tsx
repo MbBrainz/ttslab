@@ -35,6 +35,29 @@ function formatWer(wer: number): string {
 	return `${(wer * 100).toFixed(1)}%`;
 }
 
+function median(values: number[]): number {
+	if (values.length === 0) return 0;
+	const sorted = [...values].sort((a, b) => a - b);
+	const mid = Math.floor(sorted.length / 2);
+	return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+/**
+ * Median + max, never mean. WER is word-weighted, so one garbage phrase in a
+ * long run moves a mean by a couple of points and hides the failure entirely.
+ */
+function werSummary(report: QualityReport): string {
+	if (report.tests.length === 0) return "-";
+	const wers = report.tests.map((t) => t.sttRoundTrip.wer);
+	return `${formatWer(median(wers))} / ${formatWer(Math.max(...wers))}`;
+}
+
+/** Max I/N — the non-termination signal. Unbounded, so it can read > 100%. */
+function insertionSummary(report: QualityReport): string {
+	if (report.tests.length === 0) return "-";
+	return formatWer(Math.max(...report.tests.map((t) => t.sttRoundTrip.insertionRate)));
+}
+
 /** "echo x2, wer x1" — which checks actually gated this model. */
 function summarizeFailures(report: QualityReport): string {
 	const counts = new Map<string, number>();
@@ -73,10 +96,6 @@ function ProgressBar({ value, max }: { value: number; max: number }) {
 // ── Model Result Row ─────────────────────────────────────────────────
 
 function ModelResultRow({ report }: { report: QualityReport }) {
-	const avgWer = report.tests.length > 0
-		? report.tests.reduce((s, t) => s + t.sttRoundTrip.wer, 0) / report.tests.length
-		: 0;
-
 	return (
 		<tr
 			data-testid={`model-result-${report.slug}`}
@@ -88,7 +107,8 @@ function ModelResultRow({ report }: { report: QualityReport }) {
 			</td>
 			<td className="px-3 py-2 text-sm">{report.backend}</td>
 			<td className="px-3 py-2 text-sm tabular-nums">{formatMs(report.loadTimeMs)}</td>
-			<td className="px-3 py-2 text-sm tabular-nums">{formatWer(avgWer)}</td>
+			<td className="px-3 py-2 text-sm tabular-nums">{werSummary(report)}</td>
+			<td className="px-3 py-2 text-sm tabular-nums">{insertionSummary(report)}</td>
 			<td className="px-3 py-2 text-sm tabular-nums">{report.tests.length}</td>
 			<td
 				data-testid={`failed-checks-${report.slug}`}
@@ -213,7 +233,8 @@ export default function TtsQualityPage() {
 								<th className="px-3 py-2">Verdict</th>
 								<th className="px-3 py-2">Backend</th>
 								<th className="px-3 py-2">Load Time</th>
-								<th className="px-3 py-2">Avg WER</th>
+								<th className="px-3 py-2">WER med / max</th>
+								<th className="px-3 py-2">Max I/N</th>
 								<th className="px-3 py-2">Phrases</th>
 								<th className="px-3 py-2">Failed Checks</th>
 								<th className="px-3 py-2">Errors</th>

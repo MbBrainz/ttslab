@@ -8,6 +8,7 @@ import type {
 	AudioAnalysis,
 	CheckFailure,
 	Verdict,
+	WERResult,
 } from "./types";
 import { DEFAULT_PHRASES, THRESHOLDS } from "./types";
 
@@ -99,13 +100,19 @@ function resampleAudio(
 
 // ── Verdict logic ────────────────────────────────────────────────────
 
+/** Everything a gating rule is allowed to look at. */
+interface CheckContext {
+	analysis: AudioAnalysis;
+	wer: WERResult;
+}
+
 /**
- * One gating rule: pull a scalar out of the analysis, compare it against its
+ * One gating rule: pull a scalar out of the context, compare it against its
  * warn/fail thresholds. `direction` says which side of the threshold is bad.
  */
 interface CheckRule {
 	check: string;
-	value: (analysis: AudioAnalysis, wer: number) => number;
+	value: (ctx: CheckContext) => number;
 	warn: number;
 	fail: number;
 	direction: "above" | "below";
@@ -114,37 +121,44 @@ interface CheckRule {
 const CHECK_RULES: CheckRule[] = [
 	{
 		check: "echo",
-		value: (a) => a.echo.confidence,
+		value: (c) => c.analysis.echo.confidence,
 		warn: THRESHOLDS.echo.warn,
 		fail: THRESHOLDS.echo.fail,
 		direction: "above",
 	},
 	{
 		check: "silence",
-		value: (a) => a.silence.ratio,
+		value: (c) => c.analysis.silence.ratio,
 		warn: THRESHOLDS.silence.warn,
 		fail: THRESHOLDS.silence.fail,
 		direction: "above",
 	},
 	{
 		check: "clipping",
-		value: (a) => a.clipping.ratio,
+		value: (c) => c.analysis.clipping.ratio,
 		warn: THRESHOLDS.clipping.warn,
 		fail: THRESHOLDS.clipping.fail,
 		direction: "above",
 	},
 	{
 		check: "energy",
-		value: (a) => a.energy.rmsDb,
+		value: (c) => c.analysis.energy.rmsDb,
 		warn: THRESHOLDS.energyDb.warn,
 		fail: THRESHOLDS.energyDb.fail,
 		direction: "below",
 	},
 	{
 		check: "wer",
-		value: (_a, wer) => wer,
+		value: (c) => c.wer.wer,
 		warn: THRESHOLDS.wer.warn,
 		fail: THRESHOLDS.wer.fail,
+		direction: "above",
+	},
+	{
+		check: "insertion_rate",
+		value: (c) => c.wer.insertionRate,
+		warn: THRESHOLDS.insertionRate.warn,
+		fail: THRESHOLDS.insertionRate.fail,
 		direction: "above",
 	},
 ];
@@ -153,8 +167,8 @@ function breaches(value: number, threshold: number, direction: "above" | "below"
 	return direction === "above" ? value > threshold : value < threshold;
 }
 
-function evaluateRule(rule: CheckRule, analysis: AudioAnalysis, wer: number): CheckFailure | null {
-	const value = rule.value(analysis, wer);
+function evaluateRule(rule: CheckRule, ctx: CheckContext): CheckFailure | null {
+	const value = rule.value(ctx);
 	if (breaches(value, rule.fail, rule.direction)) {
 		return { check: rule.check, value, threshold: rule.fail, severity: "fail" };
 	}
@@ -165,11 +179,8 @@ function evaluateRule(rule: CheckRule, analysis: AudioAnalysis, wer: number): Ch
 }
 
 /** Worst severity wins. */
-function phraseVerdict(
-	analysis: AudioAnalysis,
-	wer: number,
-): { verdict: Verdict; failures: CheckFailure[] } {
-	const failures = CHECK_RULES.map((r) => evaluateRule(r, analysis, wer)).filter(
+function phraseVerdict(ctx: CheckContext): { verdict: Verdict; failures: CheckFailure[] } {
+	const failures = CHECK_RULES.map((r) => evaluateRule(r, ctx)).filter(
 		(f): f is CheckFailure => f !== null,
 	);
 
@@ -205,7 +216,7 @@ async function testPhrase(
 
 	const transcript = await worker.transcribe(sttModel, resampled, TARGET_SAMPLE_RATE);
 	const werResult = computeWER(phrase.text, transcript.text);
-	const { verdict, failures } = phraseVerdict(audioAnalysis, werResult.wer);
+	const { verdict, failures } = phraseVerdict({ analysis: audioAnalysis, wer: werResult });
 
 	return {
 		phrase: phrase.text,
@@ -217,6 +228,11 @@ async function testPhrase(
 		sttRoundTrip: {
 			transcription: transcript.text,
 			wer: werResult.wer,
+			substitutions: werResult.substitutions,
+			deletions: werResult.deletions,
+			insertions: werResult.insertions,
+			refWords: werResult.refWords,
+			insertionRate: werResult.insertionRate,
 			verdict: werVerdict(werResult.wer),
 		},
 	};

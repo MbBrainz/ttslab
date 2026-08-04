@@ -31,11 +31,18 @@ export interface AudioAnalysis {
 }
 
 export interface WERResult {
+	/** UNCAPPED: can exceed 1.0. A 3x-looped output scores 2.0, not 1.0. */
 	wer: number;
 	substitutions: number;
 	deletions: number;
 	insertions: number;
 	refWords: number;
+	/**
+	 * `insertions / refWords`. Unbounded, so it separates severities that WER
+	 * saturates over, and names the failure mode: I >> S,D = non-termination
+	 * (loop/stutter); D >> = truncation; S >> = mispronunciation.
+	 */
+	insertionRate: number;
 }
 
 /**
@@ -61,7 +68,13 @@ export interface PhraseResult {
 	failures: CheckFailure[];
 	sttRoundTrip: {
 		transcription: string;
+		/** UNCAPPED — see WERResult.wer. */
 		wer: number;
+		substitutions: number;
+		deletions: number;
+		insertions: number;
+		refWords: number;
+		insertionRate: number;
 		verdict: Verdict;
 	};
 }
@@ -105,6 +118,14 @@ export const DEFAULT_PHRASES: TestPhrase[] = [
 export const THRESHOLDS = {
 	echo: { warn: 0.3, fail: 0.5 },
 	wer: { warn: 0.15, fail: 0.3 },
+	/**
+	 * Insertion rate `I/N`. Provisional, pending calibration against real ASR
+	 * output. Rationale: on the 8-10 word DEFAULT_PHRASES a benign ASR filler
+	 * word costs 0.10-0.125 and two cost 0.20-0.25, while a decoder that
+	 * repeats the utterance once scores 1.0. warn 0.3 / fail 0.5 sits ~2x above
+	 * two benign insertions and ~2x below a single repeat.
+	 */
+	insertionRate: { warn: 0.3, fail: 0.5 },
 	silence: { warn: 0.3, fail: 0.5 },
 	clipping: { warn: 0.001, fail: 0.01 },
 	energyDb: { warn: -40, fail: -50 },

@@ -1,4 +1,4 @@
-import type { WERResult } from "./types";
+import type { Verdict, WERResult } from "./types";
 import { THRESHOLDS } from "./types";
 
 const DIGIT_WORDS: Record<string, string> = {
@@ -63,6 +63,17 @@ function editDistance(ref: string[], hyp: string[]): [number, number, number] {
 	return dp[m][n];
 }
 
+/**
+ * `I/N` — insertions per reference word. Unlike WER this is unbounded and
+ * ignores substitutions, which makes it the primary non-termination signal:
+ * a decoder that loops inserts words without substituting any, so I/N grows
+ * linearly with how many extra passes it made (x2 -> 1.0, x3 -> 2.0) while
+ * WER saturates at 1.0 and cannot be told apart from total garbage.
+ */
+function insertionRate(insertions: number, refWords: number): number {
+	return refWords === 0 ? 0 : insertions / refWords;
+}
+
 export function computeWER(reference: string, hypothesis: string): WERResult {
 	const refWords = toWords(reference);
 	const hypWords = toWords(hypothesis);
@@ -74,6 +85,7 @@ export function computeWER(reference: string, hypothesis: string): WERResult {
 			deletions: 0,
 			insertions: hypWords.length,
 			refWords: 0,
+			insertionRate: 0,
 		};
 	}
 
@@ -84,17 +96,30 @@ export function computeWER(reference: string, hypothesis: string): WERResult {
 			deletions: refWords.length,
 			insertions: 0,
 			refWords: refWords.length,
+			insertionRate: 0,
 		};
 	}
 
 	const [substitutions, deletions, insertions] = editDistance(refWords, hypWords);
 	const totalErrors = substitutions + deletions + insertions;
-	const wer = Math.min(totalErrors / refWords.length, 1);
 
-	return { wer, substitutions, deletions, insertions, refWords: refWords.length };
+	// Deliberately UNCAPPED. Clamping to 1.0 made "said it twice" and "emitted
+	// pure noise" both score exactly 1.000, hiding the severity and the failure
+	// mode. Nothing regresses: every value the clamp used to touch was already
+	// >= 1.0 and therefore already failing.
+	const wer = totalErrors / refWords.length;
+
+	return {
+		wer,
+		substitutions,
+		deletions,
+		insertions,
+		refWords: refWords.length,
+		insertionRate: insertionRate(insertions, refWords.length),
+	};
 }
 
-export function werVerdict(wer: number): "pass" | "warn" | "fail" {
+export function werVerdict(wer: number): Verdict {
 	if (wer > THRESHOLDS.wer.fail) return "fail";
 	if (wer >= THRESHOLDS.wer.warn) return "warn";
 	return "pass";
