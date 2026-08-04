@@ -172,6 +172,16 @@ function renderMarkdown(reports, failures, meta) {
 		`- URL: ${meta.url}`,
 		`- Artifacts: \`${meta.outDir}\``,
 		"",
+		...(meta.fatal
+			? [
+					"> **INCOMPLETE RUN** — the driver died before finishing. The verdicts",
+					"> below cover only the cells that completed; anything absent was never",
+					"> run, not passed.",
+					">",
+					`> \`${String(meta.fatal).split("\n")[0]}\``,
+					"",
+				]
+			: []),
 		"## Verdicts",
 		"",
 		"| model | variant | verdict | backend | WER med/max | max I/N | max cepstral | failed checks |",
@@ -231,6 +241,46 @@ function renderMarkdown(reports, failures, meta) {
 	return `${lines.join("\n")}\n`;
 }
 
+/**
+ * Writes report.json + report.md from whatever reports exist.
+ *
+ * Called on the success path AND from the failure path, because a run that
+ * dies partway has already produced WAVs on disk for every completed cell —
+ * losing the verdicts that say which of them failed makes those WAVs much
+ * harder to act on.
+ */
+function writeReports({ outDir, runId, url, reports, audioCount, fatal }) {
+	const failures = summarize(reports);
+	const report = {
+		runId,
+		url,
+		generatedAt: new Date().toISOString(),
+		complete: !fatal,
+		...(fatal ? { fatal: String(fatal?.stack ?? fatal) } : {}),
+		verdict: fatal
+			? "INCOMPLETE"
+			: reports.some((r) => r.overall === "fail")
+				? "FAIL"
+				: reports.some((r) => r.overall === "warn")
+					? "WARN"
+					: "PASS",
+		cellsCompleted: reports.length,
+		wavsWritten: audioCount,
+		failures,
+		reports,
+	};
+
+	writeFileSync(
+		join(outDir, "report.json"),
+		`${JSON.stringify(report, null, 2)}\n`,
+	);
+	writeFileSync(
+		join(outDir, "report.md"),
+		renderMarkdown(reports, failures, { runId, url, outDir, fatal }),
+	);
+	return report;
+}
+
 // ── Main ─────────────────────────────────────────────────────────────
 
 async function main() {
@@ -253,8 +303,10 @@ async function main() {
 		protocolTimeout: args.timeoutMs,
 	});
 
-	let reports = [];
+	const reports = [];
+	const artifactErrors = [];
 	let audioCount = 0;
+	let fatal = null;
 
 	try {
 		const page = await browser.newPage();
@@ -266,11 +318,27 @@ async function main() {
 		// Streams each buffer out as it is produced, so a run that dies halfway
 		// still leaves artifacts for the cases that completed.
 		await page.exposeFunction("__qaEmitAudio", (meta, wavBase64) => {
-			writeFileSync(
-				join(wavDir, artifactName(meta)),
-				Buffer.from(wavBase64, "base64"),
+			// Throwing rejects INSIDE the page, which the harness now awaits and
+			// turns into a phrase error — so a failed write lands in the verdict
+			// instead of leaving report.md citing a file that is not there.
+			try {
+				writeFileSync(
+					join(wavDir, artifactName(meta)),
+					Buffer.from(wavBase64, "base64"),
+				);
+				audioCount++;
+			} catch (err) {
+				artifactErrors.push(`${artifactName(meta)}: ${err.message}`);
+				throw err;
+			}
+		});
+
+		// Each cell arrives as it finishes, so a later crash cannot erase it.
+		await page.exposeFunction("__qaEmitReport", (report) => {
+			reports.push(report);
+			console.log(
+				`[qa] cell done  ${report.slug} ${report.variant} -> ${report.overall.toUpperCase()}`,
 			);
-			audioCount++;
 		});
 
 		// domcontentloaded, not networkidle2: the page holds connections open
@@ -314,53 +382,53 @@ async function main() {
 		const variants = buildVariants({ ...args, embedding });
 		console.log(`[qa] variants   ${variants.map((v) => v.id).join(", ")}`);
 
-		reports = await page.evaluate(
-			async (config) => window.__modelQA.run(config),
-			{
-				models,
-				variants,
-				backend: args.backend,
-				...(args.longPhrase ? { phrases: [LONG_PHRASE] } : {}),
-				...(args.phrases > 0 ? { phraseLimit: args.phrases } : {}),
-			},
-		);
+		// The return value is ignored: reports already arrived via __qaEmitReport.
+		// Awaiting it only tells us whether the run finished cleanly.
+		await page.evaluate(async (config) => window.__modelQA.run(config), {
+			models,
+			variants,
+			backend: args.backend,
+			...(args.longPhrase ? { phrases: [LONG_PHRASE] } : {}),
+			...(args.phrases > 0 ? { phraseLimit: args.phrases } : {}),
+		});
+	} catch (err) {
+		// Deliberately NOT rethrown. The whole point is that a crash still
+		// produces a report for the cells that already completed — their WAVs
+		// are on disk, and losing the verdicts that say which ones failed makes
+		// those WAVs much harder to act on.
+		fatal = err;
+		console.error(`[qa] RUN DIED: ${err?.message ?? err}`);
 	} finally {
-		await browser.close();
+		await browser.close().catch(() => {});
 	}
 
-	const failures = summarize(reports);
-	const report = {
+	const report = writeReports({
+		outDir,
 		runId,
 		url: args.url,
-		generatedAt: new Date().toISOString(),
-		verdict: reports.some((r) => r.overall === "fail")
-			? "FAIL"
-			: reports.some((r) => r.overall === "warn")
-				? "WARN"
-				: "PASS",
-		failures,
 		reports,
-	};
+		audioCount,
+		fatal,
+	});
 
-	writeFileSync(
-		join(outDir, "report.json"),
-		`${JSON.stringify(report, null, 2)}\n`,
-	);
-	writeFileSync(
-		join(outDir, "report.md"),
-		renderMarkdown(reports, failures, { runId, url: args.url, outDir }),
-	);
+	if (artifactErrors.length > 0) {
+		console.error(`[qa] artifact write failures: ${artifactErrors.join("; ")}`);
+	}
 
 	console.log(`\n[qa] verdict    ${report.verdict}`);
+	console.log(`[qa] cells      ${reports.length} completed`);
 	console.log(`[qa] wavs       ${audioCount}`);
 	console.log(`[qa] report     ${join(outDir, "report.md")}`);
-	for (const f of failures) {
+	for (const f of report.failures) {
 		console.log(
 			`[qa] FAIL ${f.slug} ${f.variant} ${f.check}=${f.value.toFixed(3)} -> ${f.artifact}`,
 		);
 	}
 
-	process.exit(report.verdict === "FAIL" ? 1 : 0);
+	// INCOMPLETE exits 2, distinct from a clean FAIL: "some cells never ran" is
+	// a different thing for a caller to react to than "a cell failed".
+	if (report.verdict === "INCOMPLETE") process.exit(2);
+	process.exit(report.verdict === "FAIL" || artifactErrors.length > 0 ? 1 : 0);
 }
 
 main().catch((err) => {

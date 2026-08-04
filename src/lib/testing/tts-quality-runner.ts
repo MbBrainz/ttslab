@@ -432,7 +432,7 @@ interface PhraseTestArgs {
 	voice: string;
 	variant: TestVariant;
 	/** Receives the generated audio so the caller can dump it as an artifact. */
-	onAudio?: (audio: Float32Array, sampleRate: number) => void;
+	onAudio?: (audio: Float32Array, sampleRate: number) => void | Promise<void>;
 }
 
 async function testPhrase(args: PhraseTestArgs): Promise<PhraseResult> {
@@ -445,7 +445,9 @@ async function testPhrase(args: PhraseTestArgs): Promise<PhraseResult> {
 		variant,
 	);
 
-	args.onAudio?.(result.audio, result.sampleRate);
+	// Awaited: a rejected write must fail the case, not be silently dropped
+	// while the report goes on to cite an artifact that does not exist.
+	await args.onAudio?.(result.audio, result.sampleRate);
 
 	// Reference text is passed so the duration check has an expectation to
 	// compare against — it is the only pre-ASR detector of a rate relabel.
@@ -584,20 +586,39 @@ async function testModel(args: ModelTestArgs): Promise<QualityReport> {
  * Receives every generated buffer so a caller can dump it to disk. This is what
  * makes a failure listenable and re-scorable without regenerating the audio.
  */
+/**
+ * Returning a promise is supported and AWAITED. If persisting an artifact
+ * fails, that must surface: a report pointing at a WAV path that was never
+ * written is worse than an error, because the verdict looks investigable when
+ * the evidence does not exist.
+ */
 export type AudioSink = (item: {
 	slug: string;
 	variant: string;
 	phraseIndex: number;
 	audio: Float32Array;
 	sampleRate: number;
-}) => void;
+}) => void | Promise<void>;
+
+export interface RunHooks {
+	onProgress?: (update: ProgressUpdate) => void;
+	onAudio?: AudioSink;
+	/**
+	 * Fires as each model x variant cell COMPLETES, not once at the end.
+	 *
+	 * A long matrix run can die partway — a browser crash, a driver timeout —
+	 * and returning only a batched array at the end loses the verdicts for every
+	 * cell that already finished, even though their audio is already on disk.
+	 */
+	onReport?: (report: QualityReport) => void;
+}
 
 export async function runQualityTests(
 	worker: InferenceWorkerAPI,
 	config: TestConfig,
-	onProgress?: (update: ProgressUpdate) => void,
-	onAudio?: AudioSink,
+	hooks: RunHooks = {},
 ): Promise<QualityReport[]> {
+	const { onProgress, onAudio, onReport } = hooks;
 	const models = config.models?.length ? config.models : SUPPORTED_TTS_MODELS;
 	const allPhrases = config.phrases?.length ? config.phrases : DEFAULT_PHRASES;
 	const phrases =
@@ -641,20 +662,20 @@ export async function runQualityTests(
 				message: `Loading model ${i + 1}/${models.length}: ${models[i]} · ${variant.id}`,
 			});
 
-			reports.push(
-				await testModel({
-					worker,
-					slug: models[i],
-					sttModel,
-					phrases,
-					variant,
-					backend,
-					onProgress,
-					onAudio,
-					modelIndex: i,
-					totalModels: models.length,
-				}),
-			);
+			const report = await testModel({
+				worker,
+				slug: models[i],
+				sttModel,
+				phrases,
+				variant,
+				backend,
+				onProgress,
+				onAudio,
+				modelIndex: i,
+				totalModels: models.length,
+			});
+			reports.push(report);
+			onReport?.(report);
 		}
 	}
 

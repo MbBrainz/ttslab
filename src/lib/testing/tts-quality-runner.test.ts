@@ -327,16 +327,89 @@ describe("artifact sink", () => {
 					{ id: "cloned", speakerEmbeddingUrl: "/e.bin" },
 				],
 			},
-			undefined,
-			(item) =>
-				dumped.push({
-					slug: item.slug,
-					variant: item.variant,
-					length: item.audio.length,
-				}),
+			{
+				onAudio: (item) =>
+					void dumped.push({
+						slug: item.slug,
+						variant: item.variant,
+						length: item.audio.length,
+					}),
+			},
 		);
 
 		expect(dumped.map((d) => d.variant)).toEqual(["stock", "cloned"]);
 		expect(dumped[0].length).toBe(AUDIO.length);
+	});
+
+	it("AWAITS the sink, so a failed artifact write fails the case", async () => {
+		// Dropping the rejection would leave the report citing a WAV that was
+		// never written, with nothing in the verdict to show for it.
+		const [report] = await runQualityTests(
+			fakeWorker([]),
+			{
+				models: ["fake"],
+				phrases: [{ text: TEXT, category: "test" }],
+				sttModel: "fake-stt",
+				variants: [{ id: "stock" }],
+			},
+			{
+				onAudio: async () => {
+					throw new Error("disk full");
+				},
+			},
+		);
+
+		expect(report.overall).toBe("fail");
+		expect(report.errors[0]).toMatch(/disk full/);
+	});
+});
+
+describe("incremental reporting", () => {
+	it("emits each cell as it completes, not once at the end", async () => {
+		// A long matrix run can die partway. Batching every verdict until the
+		// end loses the cells that already finished, even though their audio is
+		// already on disk.
+		const seen: string[] = [];
+		const reports = await runQualityTests(
+			fakeWorker([]),
+			{
+				models: ["fake"],
+				phrases: [{ text: TEXT, category: "test" }],
+				sttModel: "fake-stt",
+				variants: [{ id: "a" }, { id: "b" }, { id: "c" }],
+			},
+			{ onReport: (report) => void seen.push(report.variant) },
+		);
+
+		expect(seen).toEqual(["a", "b", "c"]);
+		expect(seen).toEqual(reports.map((r) => r.variant));
+	});
+
+	it("has already emitted the finished cells when a later one throws", async () => {
+		const seen: string[] = [];
+		const worker = fakeWorker([]);
+		let calls = 0;
+		const flaky: InferenceWorkerAPI = {
+			...worker,
+			loadModel: async (...loadArgs) => {
+				calls++;
+				if (calls > 2) throw new Error("browser died");
+				return worker.loadModel(...loadArgs);
+			},
+		};
+
+		await runQualityTests(
+			flaky,
+			{
+				models: ["fake"],
+				phrases: [{ text: TEXT, category: "test" }],
+				sttModel: "fake-stt",
+				variants: [{ id: "a" }, { id: "b" }, { id: "c" }],
+			},
+			{ onReport: (report) => void seen.push(report.variant) },
+		);
+
+		// "c" fails to load, but a and b are already out.
+		expect(seen).toEqual(["a", "b", "c"]);
 	});
 });

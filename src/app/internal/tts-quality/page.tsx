@@ -45,6 +45,8 @@ declare global {
 	interface Window {
 		__modelQA?: ModelQaApi;
 		/** Installed by the driver via page.exposeFunction. */
+		__qaEmitReport?: (report: QualityReport) => Promise<void>;
+		/** Installed by the driver via page.exposeFunction. */
 		__qaEmitAudio?: (
 			meta: {
 				slug: string;
@@ -301,7 +303,9 @@ export default function TtsQualityPage() {
 
 		try {
 			const config = buildConfig();
-			const results = await runQualityTests(workerAdapter, config, setProgress);
+			const results = await runQualityTests(workerAdapter, config, {
+				onProgress: setProgress,
+			});
 			setReports(results);
 			setStatus("complete");
 		} catch (err) {
@@ -344,22 +348,35 @@ export default function TtsQualityPage() {
 				setReports([]);
 				setError(null);
 				try {
-					const results = await runQualityTests(
-						workerAdapter,
-						config,
-						setProgress,
-						(item) => {
-							void window.__qaEmitAudio?.(
-								{
-									slug: item.slug,
-									variant: item.variant,
-									phraseIndex: item.phraseIndex,
-									sampleRate: item.sampleRate,
-								},
-								encodeWavBase64(item.audio, item.sampleRate),
-							);
+					const results = await runQualityTests(workerAdapter, config, {
+						onProgress: setProgress,
+						// Awaited, and failures are surfaced: a dropped rejection
+						// here would leave report.md citing a WAV that was never
+						// written, with nothing in the exit code to show for it.
+						onAudio: async (item) => {
+							if (!window.__qaEmitAudio) return;
+							try {
+								await window.__qaEmitAudio(
+									{
+										slug: item.slug,
+										variant: item.variant,
+										phraseIndex: item.phraseIndex,
+										sampleRate: item.sampleRate,
+									},
+									encodeWavBase64(item.audio, item.sampleRate),
+								);
+							} catch (err) {
+								throw new Error(
+									`Failed to persist artifact for ${item.slug} ${item.variant} #${item.phraseIndex}: ${err instanceof Error ? err.message : String(err)}`,
+								);
+							}
 						},
-					);
+						// Streamed out per cell so a run that dies partway still
+						// yields verdicts for the cells that finished.
+						onReport: (report) => {
+							void window.__qaEmitReport?.(report);
+						},
+					});
 					setReports(results);
 					setStatus("complete");
 					return results;
