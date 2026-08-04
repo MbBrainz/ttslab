@@ -11,6 +11,13 @@ conditions. All three are 16kHz mono.
 | `speecht5-stock-known-good.wav` | control: stock voice, same phrase, 16.6s, WER 0.000 |
 | `speecht5-cloned-STUTTER-known-bad.wav` | **the canonical defect**: decoder loops "sophisticated" ~7x. 10.98s |
 | `speecht5-cloned-TRUNCATED-known-bad.wav` | second failure mode: truncates to 6.18s of 17s expected |
+| `speecht5-cloned-WORKING-run1.wav` | a **working** file-upload clone (verdict PASS) |
+| `speecht5-cloned-WORKING-run2.wav` | a second working file-upload clone (verdict PASS) |
+
+The two WORKING clones are not decoration: they anchor the `voicing_flatness`
+threshold. If a successful clone scored noise-like, high flatness would mean
+"cloned" rather than "broken" and the check would be worthless. `voicing.test.ts`
+asserts they stay under the warn threshold.
 
 The prompt for all three:
 

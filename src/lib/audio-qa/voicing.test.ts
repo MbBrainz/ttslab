@@ -11,7 +11,19 @@ const flatnessOf = (path: string) => {
 	return measureVoicing(pcm).medianFlatness;
 };
 
-/** Every negative used to set the threshold: clean renders AND working clones. */
+/**
+ * The negative population, restricted to COMMITTED files so this passes in a
+ * clean checkout. An earlier version referenced qa-artifacts/, which is
+ * gitignored — the tests passed locally and failed in an isolated worktree.
+ *
+ * The two WORKING clones are committed as fixtures precisely because they anchor
+ * the threshold: if a successful clone scored noise-like, high flatness would
+ * mean "cloned" rather than "broken" and the check would be worthless.
+ *
+ * Two further stock renders from the voice-clone run were part of the original
+ * 11-file measurement and are omitted here as gitignored and equivalent to
+ * speecht5-stock-known-good.wav.
+ */
 const NEGATIVES = [
 	"public/audio-samples/kokoro-82m.wav",
 	"public/audio-samples/speecht5.wav",
@@ -20,10 +32,8 @@ const NEGATIVES = [
 	"public/audio-samples/hero-demo-2.wav",
 	"public/audio-samples/hero-demo-3.wav",
 	"test-fixtures/speecht5-stock-known-good.wav",
-	"qa-artifacts/voice-clone/1-stock-before-clone.wav",
-	"qa-artifacts/voice-clone/0-control-stock-0.wav",
-	"qa-artifacts/voice-clone/2-cloned.wav",
-	"qa-artifacts/voice-clone-run2/2-cloned.wav",
+	"test-fixtures/speecht5-cloned-WORKING-run1.wav",
+	"test-fixtures/speecht5-cloned-WORKING-run2.wav",
 ];
 
 describe("measureVoicing — basic behaviour", () => {
