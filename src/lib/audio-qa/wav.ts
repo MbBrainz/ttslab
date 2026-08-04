@@ -57,17 +57,24 @@ function toMono(pcm: Float32Array, channels: number): Float32Array {
 	return out;
 }
 
-/** Handles 16-bit int and 32-bit float payloads, and skips unknown chunks. */
+/**
+ * Handles 16-bit int and 32-bit float payloads, and skips unknown chunks.
+ *
+ * Chunks are located first and decoded second, because RIFF does not require
+ * `fmt ` to precede `data`. Decoding inline as the loop walks the file would
+ * read a data-first file with sampleRate 0 and the default bit depth — silently
+ * producing a buffer whose duration and rate are wrong rather than failing.
+ */
 export function decodeWav(bytes: Uint8Array): DecodedWav {
 	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-	let offset = 12; // past "RIFF....WAVE"
 	let sampleRate = 0;
 	let bitsPerSample = 16;
 	let format = 1;
 	let channels = 1;
-	let pcm = new Float32Array(0);
+	let dataOffset = -1;
+	let dataSize = 0;
 
-	while (offset < view.byteLength - 8) {
+	for (let offset = 12; offset < view.byteLength - 8; ) {
 		const id = String.fromCharCode(
 			view.getUint8(offset),
 			view.getUint8(offset + 1),
@@ -83,20 +90,29 @@ export function decodeWav(bytes: Uint8Array): DecodedWav {
 			sampleRate = view.getUint32(body + 4, true);
 			bitsPerSample = view.getUint16(body + 14, true);
 		} else if (id === "data") {
-			if (format === 3 || bitsPerSample === 32) {
-				const count = Math.floor(size / 4);
-				pcm = new Float32Array(count);
-				for (let i = 0; i < count; i++)
-					pcm[i] = view.getFloat32(body + i * 4, true);
-			} else {
-				const count = Math.floor(size / 2);
-				pcm = new Float32Array(count);
-				for (let i = 0; i < count; i++)
-					pcm[i] = view.getInt16(body + i * 2, true) / 32768;
-			}
+			dataOffset = body;
+			// Clamp: a truncated file can declare more data than it contains.
+			dataSize = Math.min(size, view.byteLength - body);
 		}
 
 		offset = body + size + (size % 2); // chunks are word-aligned
+	}
+
+	if (dataOffset < 0) return { pcm: new Float32Array(0), sampleRate, channels };
+
+	let pcm: Float32Array;
+	if (format === 3 || bitsPerSample === 32) {
+		const count = Math.floor(dataSize / 4);
+		pcm = new Float32Array(count);
+		for (let i = 0; i < count; i++) {
+			pcm[i] = view.getFloat32(dataOffset + i * 4, true);
+		}
+	} else {
+		const count = Math.floor(dataSize / 2);
+		pcm = new Float32Array(count);
+		for (let i = 0; i < count; i++) {
+			pcm[i] = view.getInt16(dataOffset + i * 2, true) / 32768;
+		}
 	}
 
 	return { pcm: toMono(pcm, channels), sampleRate, channels };

@@ -53,6 +53,41 @@ describe("encodeWav / decodeWav", () => {
 		expect(Number.isNaN(decoded[10])).toBe(false);
 	});
 
+	it("decodes a data-before-fmt file correctly", () => {
+		// RIFF does not require fmt to precede data. Decoding inline as the
+		// chunk loop walks the file reads such a file with sampleRate 0 and the
+		// default bit depth — silently wrong duration and rate rather than a
+		// failure.
+		const original = sine(200, SR, 0.2, 0.5);
+		const normal = encodeWav(original, SR);
+
+		// Rebuild the same file with the two chunks swapped.
+		const fmtChunk = normal.slice(12, 36); // "fmt " header + 16-byte body
+		const dataChunk = normal.slice(36); // "data" header + payload
+		const swapped = new Uint8Array(normal.length);
+		swapped.set(normal.slice(0, 12), 0);
+		swapped.set(dataChunk, 12);
+		swapped.set(fmtChunk, 12 + dataChunk.length);
+
+		const decoded = decodeWav(swapped);
+		expect(decoded.sampleRate).toBe(SR);
+		expect(decoded.pcm.length).toBe(original.length);
+		expect(decoded.pcm[50]).toBeCloseTo(original[50], 3);
+	});
+
+	it("returns an empty buffer rather than throwing when there is no data chunk", () => {
+		const headerOnly = encodeWav(new Float32Array(0), SR).slice(0, 36);
+		expect(decodeWav(headerOnly).pcm.length).toBe(0);
+	});
+
+	it("clamps a data chunk that declares more bytes than the file holds", () => {
+		// A truncated download should decode what is there, not read past the end.
+		const full = encodeWav(sine(200, SR, 0.2, 0.5), SR);
+		const truncated = full.slice(0, full.length - 200);
+		expect(() => decodeWav(truncated)).not.toThrow();
+		expect(decodeWav(truncated).pcm.length).toBeGreaterThan(0);
+	});
+
 	it("handles an empty buffer", () => {
 		const decoded = decodeWav(encodeWav(new Float32Array(0), SR));
 		expect(decoded.pcm.length).toBe(0);

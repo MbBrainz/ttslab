@@ -295,6 +295,53 @@ async function main() {
 	console.log(`[qa] url        ${args.url}`);
 	console.log(`[qa] artifacts  ${outDir}`);
 
+	const reports = [];
+	const artifactErrors = [];
+	let audioCount = 0;
+	let fatal = null;
+
+	// Ctrl-C during a 30-minute matrix run.
+	//
+	// NOT about orphaned processes: puppeteer already closes the browser on
+	// SIGINT/SIGTERM/SIGHUP by default. Verified — with no handler at all,
+	// headless Chrome still goes 2 procs -> 0 on either signal.
+	//
+	// What it IS about: the signal kills the process before main() reaches
+	// writeReports, so an interrupted run leaves an empty wav/ directory and NO
+	// report, losing the verdicts for every cell that had already finished.
+	// Verified against a real SIGINT before this fix.
+	//
+	// REGISTERED BEFORE launch() on purpose. @puppeteer/browsers subscribes its
+	// dispatcher during launch and its SIGINT branch is `this.kill();
+	// process.exit(130);` — synchronous. Node runs listeners in registration
+	// order, so a handler added after launch() never executes. Registering here
+	// puts this first; writeReports is synchronous and completes before
+	// puppeteer's exit.
+	let interrupted = false;
+	const onSignal = (signal) => {
+		if (interrupted) return;
+		interrupted = true;
+		console.error(
+			`\n[qa] ${signal} — writing partial report for ${reports.length} completed cell(s)`,
+		);
+		try {
+			writeReports({
+				outDir,
+				runId,
+				url: args.url,
+				reports,
+				audioCount,
+				fatal: `Interrupted by ${signal}`,
+			});
+			console.error(`[qa] partial report at ${join(outDir, "report.md")}`);
+		} catch (err) {
+			console.error(`[qa] could not write partial report: ${err.message}`);
+		}
+	};
+	for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+		process.on(signal, onSignal);
+	}
+
 	const browser = await puppeteer.launch({
 		executablePath: DEFAULT_CHROME,
 		args: args.cloneMicWav
@@ -302,11 +349,6 @@ async function main() {
 			: CHROME_ARGS,
 		protocolTimeout: args.timeoutMs,
 	});
-
-	const reports = [];
-	const artifactErrors = [];
-	let audioCount = 0;
-	let fatal = null;
 
 	try {
 		const page = await browser.newPage();
