@@ -92,6 +92,30 @@ Verified through the real `runQualityTests()` with a fake worker (before = old S
 
 **False-fail margins measured on the committed `public/audio-samples/*.wav`** — re-check these before changing any threshold: echo `0.023–0.072` vs 0.3 warn; silence `0.191–0.272` vs 0.3; clipping `0.00000` vs 0.001; rms `−22…−27 dB` vs −40.
 
+### Insertion rate `I/N` is the non-termination gate, not WER (2026-08-04, verified)
+
+`computeWER` was clamped to 1.0 and `PhraseResult` discarded the S/D/I breakdown it already computed. Both fixed: WER is uncapped, and `substitutions`/`deletions`/`insertions`/`refWords`/`insertionRate` are surfaced on `PhraseResult.sttRoundTrip`. Uncapping regressed no verdict — the clamp only touched values ≥ 1.0, which already failed.
+
+Reference `"The quick brown fox jumps over the lazy dog."` (9 words):
+
+| case | WER before | WER after | S | D | I | I/N |
+|---|---|---|---|---|---|---|
+| exact | 0.000 | 0.000 | 0 | 0 | 0 | 0.000 |
+| 2 benign ASR insertions | 0.222 | 0.222 | 0 | 0 | 2 | 0.222 |
+| truncated (half) | 0.556 | 0.556 | 0 | 5 | 0 | 0.000 |
+| LOOPED x2 | 1.000 | **1.000** | 0 | 0 | 9 | **1.000** |
+| LOOPED x3 | 1.000 | 2.000 | 0 | 0 | 18 | 2.000 |
+| LOOPED x5 | 1.000 | 4.000 | 0 | 0 | 36 | 4.000 |
+| total garbage | 1.000 | **1.000** | 9 | 0 | 0 | **0.000** |
+
+**Do not re-derive this: uncapping WER does NOT separate `LOOPED x2` from total garbage.** A 2×-looped 9-word reference has exactly 9 insertions, so it scores 1.000 uncapped — bit-identical to garbage. `I/N` is what separates them, **1.000 vs 0.000**. The earlier brief (`docs/briefs/qa-harness.md`) claimed uncapping fixed that case; it does not, and that line is wrong. The spec's *"uncapped they separate (1.0 vs 2.0)"* refers to **x2 vs x3 severity ranking among loops**, not x2 vs garbage.
+
+So `I/N` is the primary non-termination signal and WER is the severity ranking on top of it. `I/N` also names the mode: **I ≫ S,D = loop/non-termination; D ≫ = truncation; S ≫ = mispronunciation.** Against the ground-truth SpeechT5 cloned-voice stutter (looped real words from its own reference): `S=0 D=0 I=8`, `I/N=0.889` → FAIL as non-termination, where WER 0.889 alone only says "bad".
+
+`I/N` thresholds (warn 0.3 / fail 0.5) are **provisional pending real-ASR calibration** — rationale is in the `THRESHOLDS.insertionRate` comment. Benign ASR filler words on the 8–10 word `DEFAULT_PHRASES` cost 0.111–0.222; one full repeat costs 1.0.
+
+**Score a defect against its own reference sentence.** Scoring the stutter transcript against an unrelated reference reports `S=9` "mispronunciation" and turns a harness bug into an apparent metric bug. Mismatched ref/hyp pairs make S/D/I meaningless.
+
 ### Live blind spots — do not trust a PASS as proof of these
 
 - **`detectEcho` cannot see long-lag duplication.** It scans 50–500 ms. Measured on `speecht5.wav`: clean `0.072`, duplicated-concat `0.070`, overlap @1.2 s `0.073` — indistinguishable. It caught the 0.4 s case only because that lag is inside its window. Autoregressive looping happens at 1–5 s. Cepstral peak prominence replaces it (spec Tier 1 #1).
