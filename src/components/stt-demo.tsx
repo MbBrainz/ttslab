@@ -1,14 +1,18 @@
 "use client";
 
-import { Cpu, Mic, Zap } from "lucide-react";
+import { Cpu, Loader2, Mic, Radio, Zap } from "lucide-react";
 import { GpuEstimate } from "@/components/gpu-estimate";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { MicWaveform } from "@/components/mic-waveform";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { analyserPeakReader, MicWaveform } from "@/components/mic-waveform";
 import { type ModelState, ModelStatus } from "@/components/model-status";
 import { Button } from "@/components/ui/button";
 import { trackModelLoad, trackSTTTranscription } from "@/lib/analytics";
 import { createDownloadTracker } from "@/lib/inference/download-tracker";
 import type { Model } from "@/lib/db/schema";
+import {
+	type TranscriptSegment,
+	useLiveTranscription,
+} from "@/lib/hooks/use-live-transcription";
 import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
 import { pickRecordingMimeType } from "@/lib/recording-mime";
 import { cn } from "@/lib/utils";
@@ -16,6 +20,12 @@ import { cn } from "@/lib/utils";
 type SttDemoProps = {
 	model: Model;
 };
+
+const PENDING_LABEL = {
+	listening: "Listening…",
+	queued: "Queued…",
+	transcribing: "Transcribing…",
+} as const;
 
 /** close() rejects on an already-closed context, so guard and swallow. */
 async function closeAudioContext(ctx: AudioContext | null): Promise<void> {
@@ -27,16 +37,68 @@ async function closeAudioContext(ctx: AudioContext | null): Promise<void> {
 	}
 }
 
+function SegmentRow({ segment }: { segment: TranscriptSegment }) {
+	if (segment.status === "error") {
+		return (
+			<p className="text-sm text-destructive">
+				{segment.error ?? "Transcription failed"}
+			</p>
+		);
+	}
+
+	if (segment.status === "done") {
+		if (!segment.text) {
+			return (
+				<p className="text-sm italic text-muted-foreground">
+					No speech detected
+				</p>
+			);
+		}
+		return (
+			<p className="text-sm leading-relaxed">
+				{segment.text}
+				{segment.transcribeMs != null && (
+					<span className="ml-2 text-xs tabular-nums text-muted-foreground">
+						{segment.transcribeMs}ms
+					</span>
+				)}
+			</p>
+		);
+	}
+
+	return (
+		<p className="flex items-center gap-2 text-sm italic text-muted-foreground">
+			{segment.status === "listening" ? (
+				<span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-destructive" />
+			) : (
+				<Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+			)}
+			{PENDING_LABEL[segment.status]}
+		</p>
+	);
+}
+
 export function SttDemo({ model }: SttDemoProps) {
 	const [modelState, setModelState] = useState<ModelState>({
 		status: "not_loaded",
 	});
 	const [isRecording, setIsRecording] = useState(false);
 	const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
-	const [transcript, setTranscript] = useState("");
+	const [recordedSegments, setRecordedSegments] = useState<TranscriptSegment[]>(
+		[],
+	);
 	const [recordingDuration, setRecordingDuration] = useState(0);
 
 	const { loadModel, transcribe, dispose } = useInferenceWorker();
+
+	// Live mode shares this component's worker, so it transcribes with the model
+	// that is already loaded rather than loading a second copy.
+	const transcribeUtterance = useCallback(
+		(audio: Float32Array, sampleRate: number) =>
+			transcribe(model.slug, audio, sampleRate),
+		[model.slug, transcribe],
+	);
+	const live = useLiveTranscription({ transcribe: transcribeUtterance });
 
 	const backendRef = useRef<"webgpu" | "wasm">("wasm");
 	const loadTimeRef = useRef(0);
@@ -166,7 +228,6 @@ export function SttDemo({ model }: SttDemoProps) {
 
 			setIsRecording(true);
 			setRecordingDuration(0);
-			setTranscript("");
 
 			timerRef.current = setInterval(() => {
 				setRecordingDuration((prev) => prev + 100);
@@ -247,7 +308,17 @@ export function SttDemo({ model }: SttDemoProps) {
 
 			clearInterval(timer);
 
-			setTranscript(result.text);
+			setRecordedSegments((prev) => [
+				...prev,
+				{
+					id: crypto.randomUUID(),
+					status: "done",
+					text: result.text.trim(),
+					createdAt: Date.now(),
+					audioMs: Math.round(audioDuration * 1000),
+					transcribeMs: Math.round(result.metrics.totalMs),
+				},
+			]);
 
 			trackSTTTranscription(
 				model.slug,
@@ -298,8 +369,36 @@ export function SttDemo({ model }: SttDemoProps) {
 		return `${mins}:${secs.toString().padStart(2, "0")}`;
 	}
 
+	const toggleListening = useCallback(() => {
+		if (live.isListening) {
+			void live.stop();
+		} else {
+			void live.start();
+		}
+	}, [live.isListening, live.start, live.stop]);
+
+	const clearTranscript = useCallback(() => {
+		setRecordedSegments([]);
+		live.clear();
+	}, [live.clear]);
+
 	const isReady =
 		modelState.status === "ready" || modelState.status === "result";
+
+	const segments = useMemo(
+		() =>
+			[...recordedSegments, ...live.segments].sort(
+				(a, b) => a.createdAt - b.createdAt,
+			),
+		[recordedSegments, live.segments],
+	);
+
+	const isCapturing = isRecording || live.isListening;
+	const peakReader = useMemo(
+		() => (analyser ? analyserPeakReader(analyser) : null),
+		[analyser],
+	);
+	const getPeak = isRecording ? peakReader : live.getInputPeak;
 
 	return (
 		<div className="space-y-6">
@@ -321,7 +420,7 @@ export function SttDemo({ model }: SttDemoProps) {
 						variant={isRecording ? "destructive" : "default"}
 						size="lg"
 						onClick={toggleRecording}
-						disabled={!isReady && !isRecording}
+						disabled={(!isReady && !isRecording) || live.isListening}
 						className={cn(
 							"relative h-20 w-20 rounded-full",
 							isRecording && "shadow-lg shadow-destructive/25",
@@ -337,12 +436,30 @@ export function SttDemo({ model }: SttDemoProps) {
 				</div>
 
 				<p className="text-sm text-muted-foreground">
-					{!isReady && !isRecording
+					{!isReady
 						? "Download the model first to start recording"
-						: isRecording
-							? "Click to stop recording"
-							: "Click to start recording"}
+						: live.isListening
+							? "Listening — speak, and each pause is transcribed"
+							: isRecording
+								? "Click to stop recording"
+								: "Click to record one clip, or listen continuously"}
 				</p>
+
+				{/* Live transcription toggle, alongside the one-shot recorder */}
+				<Button
+					variant={live.isListening ? "destructive" : "outline"}
+					size="sm"
+					onClick={toggleListening}
+					disabled={!isReady || isRecording}
+					className="min-h-11"
+				>
+					<Radio
+						className={cn("h-4 w-4", live.isListening && "animate-pulse")}
+					/>
+					{live.isListening ? "Stop Listening" : "Start Listening"}
+				</Button>
+
+				{live.error && <p className="text-sm text-destructive">{live.error}</p>}
 
 				{/* Recording duration */}
 				{isRecording && (
@@ -353,25 +470,37 @@ export function SttDemo({ model }: SttDemoProps) {
 				)}
 
 				{/* Live waveform */}
-				{isRecording && (
+				{isCapturing && (
 					<div className="w-full max-w-xs">
-						<MicWaveform analyser={analyser} isActive={isRecording} />
+						<MicWaveform getPeak={getPeak} isActive={isCapturing} />
 					</div>
 				)}
 			</div>
 
 			{/* Transcript output */}
-			{transcript && (
+			{segments.length > 0 && (
 				<div className="space-y-3">
-					<h3 className="text-sm font-medium text-foreground">Transcript</h3>
-					<div className="min-h-[80px] rounded-lg border border-border bg-secondary/30 p-4 text-sm leading-relaxed">
-						{transcript}
+					<div className="flex items-center justify-between">
+						<h3 className="text-sm font-medium text-foreground">Transcript</h3>
+						<Button
+							variant="ghost"
+							size="sm"
+							className="h-7 px-2 text-xs text-muted-foreground"
+							onClick={clearTranscript}
+						>
+							Clear
+						</Button>
+					</div>
+					<div className="min-h-[80px] space-y-2 rounded-lg border border-border bg-secondary/30 p-4">
+						{segments.map((segment) => (
+							<SegmentRow key={segment.id} segment={segment} />
+						))}
 					</div>
 				</div>
 			)}
 
-			{/* Metrics */}
-			{modelState.status === "result" && (
+			{/* Metrics — one-shot only; live mode reports per segment */}
+			{modelState.status === "result" && !live.isListening && (
 				<div className={`grid gap-4 rounded-lg border border-border bg-secondary/30 p-4 ${modelState.metrics.backend === "wasm" ? "grid-cols-4" : "grid-cols-3"}`}>
 					<div className="text-center">
 						<p className="text-xs text-muted-foreground">Processing time</p>

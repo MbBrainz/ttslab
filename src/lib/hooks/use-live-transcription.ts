@@ -17,6 +17,8 @@ export interface TranscriptSegment {
 	id: string;
 	status: SegmentStatus;
 	text: string;
+	/** Ordering key, so segments from other sources can be interleaved. */
+	createdAt: number;
 	/** Length of the captured utterance. */
 	audioMs?: number;
 	transcribeMs?: number;
@@ -162,7 +164,10 @@ export function useLiveTranscription({
 		setIsSpeechActive(true);
 		const id = crypto.randomUUID();
 		activeSegmentRef.current = id;
-		setSegments((prev) => [...prev, { id, status: "listening", text: "" }]);
+		setSegments((prev) => [
+			...prev,
+			{ id, status: "listening", text: "", createdAt: Date.now() },
+		]);
 	}, []);
 
 	const dropActiveSegment = useCallback(() => {

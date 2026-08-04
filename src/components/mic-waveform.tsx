@@ -2,8 +2,11 @@
 
 import { useEffect, useRef } from "react";
 
+/** Current input level as 0..1, sampled once per animation frame. */
+export type PeakReader = () => number;
+
 type MicWaveformProps = {
-	analyser: AnalyserNode | null;
+	getPeak: PeakReader | null;
 	isActive: boolean;
 	height?: number;
 };
@@ -13,18 +16,21 @@ const BAR_GAP = 2;
 /** ms of audio summarised into one bar — BAR_COUNT * this = window length */
 const BAR_INTERVAL_MS = 50;
 
-/** Peak deviation from the 128 midpoint of getByteTimeDomainData, as 0..1. */
-function readPeak(
-	analyser: AnalyserNode,
-	data: Uint8Array<ArrayBuffer>,
-): number {
-	analyser.getByteTimeDomainData(data);
-	let peak = 0;
-	for (const sample of data) {
-		const deviation = Math.abs(sample - 128);
-		if (deviation > peak) peak = deviation;
-	}
-	return Math.min(1, peak / 128);
+/**
+ * Peak reader backed by an AnalyserNode: peak deviation from the 128 midpoint
+ * of getByteTimeDomainData. The scratch buffer is allocated once per reader.
+ */
+export function analyserPeakReader(analyser: AnalyserNode): PeakReader {
+	const data = new Uint8Array(analyser.fftSize);
+	return () => {
+		analyser.getByteTimeDomainData(data);
+		let peak = 0;
+		for (const sample of data) {
+			const deviation = Math.abs(sample - 128);
+			if (deviation > peak) peak = deviation;
+		}
+		return Math.min(1, peak / 128);
+	};
 }
 
 function readCssColors(canvas: HTMLCanvasElement) {
@@ -61,12 +67,14 @@ function drawBars(
 }
 
 /**
- * Scrolling time-domain view of a live microphone stream. Each bar is the peak
+ * Scrolling time-domain view of live microphone input. Each bar is the peak
  * amplitude of one BAR_INTERVAL_MS slice of audio, newest on the right — so the
  * shape carries real per-time information rather than a re-rendered scalar.
+ * The level source is injected, so it works off an AnalyserNode or off the
+ * VAD's own frames without this component knowing which.
  */
 export function MicWaveform({
-	analyser,
+	getPeak,
 	isActive,
 	height = 64,
 }: MicWaveformProps) {
@@ -79,7 +87,6 @@ export function MicWaveform({
 		const ctx = canvas?.getContext("2d");
 		if (!canvas || !ctx) return;
 
-		const data = analyser ? new Uint8Array(analyser.fftSize) : null;
 		const colors = readCssColors(canvas);
 		let slicePeak = 0;
 		let lastPush = performance.now();
@@ -98,8 +105,8 @@ export function MicWaveform({
 		const draw = () => {
 			rafRef.current = requestAnimationFrame(draw);
 
-			if (analyser && data && isActive) {
-				slicePeak = Math.max(slicePeak, readPeak(analyser, data));
+			if (getPeak && isActive) {
+				slicePeak = Math.max(slicePeak, getPeak());
 			}
 
 			const now = performance.now();
@@ -119,7 +126,7 @@ export function MicWaveform({
 			cancelAnimationFrame(rafRef.current);
 			observer.disconnect();
 		};
-	}, [analyser, isActive]);
+	}, [getPeak, isActive]);
 
 	return (
 		<canvas
