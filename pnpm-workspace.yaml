@@ -1,0 +1,13 @@
+allowBuilds:
+  esbuild: true
+  onnxruntime-node: true
+  protobufjs: true
+  sharp: true
+
+# Pin every nested onnxruntime-web (transformers.js, kokoro-js, vits-web,
+# vad-web) to one build. scripts/copy-onnx-wasm.mjs serves a single set of
+# WASM binaries from public/onnx/ for all of them, and ORT requires the JS
+# glue and the .wasm binary to be the same version.
+# Moved here from package.json "pnpm.overrides", which pnpm 11 ignores.
+overrides:
+  onnxruntime-web: 1.25.0-dev.20260212-1a71a5f46e
