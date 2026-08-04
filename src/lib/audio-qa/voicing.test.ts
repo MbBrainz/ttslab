@@ -69,7 +69,7 @@ describe("measureVoicing — basic behaviour", () => {
 describe("the WARN-ONLY threshold, against the populations that set it", () => {
 	it("stays under the warn threshold for every negative, including working clones", () => {
 		// If any of these crossed, the check would warn on healthy output — which
-		// is the whole risk with a 112x-spread negative population.
+		// is the whole risk with a 110x-spread negative population.
 		for (const p of NEGATIVES) {
 			expect(flatnessOf(p), p).toBeLessThan(THRESHOLDS.spectralFlatness.warn);
 		}

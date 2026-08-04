@@ -43,7 +43,7 @@ import { cosineSimilarity, MFCC_HOP_SEC, mfccFrames } from "./mfcc";
  * The promising lead is instead VOICING QUALITY: median spectral flatness
  * separates at 6.2x (negatives max 0.00900, STUTTER 0.05579). Not shipped as a
  * gate because there is exactly ONE positive example, and the 11 negatives span
- * 0.00008-0.00900 — a 112x internal spread, so the false-positive tail is
+ * 0.00008-0.00900 — a 110x internal spread, so the false-positive tail is
  * unknown. See CLAUDE.md.
  */
 

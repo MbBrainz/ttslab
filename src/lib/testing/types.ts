@@ -213,7 +213,7 @@ export const THRESHOLDS = {
 	 * weaker positive, so the two error directions are balanced.
 	 *
 	 * ONE strong positive example, and the 11 negatives span 0.00008-0.00900 —
-	 * a 112x internal spread — so the false-positive tail is UNBOUNDED and a
+	 * a 110x internal spread — so the false-positive tail is UNBOUNDED and a
 	 * differently-voiced model could exceed this while being perfectly fine.
 	 * DO NOT add a `fail` key without substantially more positives. See
 	 * src/lib/audio-qa/voicing.ts.

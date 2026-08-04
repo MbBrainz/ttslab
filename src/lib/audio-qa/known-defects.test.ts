@@ -178,7 +178,7 @@ describe("known-bad: cloned voice STUTTERS — the live defect, and the detector
 		//
 		// This is the most promising lead for an acoustic detector here, and it
 		// is deliberately NOT a gate: one positive example, and the 11 negatives
-		// span 0.00008-0.00900, a 112x internal spread, so the false-positive
+		// span 0.00008-0.00900, a 110x internal spread, so the false-positive
 		// tail is unbounded. Do not ship a threshold off this without more
 		// positives.
 		expect(stutter.voicing.medianFlatness).toBeGreaterThan(

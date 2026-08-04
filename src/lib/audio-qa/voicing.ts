@@ -38,14 +38,22 @@ const FLOOR_RATIO = 1e-10;
  * degenerating into noise; Whisper's looping transcript is its decoding of that
  * degradation. Flatness measures the property that is actually present.
  *
- * MEASURED POPULATIONS (2026-08-04):
- *   negatives max   0.00900   9 clean real renders + 2 WORKING file-upload clones
- *   TRUNCATED       0.03081   weaker positive
- *   STUTTER         0.05579   stronger positive
+ * MEASURED POPULATIONS (2026-08-04). Every file below is COMMITTED, so the
+ * calibration is reproducible from a clean checkout — `voicing.test.ts` re-derives
+ * it. An earlier version of that test read part of the population from gitignored
+ * qa-artifacts/, which made the number verifiable only on the machine that
+ * generated it.
+ *
+ *   negatives  0.00008 - 0.00900  9 files: 6 clean real renders, the stock
+ *                                 fixture, and 2 WORKING file-upload clones.
+ *                                 Spread 110x. Both bounds are committed files:
+ *                                 floor piper-lessac, ceiling WORKING-run2.
+ *   TRUNCATED  0.03081            weaker positive
+ *   STUTTER    0.05579            stronger positive
  *
  * EVIDENCE BASE AND ITS WEAKNESS, in the same breath as the number:
  * there is exactly ONE strong positive example, and the 11 negatives span
- * 0.00008-0.00900 — a 112x internal spread. The false-positive tail is therefore
+ * 0.00008-0.00900 — a 110x internal spread. The false-positive tail is therefore
  * UNBOUNDED: a differently-voiced model (breathier, noisier, or simply a
  * different vocoder) could plausibly sit above the threshold while being
  * perfectly fine.

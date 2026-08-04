@@ -271,7 +271,7 @@ Measured populations:
 
 0.017 is the geometric midpoint of the negative ceiling and the weaker positive: **1.89× headroom above the negatives**, **1.81× margin below TRUNCATED**, 3.28× below STUTTER. Both error directions are balanced by construction.
 
-**The evidence base and its weakness, together:** there is exactly **ONE** strong positive example, and the 11 negatives span **0.00008–0.00900 — a 112× internal spread**. The false-positive tail is therefore **unbounded**: a differently-voiced model (breathier, noisier, a different vocoder) could plausibly exceed 0.017 while being perfectly fine. That is why it warns and cannot fail.
+**The evidence base and its weakness, together:** there is exactly **ONE** strong positive example, and the 11 negatives span **0.00008–0.00900 — a 110× internal spread**. The false-positive tail is therefore **unbounded**: a differently-voiced model (breathier, noisier, a different vocoder) could plausibly exceed 0.017 while being perfectly fine. That is why it warns and cannot fail.
 
 **DO NOT promote this to a fail gate without substantially more positive examples.** A warn costs a reader a glance; a fail on this basis would break someone's run over a voice the threshold never saw. `voicing.test.ts` asserts the no-fail-tier property structurally so the constraint survives refactors.
 
