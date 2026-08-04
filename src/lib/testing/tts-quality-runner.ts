@@ -2,6 +2,7 @@ import { type AudioQaMetrics, analyzeAudioQa } from "../audio-qa";
 import { measureEnergy } from "./audio-analysis";
 import { computeWER, werVerdict } from "./wer";
 import type {
+	TestVariant,
 	QualityReport,
 	PhraseResult,
 	TestConfig,
@@ -11,7 +12,7 @@ import type {
 	Verdict,
 	WERResult,
 } from "./types";
-import { DEFAULT_PHRASES, THRESHOLDS } from "./types";
+import { DEFAULT_PHRASES, DEFAULT_VARIANT, THRESHOLDS } from "./types";
 
 // ── Worker API shape (duck-typed, not imported) ──────────────────────
 
@@ -41,6 +42,29 @@ export interface InferenceWorkerAPI {
 		duration: number;
 		metrics: { totalMs: number; backend: string };
 	}>;
+	/**
+	 * Optional. Absent adapters simply cannot run streaming variants — the
+	 * runner reports that as an error rather than silently testing the
+	 * non-streaming path and calling it streaming coverage.
+	 */
+	synthesizeStream?(
+		slug: string,
+		text: string,
+		voice: string,
+		speakerEmbeddingUrl: string | null | undefined,
+		callbacks: {
+			onChunk: (data: {
+				audio: Float32Array;
+				sampleRate: number;
+				chunkIndex: number;
+				totalChunks: number;
+				sentenceText: string;
+			}) => void;
+			onEnd: (data: { totalMs: number; sampleRate: number; totalChunks: number }) => void;
+			onError: (error: Error) => void;
+		},
+		language?: string,
+	): void;
 	transcribe(
 		slug: string,
 		audio: Float32Array,
@@ -54,6 +78,7 @@ export interface InferenceWorkerAPI {
 export interface ProgressUpdate {
 	phase: "loading-stt" | "testing-model" | "done";
 	modelSlug?: string;
+	variant?: string;
 	modelIndex?: number;
 	totalModels?: number;
 	phraseIndex?: number;
@@ -225,16 +250,129 @@ function overallVerdict(tests: PhraseResult[], errors: string[]): Verdict {
 	return "pass";
 }
 
-// ── Single phrase test ───────────────────────────────────────────────
+// ── Synthesis, streaming and non-streaming ───────────────────────────
 
-async function testPhrase(
+interface SynthesisResult {
+	audio: Float32Array;
+	sampleRate: number;
+	totalMs: number;
+	streaming?: { chunkCount: number; firstChunkMs: number };
+}
+
+/** A hung stream must fail the case, not hang the whole run. */
+const STREAM_TIMEOUT_MS = 120_000;
+
+function concatChunks(chunks: Float32Array[]): Float32Array {
+	const total = chunks.reduce((sum, c) => sum + c.length, 0);
+	const out = new Float32Array(total);
+	let offset = 0;
+	for (const chunk of chunks) {
+		out.set(chunk, offset);
+		offset += chunk.length;
+	}
+	return out;
+}
+
+/**
+ * Bridges the callback-based streaming API to a promise, concatenating chunks
+ * into one buffer so the same metric stack runs against it.
+ *
+ * Joining the chunks is the point: a model that streams correctly per chunk but
+ * mis-joins them produces clicks and gaps at the boundaries, which is precisely
+ * what a whole-utterance analysis catches and a per-chunk one does not.
+ */
+function synthesizeStreaming(
 	worker: InferenceWorkerAPI,
 	modelSlug: string,
-	sttModel: string,
-	phrase: TestPhrase,
+	text: string,
 	voice: string,
-): Promise<PhraseResult> {
-	const result = await worker.synthesize(modelSlug, phrase.text, voice);
+	speakerEmbeddingUrl: string | undefined,
+): Promise<SynthesisResult> {
+	if (!worker.synthesizeStream) {
+		return Promise.reject(
+			new Error("Streaming variant requested but the worker adapter has no synthesizeStream"),
+		);
+	}
+
+	return new Promise((resolve, reject) => {
+		const chunks: Float32Array[] = [];
+		const startedAt = Date.now();
+		let firstChunkMs = 0;
+		let sampleRate = 0;
+
+		const timer = setTimeout(() => {
+			reject(new Error(`Stream did not finish within ${STREAM_TIMEOUT_MS}ms`));
+		}, STREAM_TIMEOUT_MS);
+
+		worker.synthesizeStream?.(modelSlug, text, voice, speakerEmbeddingUrl ?? null, {
+			onChunk: (data) => {
+				if (chunks.length === 0) firstChunkMs = Date.now() - startedAt;
+				chunks.push(data.audio);
+				sampleRate = data.sampleRate;
+			},
+			onEnd: (data) => {
+				clearTimeout(timer);
+				if (chunks.length === 0) {
+					reject(new Error("Stream ended without emitting any audio"));
+					return;
+				}
+				resolve({
+					audio: concatChunks(chunks),
+					sampleRate: sampleRate || data.sampleRate,
+					totalMs: data.totalMs,
+					streaming: { chunkCount: chunks.length, firstChunkMs },
+				});
+			},
+			onError: (error) => {
+				clearTimeout(timer);
+				reject(error);
+			},
+		});
+	});
+}
+
+async function synthesizeVariant(
+	worker: InferenceWorkerAPI,
+	modelSlug: string,
+	text: string,
+	voice: string,
+	variant: TestVariant,
+): Promise<SynthesisResult> {
+	if (variant.streaming) {
+		return synthesizeStreaming(worker, modelSlug, text, voice, variant.speakerEmbeddingUrl);
+	}
+
+	const result = await worker.synthesize(
+		modelSlug,
+		text,
+		voice,
+		variant.speakerEmbeddingUrl,
+	);
+	return {
+		audio: result.audio,
+		sampleRate: result.sampleRate,
+		totalMs: result.metrics.totalMs,
+	};
+}
+
+// ── Single phrase test ───────────────────────────────────────────────
+
+interface PhraseTestArgs {
+	worker: InferenceWorkerAPI;
+	modelSlug: string;
+	sttModel: string;
+	phrase: TestPhrase;
+	voice: string;
+	variant: TestVariant;
+	/** Receives the generated audio so the caller can dump it as an artifact. */
+	onAudio?: (audio: Float32Array, sampleRate: number) => void;
+}
+
+async function testPhrase(args: PhraseTestArgs): Promise<PhraseResult> {
+	const { worker, modelSlug, sttModel, phrase, voice, variant } = args;
+	const result = await synthesizeVariant(worker, modelSlug, phrase.text, voice, variant);
+
+	args.onAudio?.(result.audio, result.sampleRate);
 
 	// Reference text is passed so the duration check has an expectation to
 	// compare against — it is the only pre-ASR detector of a rate relabel.
@@ -253,10 +391,11 @@ async function testPhrase(
 	return {
 		phrase: phrase.text,
 		category: phrase.category,
-		generationMs: result.metrics.totalMs,
+		generationMs: result.totalMs,
 		sampleRate: result.sampleRate,
 		qa,
 		energy,
+		streaming: result.streaming,
 		verdict,
 		failures,
 		sttRoundTrip: {
@@ -274,16 +413,21 @@ async function testPhrase(
 
 // ── Single model test ────────────────────────────────────────────────
 
-async function testModel(
-	worker: InferenceWorkerAPI,
-	slug: string,
-	sttModel: string,
-	phrases: TestPhrase[],
-	backend: "webgpu" | "wasm" | "auto",
-	onProgress?: (u: ProgressUpdate) => void,
-	modelIndex?: number,
-	totalModels?: number,
-): Promise<QualityReport> {
+interface ModelTestArgs {
+	worker: InferenceWorkerAPI;
+	slug: string;
+	sttModel: string;
+	phrases: TestPhrase[];
+	variant: TestVariant;
+	backend: "webgpu" | "wasm" | "auto";
+	onProgress?: (u: ProgressUpdate) => void;
+	onAudio?: AudioSink;
+	modelIndex?: number;
+	totalModels?: number;
+}
+
+async function testModel(args: ModelTestArgs): Promise<QualityReport> {
+	const { worker, slug, sttModel, phrases, variant, backend, onProgress } = args;
 	const errors: string[] = [];
 	const tests: PhraseResult[] = [];
 	let loadTimeMs = 0;
@@ -300,15 +444,25 @@ async function testModel(
 			onProgress?.({
 				phase: "testing-model",
 				modelSlug: slug,
-				modelIndex,
-				totalModels,
+				variant: variant.id,
+				modelIndex: args.modelIndex,
+				totalModels: args.totalModels,
 				phraseIndex: i,
 				totalPhrases: phrases.length,
-				message: `[${slug}] Testing phrase ${i + 1}/${phrases.length}`,
+				message: `[${slug} · ${variant.id}] Testing phrase ${i + 1}/${phrases.length}`,
 			});
 
 			try {
-				const result = await testPhrase(worker, slug, sttModel, phrases[i], voice);
+				const result = await testPhrase({
+					worker,
+					modelSlug: slug,
+					sttModel,
+					phrase: phrases[i],
+					voice,
+					variant,
+					onAudio: (audio, sampleRate) =>
+						args.onAudio?.({ slug, variant: variant.id, phraseIndex: i, audio, sampleRate }),
+				});
 				tests.push(result);
 			} catch (err) {
 				errors.push(`Phrase "${phrases[i].text}": ${err instanceof Error ? err.message : String(err)}`);
@@ -326,6 +480,7 @@ async function testModel(
 
 	return {
 		slug,
+		variant: variant.id,
 		timestamp: new Date().toISOString(),
 		overall: overallVerdict(tests, errors),
 		loadTimeMs,
@@ -337,15 +492,29 @@ async function testModel(
 
 // ── Main entry point ─────────────────────────────────────────────────
 
+/**
+ * Receives every generated buffer so a caller can dump it to disk. This is what
+ * makes a failure listenable and re-scorable without regenerating the audio.
+ */
+export type AudioSink = (item: {
+	slug: string;
+	variant: string;
+	phraseIndex: number;
+	audio: Float32Array;
+	sampleRate: number;
+}) => void;
+
 export async function runQualityTests(
 	worker: InferenceWorkerAPI,
 	config: TestConfig,
 	onProgress?: (update: ProgressUpdate) => void,
+	onAudio?: AudioSink,
 ): Promise<QualityReport[]> {
 	const models = config.models?.length ? config.models : SUPPORTED_TTS_MODELS;
 	const phrases = config.phrases?.length ? config.phrases : DEFAULT_PHRASES;
 	const sttModel = config.sttModel ?? DEFAULT_STT_MODEL;
 	const backend = config.backend ?? "auto";
+	const variants = config.variants?.length ? config.variants : [DEFAULT_VARIANT];
 
 	// 1. Load STT judge model
 	onProgress?.({ phase: "loading-stt", message: `Loading STT judge: ${sttModel}` });
@@ -359,26 +528,35 @@ export async function runQualityTests(
 	// 2. Test each TTS model
 	const reports: QualityReport[] = [];
 
+	// Model-major, variant-minor: every variant of a model runs while that
+	// model is loaded, so the coverage matrix costs one load per model rather
+	// than one per cell.
 	for (let i = 0; i < models.length; i++) {
-		onProgress?.({
-			phase: "testing-model",
-			modelSlug: models[i],
-			modelIndex: i,
-			totalModels: models.length,
-			message: `Loading model ${i + 1}/${models.length}: ${models[i]}`,
-		});
+		for (const variant of variants) {
+			onProgress?.({
+				phase: "testing-model",
+				modelSlug: models[i],
+				variant: variant.id,
+				modelIndex: i,
+				totalModels: models.length,
+				message: `Loading model ${i + 1}/${models.length}: ${models[i]} · ${variant.id}`,
+			});
 
-		const report = await testModel(
-			worker,
-			models[i],
-			sttModel,
-			phrases,
-			backend,
-			onProgress,
-			i,
-			models.length,
-		);
-		reports.push(report);
+			reports.push(
+				await testModel({
+					worker,
+					slug: models[i],
+					sttModel,
+					phrases,
+					variant,
+					backend,
+					onProgress,
+					onAudio,
+					modelIndex: i,
+					totalModels: models.length,
+				}),
+			);
+		}
 	}
 
 	// 3. Dispose STT judge

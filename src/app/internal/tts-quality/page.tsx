@@ -7,7 +7,7 @@ import {
 	type ProgressUpdate,
 	type InferenceWorkerAPI,
 } from "@/lib/testing/tts-quality-runner";
-import type { QualityReport, TestConfig } from "@/lib/testing/types";
+import type { QualityReport, TestConfig, TestVariant } from "@/lib/testing/types";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -80,9 +80,30 @@ function buildWorkerAdapter(hook: ReturnType<typeof useInferenceWorker>): Infere
 	return {
 		loadModel: hook.loadModel,
 		synthesize: hook.synthesize,
+		synthesizeStream: hook.synthesizeStream,
 		transcribe: hook.transcribe,
 		disposeModel: hook.dispose,
 	};
+}
+
+/** Cross the coverage matrix: {stock, cloned} x {non-streaming, streaming}. */
+function buildVariants(embeddingUrl: string, includeStreaming: boolean): TestVariant[] {
+	const voices: Array<{ label: string; speakerEmbeddingUrl?: string }> = [
+		{ label: "stock" },
+	];
+	if (embeddingUrl.trim()) {
+		voices.push({ label: "cloned", speakerEmbeddingUrl: embeddingUrl.trim() });
+	}
+
+	const modes = includeStreaming ? [false, true] : [false];
+
+	return voices.flatMap((voice) =>
+		modes.map((streaming) => ({
+			id: `${voice.label}/${streaming ? "streaming" : "non-streaming"}`,
+			speakerEmbeddingUrl: voice.speakerEmbeddingUrl,
+			streaming,
+		})),
+	);
 }
 
 // ── Progress Bar ─────────────────────────────────────────────────────
@@ -104,10 +125,11 @@ function ProgressBar({ value, max }: { value: number; max: number }) {
 function ModelResultRow({ report }: { report: QualityReport }) {
 	return (
 		<tr
-			data-testid={`model-result-${report.slug}`}
+			data-testid={`model-result-${report.slug}-${report.variant}`}
 			className={VERDICT_BG[report.overall]}
 		>
 			<td className="px-3 py-2 font-mono text-sm">{report.slug}</td>
+			<td className="px-3 py-2 font-mono text-xs text-zinc-400">{report.variant}</td>
 			<td className={`px-3 py-2 font-bold ${VERDICT_COLORS[report.overall]}`}>
 				{report.overall.toUpperCase()}
 			</td>
@@ -118,7 +140,7 @@ function ModelResultRow({ report }: { report: QualityReport }) {
 			<td className="px-3 py-2 text-sm tabular-nums">{cepstralSummary(report)}</td>
 			<td className="px-3 py-2 text-sm tabular-nums">{report.tests.length}</td>
 			<td
-				data-testid={`failed-checks-${report.slug}`}
+				data-testid={`failed-checks-${report.slug}-${report.variant}`}
 				className="px-3 py-2 font-mono text-sm text-yellow-400"
 			>
 				{summarizeFailures(report)}
@@ -139,19 +161,23 @@ export default function TtsQualityPage() {
 	const [progress, setProgress] = useState<ProgressUpdate | null>(null);
 	const [reports, setReports] = useState<QualityReport[]>([]);
 	const [modelFilter, setModelFilter] = useState("");
+	const [embeddingUrl, setEmbeddingUrl] = useState("");
+	const [includeStreaming, setIncludeStreaming] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const runningRef = useRef(false);
 
 	const workerAdapter = useMemo(() => buildWorkerAdapter(worker), [worker]);
 
 	const buildConfig = useCallback((): TestConfig => {
-		if (!modelFilter.trim()) return {};
 		const models = modelFilter
 			.split(",")
 			.map((s) => s.trim())
 			.filter(Boolean);
-		return { models };
-	}, [modelFilter]);
+		return {
+			...(models.length > 0 ? { models } : {}),
+			variants: buildVariants(embeddingUrl, includeStreaming),
+		};
+	}, [modelFilter, embeddingUrl, includeStreaming]);
 
 	const handleRun = useCallback(async () => {
 		if (runningRef.current) return;
@@ -201,6 +227,30 @@ export default function TtsQualityPage() {
 						className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-mono text-zinc-100 placeholder-zinc-600 focus:border-blue-500 focus:outline-none"
 					/>
 				</div>
+				<div className="flex-1">
+					<label htmlFor="embedding-url" className="mb-1 block text-xs text-zinc-400">
+						Speaker embedding URL (empty = stock voice only)
+					</label>
+					<input
+						id="embedding-url"
+						type="text"
+						value={embeddingUrl}
+						onChange={(e) => setEmbeddingUrl(e.target.value)}
+						placeholder="/embeddings/mic-clone.bin"
+						disabled={status === "running"}
+						className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-mono text-zinc-100 placeholder-zinc-600 focus:border-blue-500 focus:outline-none"
+					/>
+				</div>
+				<label className="flex items-center gap-2 pb-2 text-xs text-zinc-400">
+					<input
+						id="include-streaming"
+						type="checkbox"
+						checked={includeStreaming}
+						onChange={(e) => setIncludeStreaming(e.target.checked)}
+						disabled={status === "running"}
+					/>
+					Streaming
+				</label>
 				<button
 					data-testid="run-all-btn"
 					onClick={handleRun}
@@ -237,6 +287,7 @@ export default function TtsQualityPage() {
 						<thead className="bg-zinc-900 text-xs text-zinc-400">
 							<tr>
 								<th className="px-3 py-2">Model</th>
+								<th className="px-3 py-2">Variant</th>
 								<th className="px-3 py-2">Verdict</th>
 								<th className="px-3 py-2">Backend</th>
 								<th className="px-3 py-2">Load Time</th>
@@ -250,7 +301,7 @@ export default function TtsQualityPage() {
 						</thead>
 						<tbody className="divide-y divide-zinc-800">
 							{reports.map((r) => (
-								<ModelResultRow key={r.slug} report={r} />
+								<ModelResultRow key={`${r.slug}/${r.variant}`} report={r} />
 							))}
 						</tbody>
 					</table>

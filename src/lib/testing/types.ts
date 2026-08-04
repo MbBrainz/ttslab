@@ -68,6 +68,11 @@ export interface PhraseResult {
 	/** Tier-1 DSP metrics. These are what gate. */
 	qa: AudioQaMetrics;
 	energy: EnergyResult;
+	/** Present only for streaming variants. */
+	streaming?: {
+		chunkCount: number;
+		firstChunkMs: number;
+	};
 	/** Combined acoustic + STT verdict for this phrase. */
 	verdict: Verdict;
 	/** Every check that warned or failed. Empty when `verdict` is "pass". */
@@ -85,8 +90,26 @@ export interface PhraseResult {
 	};
 }
 
+/**
+ * One cell of the coverage matrix: model x {stock, cloned} x {non-streaming,
+ * streaming}. The cloned and streaming axes were structurally untestable before
+ * -- `testPhrase` called `synthesize(slug, text, voice)` and nothing else -- so
+ * the known-broken cloned path could not be exercised at all.
+ */
+export interface TestVariant {
+	/** Appears in the report and in artifact filenames, e.g. "cloned/streaming". */
+	id: string;
+	/** Absent = stock voice. Present = clone from this speaker embedding. */
+	speakerEmbeddingUrl?: string;
+	streaming?: boolean;
+}
+
+export const DEFAULT_VARIANT: TestVariant = { id: "stock/non-streaming" };
+
 export interface QualityReport {
 	slug: string;
+	/** Which coverage-matrix cell this report is for. */
+	variant: string;
 	timestamp: string;
 	overall: Verdict;
 	loadTimeMs: number;
@@ -100,6 +123,8 @@ export interface TestConfig {
 	phrases?: TestPhrase[];
 	sttModel?: string;
 	backend?: "webgpu" | "wasm" | "auto";
+	/** Defaults to [DEFAULT_VARIANT] — stock voice, non-streaming. */
+	variants?: TestVariant[];
 }
 
 export interface TestPhrase {
