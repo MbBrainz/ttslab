@@ -129,4 +129,35 @@ export const THRESHOLDS = {
 	silence: { warn: 0.3, fail: 0.5 },
 	clipping: { warn: 0.001, fail: 0.01 },
 	energyDb: { warn: -40, fail: -50 },
+
+	// ── Tier-1 DSP thresholds. Every number below was measured, not assumed;
+	// the measurements are in the metric's own source file.
+
+	/**
+	 * Cepstral peak prominence. NOT the spec's 50 — at 50, three of the six
+	 * committed clean samples FAIL (kokoro 68.7, hero-demo-1 68.7,
+	 * hero-demo-2 122.2), because clean speech with regular prosodic rhythm
+	 * scores high. Measured clean max 122.2, additive-overlap min 446.6.
+	 * Caveat for review: only 6 clean samples, all from 3 models. Re-check as
+	 * models are added.
+	 */
+	cepstralRatio: { warn: 200, fail: 300 },
+	/**
+	 * |log2(actual/expected duration)|. Clean real max 0.140. Catches doubling
+	 * (1.075), halving (-0.925), truncation (-1.247) and a 24k->44.1k relabel
+	 * (-0.803). A 24k->16k relabel measures 0.660 and only WARNS — so a
+	 * duration warn must be investigated, never ignored. 48k<->44.1k measures
+	 * 0.197 and is undetectable acoustically, as the spec states.
+	 */
+	durationLog2Ratio: { warn: 0.4, fail: 0.7 },
+	/** Peak-relative frame silence. Clean real 0.174-0.283; dead audio 1.0. */
+	frameSilence: { warn: 0.45, fail: 0.65 },
+	/**
+	 * Fraction of samples inside a clipping run. Clean real is exactly 0 across
+	 * all six samples; 12x overdrive measures 0.875. A single short run warns
+	 * via runCount instead.
+	 */
+	clippedFraction: { warn: 0, fail: 0.001 },
+	/** DC offset relative to RMS, in dB. Clean real max -43.4; DC+0.2 = -6.2. */
+	dcOffsetDb: { warn: -30, fail: -20 },
 } as const;
