@@ -198,9 +198,50 @@ All three real clean hero-demo renders PASS with zero failures (`cepstral` 68.7 
 - **WER dilutes numeric misreadings** — see the normalizer section above.
 - **Voice cloning and streaming are untested.** `testPhrase()` calls `synthesize(slug, text, voice)` with no `speakerEmbeddingUrl`, so the known-broken cloned path is structurally untestable.
 
+### Running the harness (`scripts/model-qa.mjs`)
+
+```bash
+./node_modules/.bin/next build --webpack
+lsof -ti:3005 | xargs -r kill -9        # pkill does NOT reliably free it — see below
+./node_modules/.bin/next start -p 3005
+node scripts/model-qa.mjs --models kokoro-82m --phrases 3
+node scripts/model-qa.mjs --embedding /audio-samples/kokoro-82m.wav --streaming
+```
+
+Writes `qa-artifacts/<run>/report.json`, `report.md` and `wav/<slug>__<variant>__NN.wav` (gitignored). Exits 1 on FAIL. The page exposes `window.__modelQA = { run, listModels }`; the driver installs `window.__qaEmitAudio` and each buffer is streamed out **as it is produced**, so a run that dies halfway still leaves artifacts for the cases that finished.
+
+**Offline re-scoring works and is the point** — `decodeWav` + `analyzeAudioQa` on a saved artifact reproduces the in-browser numbers to **0.007%** (16-bit quantization). A threshold change costs nothing to re-evaluate; no model download, no browser.
+
+Two operational traps, both hit during development:
+- **`pkill -f "next start"` does not reliably kill the server.** A stale process keeps port 3005, the new one dies with `EADDRINUSE`, and the old process then serves HTML referencing chunk hashes the rebuild deleted → the page 500s on its JS chunk, never hydrates, and `window.__modelQA` never appears. Use `lsof -ti:3005 | xargs -r kill -9` and check the server log.
+- **Do not wait on `networkidle2`.** The page holds connections open (inference worker, analytics retries) so navigation times out even though the harness is ready. Wait for `window.__modelQA` instead.
+
+### The duration prior is calibrated against real runs — and is the weakest check
+
+`WORDS_PER_SECOND = 2.5`, the geometric mean of six real Kokoro renders (three committed hero demos, three from an actual harness run on WebGPU):
+
+| render | words / duration | rate |
+|---|---|---|
+| hero-demo-1 | 13 / 6.22s | 2.09 w/s |
+| hero-demo-2 | 13 / 6.33s | 2.05 w/s |
+| hero-demo-3 | 12 / 4.95s | 2.42 w/s |
+| qa pangram | 9 / 3.30s | 2.73 w/s |
+| qa alice | 11 / 3.48s | **3.16 w/s** |
+| qa oranges | 10 / 3.67s | 2.72 w/s |
+
+**Thresholds are 0.45/0.65, NOT the spec's 0.4/0.7.** The "alice" phrase measured **log2 −0.399 against a 0.40 warn** — 0.001 from warning on perfectly correct output. That is what forced the recalibration; it is now −0.340 against 0.45.
+
+Within *one* model the rate spans 2.05–3.16 w/s — a **1.54× spread, log2 0.62**, larger than the whole warn budget. Legitimate phrase-to-phrase variation is the same order as the thing being detected. A slower or faster model **will** warn: pass `wordsPerSecond` for it rather than widening the threshold for everyone.
+
+**Do not trust duration for sample-rate errors.** Detection is asymmetric because the clean baseline is not at zero, so which relabel fails depends on the prior — at 2.2 w/s the 24k→44.1k case failed and 24k→16k only warned; at 2.5 it is the other way round. Currently 48k/16k/8k fail, 44.1k warns (−0.619), 22.05k is invisible (0.381). **Assert on `PhraseResult.sampleRate` directly.**
+
 ### Verifying a change to the harness
 
-There is **no test runner configured** in this repo (no vitest/jest). Until there is, prove scoring changes with `npx tsx` against a fake `InferenceWorkerAPI` and the committed WAVs — drive the real `runQualityTests()`, not a reimplementation, and report actual before/after numbers. "It compiles" is not evidence; that failure mode is exactly why this harness exists.
+`pnpm test` (vitest, 131 tests). Prove scoring changes with real before/after numbers — drive the real `runQualityTests()` against a fake `InferenceWorkerAPI` and the committed WAVs, not a reimplementation. "It compiles" is not evidence; that failure mode is exactly why this harness exists.
+
+Calibrate thresholds against **real** output, not synthetic fixtures alone. Every threshold that turned out wrong here was wrong because it had only been checked against synthetic signals: the cepstral 50, the absolute silence gate, and the duration 0.4 all survived synthetic testing and failed on real audio.
+
+A fixture can be the bug. The first `speechLike()` was a fixed-f0 harmonic stack, which is perfectly periodic and measured `detectEcho` **0.9999 while clean** — it would have made a working detector look broken. Check a new fixture against the committed real WAVs before trusting a result derived from it.
 
 ## WebGPU-Specific Debugging
 

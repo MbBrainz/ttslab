@@ -125,6 +125,8 @@ export interface TestConfig {
 	backend?: "webgpu" | "wasm" | "auto";
 	/** Defaults to [DEFAULT_VARIANT] — stock voice, non-streaming. */
 	variants?: TestVariant[];
+	/** Cap the phrase list — for quick smoke runs, not for a real gate. */
+	phraseLimit?: number;
 }
 
 export interface TestPhrase {
@@ -174,13 +176,23 @@ export const THRESHOLDS = {
 	 */
 	cepstralRatio: { warn: 200, fail: 300 },
 	/**
-	 * |log2(actual/expected duration)|. Clean real max 0.140. Catches doubling
-	 * (1.075), halving (-0.925), truncation (-1.247) and a 24k->44.1k relabel
-	 * (-0.803). A 24k->16k relabel measures 0.660 and only WARNS — so a
-	 * duration warn must be investigated, never ignored. 48k<->44.1k measures
-	 * 0.197 and is undetectable acoustically, as the spec states.
+	 * |log2(actual/expected duration)|. NOT the spec's 0.4/0.7.
+	 *
+	 * Measured over six real Kokoro renders (three committed, three from an
+	 * actual harness run), legitimate output reaches 0.338 — one phrase hit
+	 * 0.399 against the spec's 0.40 warn, i.e. it came within 0.001 of warning
+	 * on correct output. Widened to 0.45/0.65, which puts clean output 1.33x
+	 * clear of warn while every gross defect still fails:
+	 *
+	 *   doubled 1.258 | halved -0.742 | truncated -1.064
+	 *   relabel ->48k -0.742 | ->16k 0.843 | ->8k 1.843
+	 *
+	 * A 24k->44.1k relabel measures -0.619 and only WARNS; 24k->22.05k measures
+	 * 0.381 and is invisible, as the spec says. A duration warn must be
+	 * investigated, never ignored — and for rate errors assert on
+	 * PhraseResult.sampleRate directly rather than relying on this at all.
 	 */
-	durationLog2Ratio: { warn: 0.4, fail: 0.7 },
+	durationLog2Ratio: { warn: 0.45, fail: 0.65 },
 	/** Peak-relative frame silence. Clean real 0.174-0.283; dead audio 1.0. */
 	frameSilence: { warn: 0.45, fail: 0.65 },
 	/**

@@ -88,7 +88,7 @@ export interface ProgressUpdate {
 
 // ── Constants ────────────────────────────────────────────────────────
 
-const SUPPORTED_TTS_MODELS = [
+export const SUPPORTED_TTS_MODELS = [
 	"kokoro-82m",
 	"supertonic-2",
 	"speecht5",
@@ -511,7 +511,11 @@ export async function runQualityTests(
 	onAudio?: AudioSink,
 ): Promise<QualityReport[]> {
 	const models = config.models?.length ? config.models : SUPPORTED_TTS_MODELS;
-	const phrases = config.phrases?.length ? config.phrases : DEFAULT_PHRASES;
+	const allPhrases = config.phrases?.length ? config.phrases : DEFAULT_PHRASES;
+	const phrases =
+		config.phraseLimit && config.phraseLimit > 0
+			? allPhrases.slice(0, config.phraseLimit)
+			: allPhrases;
 	const sttModel = config.sttModel ?? DEFAULT_STT_MODEL;
 	const backend = config.backend ?? "auto";
 	const variants = config.variants?.length ? config.variants : [DEFAULT_VARIANT];

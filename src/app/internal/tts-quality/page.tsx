@@ -1,17 +1,36 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
 import {
 	runQualityTests,
+	SUPPORTED_TTS_MODELS,
 	type ProgressUpdate,
 	type InferenceWorkerAPI,
 } from "@/lib/testing/tts-quality-runner";
+import { encodeWavBase64 } from "@/lib/audio-qa/wav";
 import type { QualityReport, TestConfig, TestVariant } from "@/lib/testing/types";
 
 // ── Types ────────────────────────────────────────────────────────────
 
 type Status = "idle" | "running" | "complete";
+
+/** The surface `scripts/model-qa.mjs` drives. */
+interface ModelQaApi {
+	listModels: () => string[];
+	run: (config?: TestConfig) => Promise<QualityReport[]>;
+}
+
+declare global {
+	interface Window {
+		__modelQA?: ModelQaApi;
+		/** Installed by the driver via page.exposeFunction. */
+		__qaEmitAudio?: (
+			meta: { slug: string; variant: string; phraseIndex: number; sampleRate: number },
+			wavBase64: string,
+		) => Promise<void>;
+	}
+}
 
 const VERDICT_COLORS = {
 	pass: "text-green-400",
@@ -200,6 +219,55 @@ export default function TtsQualityPage() {
 			runningRef.current = false;
 		}
 	}, [workerAdapter, buildConfig]);
+
+	// ── Automation hook ──────────────────────────────────────────────
+	// Without this the page is button-driven only and any automation has to
+	// scrape the DOM for results. `run` returns the reports directly.
+	//
+	// If the driver has installed window.__qaEmitAudio, every generated buffer
+	// is streamed out as a base64 WAV as it is produced — so a run that dies
+	// halfway still leaves listenable artifacts for the cases that completed.
+	useEffect(() => {
+		const api: ModelQaApi = {
+			listModels: () => [...SUPPORTED_TTS_MODELS],
+			run: async (config = {}) => {
+				setStatus("running");
+				setReports([]);
+				setError(null);
+				try {
+					const results = await runQualityTests(
+						workerAdapter,
+						config,
+						setProgress,
+						(item) => {
+							void window.__qaEmitAudio?.(
+								{
+									slug: item.slug,
+									variant: item.variant,
+									phraseIndex: item.phraseIndex,
+									sampleRate: item.sampleRate,
+								},
+								encodeWavBase64(item.audio, item.sampleRate),
+							);
+						},
+					);
+					setReports(results);
+					setStatus("complete");
+					return results;
+				} catch (err) {
+					const message = err instanceof Error ? err.message : String(err);
+					setError(message);
+					setStatus("complete");
+					throw err;
+				}
+			},
+		};
+
+		window.__modelQA = api;
+		return () => {
+			delete window.__modelQA;
+		};
+	}, [workerAdapter]);
 
 	const overallProgress = progress?.modelIndex != null && progress.totalModels
 		? { value: progress.modelIndex, max: progress.totalModels }
