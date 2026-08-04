@@ -74,14 +74,24 @@ interface QueuedUtterance {
 }
 
 /**
- * destroy() reads the audio graph and throws if start() never built one, so a
- * failed start still has to release whatever `new()` managed to acquire.
+ * Tear a MicVAD down without letting teardown failures escape.
+ *
+ * Both steps read an audio graph that a half-finished start() may never have
+ * built, and both throw when it is missing. They are swallowed independently so
+ * that destroy() — which releases the ONNX session and the microphone — is
+ * always attempted even when pause() throws. A throw escaping here would
+ * propagate to the caller's teardown and strand whatever it holds.
  */
-async function destroyQuietly(instance: MicVAD): Promise<void> {
+export async function releaseVad(instance: MicVAD): Promise<void> {
+	try {
+		await instance.pause();
+	} catch {
+		// Never fully wired up, or already paused.
+	}
 	try {
 		await instance.destroy();
 	} catch {
-		// Nothing was fully wired up — nothing to release.
+		// Nothing left to release.
 	}
 }
 
@@ -115,6 +125,7 @@ export function useLiveTranscription({
 	// Set synchronously, because vadRef only fills in several awaits into
 	// start() — without it two fast clicks build two MicVADs.
 	const startingRef = useRef(false);
+	const unmountedRef = useRef(false);
 	const activeSegmentRef = useRef<string | null>(null);
 	const inputPeakRef = useRef(0);
 	// The worker transport has a single pending slot, so utterances arriving
@@ -264,13 +275,20 @@ export function useLiveTranscription({
 			});
 			vadRef.current = instance;
 			await instance.start();
+			// Unmounting during the dynamic import or new() leaves the cleanup
+			// with nothing to release, since vadRef is only assigned above.
+			if (unmountedRef.current) {
+				vadRef.current = null;
+				await releaseVad(instance);
+				return false;
+			}
 			setIsListening(true);
 			return true;
 		} catch (err) {
 			vadRef.current = null;
 			// new() holds an ONNX session and start() may have taken the mic
 			// before throwing — abandoning the instance would leak both.
-			if (instance) await destroyQuietly(instance);
+			if (instance) await releaseVad(instance);
 			setIsListening(false);
 			setError(
 				err instanceof Error
@@ -293,8 +311,7 @@ export function useLiveTranscription({
 		if (instance) {
 			// pause() flushes the trailing utterance through onSpeechEnd before
 			// destroy() tears the graph down.
-			await instance.pause();
-			await destroyQuietly(instance);
+			await releaseVad(instance);
 		}
 		// Callers hand the shared worker to another capture path once this
 		// resolves, so the last transcribe() must have finished by then.
@@ -311,10 +328,11 @@ export function useLiveTranscription({
 
 	useEffect(() => {
 		return () => {
+			unmountedRef.current = true;
 			const instance = vadRef.current;
 			vadRef.current = null;
 			queueRef.current = [];
-			void instance?.destroy();
+			if (instance) void releaseVad(instance);
 		};
 	}, []);
 

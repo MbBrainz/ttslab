@@ -402,14 +402,24 @@ export function SttDemo({ model }: SttDemoProps) {
 			// Startup is still in flight — stopping now would race it and orphan
 			// the VAD that start() is about to install.
 			if (!live.isListening) return;
-			// stop() also waits for the queue to drain, so the worker is free
-			// before the claim is handed back.
-			await live.stop();
-			releaseCapture();
+			try {
+				// stop() also waits for the queue to drain, so the worker is free
+				// before the claim is handed back.
+				await live.stop();
+			} finally {
+				// A failed teardown must never strand the claim: that would leave
+				// both capture paths disabled until a page reload.
+				releaseCapture();
+			}
 			return;
 		}
 		if (!claimCapture("live")) return;
-		if (!(await live.start())) releaseCapture();
+		let started = false;
+		try {
+			started = await live.start();
+		} finally {
+			if (!started) releaseCapture();
+		}
 	}, [live.isListening, live.start, live.stop, claimCapture, releaseCapture]);
 
 	const clearTranscript = useCallback(() => {
