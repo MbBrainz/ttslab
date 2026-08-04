@@ -3,6 +3,7 @@
 import { Cpu, Mic, Zap } from "lucide-react";
 import { GpuEstimate } from "@/components/gpu-estimate";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { MicWaveform } from "@/components/mic-waveform";
 import { type ModelState, ModelStatus } from "@/components/model-status";
 import { Button } from "@/components/ui/button";
 import { trackModelLoad, trackSTTTranscription } from "@/lib/analytics";
@@ -16,12 +17,22 @@ type SttDemoProps = {
 	model: Model;
 };
 
+/** close() rejects on an already-closed context, so guard and swallow. */
+async function closeAudioContext(ctx: AudioContext | null): Promise<void> {
+	if (!ctx || ctx.state === "closed") return;
+	try {
+		await ctx.close();
+	} catch {
+		// Already closed or closing — nothing to do.
+	}
+}
+
 export function SttDemo({ model }: SttDemoProps) {
 	const [modelState, setModelState] = useState<ModelState>({
 		status: "not_loaded",
 	});
 	const [isRecording, setIsRecording] = useState(false);
-	const [audioLevel, setAudioLevel] = useState(0);
+	const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
 	const [transcript, setTranscript] = useState("");
 	const [recordingDuration, setRecordingDuration] = useState(0);
 
@@ -34,24 +45,34 @@ export function SttDemo({ model }: SttDemoProps) {
 	const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 	const audioChunksRef = useRef<Blob[]>([]);
-	const analyserRef = useRef<AnalyserNode | null>(null);
-	const levelAnimRef = useRef<ReturnType<typeof requestAnimationFrame> | null>(
-		null,
-	);
 	const streamRef = useRef<MediaStream | null>(null);
+	// The source node is retained alongside the context: an unreferenced
+	// MediaStreamAudioSourceNode can be collected mid-recording in Chrome.
+	const audioCtxRef = useRef<AudioContext | null>(null);
+	const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+
+	/** Release the mic, the source node and the capture AudioContext. */
+	const teardownCapture = useCallback(() => {
+		sourceRef.current?.disconnect();
+		sourceRef.current = null;
+		setAnalyser(null);
+		void closeAudioContext(audioCtxRef.current);
+		audioCtxRef.current = null;
+		if (streamRef.current) {
+			for (const track of streamRef.current.getTracks()) {
+				track.stop();
+			}
+			streamRef.current = null;
+		}
+	}, []);
 
 	// Clean up on unmount
 	useEffect(() => {
 		return () => {
 			if (timerRef.current) clearInterval(timerRef.current);
-			if (levelAnimRef.current) cancelAnimationFrame(levelAnimRef.current);
-			if (streamRef.current) {
-				for (const track of streamRef.current.getTracks()) {
-					track.stop();
-				}
-			}
+			teardownCapture();
 		};
-	}, []);
+	}, [teardownCapture]);
 
 	const handleDownload = useCallback(async () => {
 		if (loadingRef.current) return;
@@ -118,24 +139,15 @@ export function SttDemo({ model }: SttDemoProps) {
 			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 			streamRef.current = stream;
 
-			// Set up audio level analysis
+			// Set up the analyser that feeds the live waveform
 			const audioCtx = new AudioContext();
 			const source = audioCtx.createMediaStreamSource(stream);
-			const analyser = audioCtx.createAnalyser();
-			analyser.fftSize = 256;
-			source.connect(analyser);
-			analyserRef.current = analyser;
-
-			// Animate audio level
-			const dataArray = new Uint8Array(analyser.frequencyBinCount);
-			function updateLevel() {
-				analyser.getByteFrequencyData(dataArray);
-				const avg =
-					dataArray.reduce((sum, val) => sum + val, 0) / dataArray.length;
-				setAudioLevel(avg / 255);
-				levelAnimRef.current = requestAnimationFrame(updateLevel);
-			}
-			updateLevel();
+			const node = audioCtx.createAnalyser();
+			node.fftSize = 2048;
+			source.connect(node);
+			audioCtxRef.current = audioCtx;
+			sourceRef.current = source;
+			setAnalyser(node);
 
 			// Start MediaRecorder
 			const mimeType = pickRecordingMimeType();
@@ -160,6 +172,7 @@ export function SttDemo({ model }: SttDemoProps) {
 				setRecordingDuration((prev) => prev + 100);
 			}, 100);
 		} catch (err) {
+			teardownCapture();
 			setModelState({
 				status: "error",
 				code: "MIC_ACCESS_DENIED",
@@ -170,23 +183,21 @@ export function SttDemo({ model }: SttDemoProps) {
 				recoverable: true,
 			});
 		}
-	}, []);
+	}, [teardownCapture]);
 
 	const stopRecording = useCallback(async () => {
 		setIsRecording(false);
-		setAudioLevel(0);
 
 		if (timerRef.current) {
 			clearInterval(timerRef.current);
 			timerRef.current = null;
 		}
-		if (levelAnimRef.current) {
-			cancelAnimationFrame(levelAnimRef.current);
-			levelAnimRef.current = null;
-		}
 
 		const recorder = mediaRecorderRef.current;
-		if (!recorder || recorder.state === "inactive") return;
+		if (!recorder || recorder.state === "inactive") {
+			teardownCapture();
+			return;
+		}
 
 		// Wait for the recorder to finish
 		const audioBlob = await new Promise<Blob>((resolve) => {
@@ -200,13 +211,7 @@ export function SttDemo({ model }: SttDemoProps) {
 			recorder.stop();
 		});
 
-		// Stop microphone
-		if (streamRef.current) {
-			for (const track of streamRef.current.getTracks()) {
-				track.stop();
-			}
-			streamRef.current = null;
-		}
+		teardownCapture();
 
 		const startTime = performance.now();
 
@@ -226,20 +231,23 @@ export function SttDemo({ model }: SttDemoProps) {
 			});
 		}, 100);
 
+		// Decoding needs its own 16kHz context; it is closed as soon as the
+		// samples are copied out, before the (much longer) transcribe await.
+		const decodeCtx = new AudioContext({ sampleRate: 16000 });
+
 		try {
-			// Decode audio blob to Float32Array
-			const audioCtx = new AudioContext({ sampleRate: 16000 });
 			const arrayBuffer = await audioBlob.arrayBuffer();
-			const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-			const pcm = audioBuffer.getChannelData(0);
+			const audioBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
+			// Copy: transcribe() transfers the buffer to the worker.
+			const pcm = new Float32Array(audioBuffer.getChannelData(0));
+			const audioDuration = audioBuffer.duration;
+			await closeAudioContext(decodeCtx);
 
 			const result = await transcribe(model.slug, pcm, 16000);
 
 			clearInterval(timer);
 
 			setTranscript(result.text);
-
-			const audioDuration = audioBuffer.duration;
 
 			trackSTTTranscription(
 				model.slug,
@@ -269,8 +277,11 @@ export function SttDemo({ model }: SttDemoProps) {
 					err instanceof Error ? err.message : "Failed to transcribe audio",
 				recoverable: true,
 			});
+		} finally {
+			// No-op if the success path already closed it.
+			await closeAudioContext(decodeCtx);
 		}
-	}, [model.slug, transcribe]);
+	}, [model.slug, transcribe, teardownCapture]);
 
 	const toggleRecording = useCallback(() => {
 		if (isRecording) {
@@ -341,22 +352,10 @@ export function SttDemo({ model }: SttDemoProps) {
 					</div>
 				)}
 
-				{/* Audio level indicator */}
+				{/* Live waveform */}
 				{isRecording && (
-					<div className="flex h-16 w-full max-w-xs items-end justify-center gap-1">
-						{Array.from({ length: 20 }, (_, i) => {
-							const barHeight = Math.max(
-								4,
-								Math.min(64, audioLevel * 64 * (0.5 + Math.random() * 0.5)),
-							);
-							return (
-								<div
-									key={i}
-									className="w-2 rounded-full bg-primary/80 transition-all duration-75"
-									style={{ height: `${barHeight}px` }}
-								/>
-							);
-						})}
+					<div className="w-full max-w-xs">
+						<MicWaveform analyser={analyser} isActive={isRecording} />
 					</div>
 				)}
 			</div>
