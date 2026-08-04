@@ -69,6 +69,53 @@ You are testing the TTS Lab web app at http://localhost:3001. Perform an end-to-
 | Kokoro 82M | PASS (249s load, 2.4s gen) | Not tested | Baseline reference |
 | Chatterbox Turbo | PASS (181s load, 6.3s gen) | BLOCKED — WASM-only | Browser JSEP WebGPU EP has no INT64 Cast kernel; ONNX spec requires INT64 for Shape/Unsqueeze. Unsolvable by model patching. |
 
+## STT demo: the capture claim, and the frozen-UI trade (2026-08-04)
+
+`stt-demo.tsx` has two capture paths — the one-shot recorder and live
+VAD-segmented transcription (`use-live-transcription.ts`) — and **they share one
+inference worker**. `WorkerTransport` keeps a single pending slot and overwrites
+it unconditionally, so two overlapping `transcribe()` calls resolve each other's
+promises: the first response settles the *second* caller's promise (wrong text
+in a segment) and the first hangs forever.
+
+Mutual exclusion is therefore enforced by `captureClaimRef` — a **synchronous**
+ref taken at the top of `startRecording` and of the live toggle, before any
+await. It cannot be `isRecording` / `live.isListening`: both only flip once
+their async startup resolves, leaving a window where both buttons are still
+enabled and both handlers run. The claim is held until *transcription* finishes,
+not just until the mic is released, because it guards the worker too; live
+`stop()` awaits its queue drain for the same reason.
+
+**Rules if you touch this:**
+- Every path that takes the claim must release it from a `finally`. A stranded
+  claim disables both capture paths until a page reload.
+- Anything that can throw during teardown goes through `releaseVad()`, which
+  never rethrows (it is called from inside `finally` blocks) but does
+  `console.warn` — a failed `destroy()` means the mic is still hot.
+- Do not "fix" this in `worker-transport.ts`. Its single-slot design is a
+  broader latent hazard tracked separately; the demo handles it locally.
+
+### Known behaviour change — frozen UI if `onstop` never fires
+
+`stopRecording` awaits `recorder.onstop` unbounded. If it never fires (recorder
+error, device yanked), the failure mode is now **different from before the claim
+existed**:
+
+- **Before:** the record button stayed enabled. A user could click again and get
+  a second overlapping `MediaRecorder` and `MediaStream` — a live UI, but
+  silently corrupting data.
+- **Now:** `modelState` never reaches `processing` or `error` and the claim
+  never releases, so *both* buttons stay permanently disabled with no error
+  shown. Honest-but-frozen, deliberately chosen over confusable-but-corrupting.
+
+This is a real regression in recoverability and should not be rediscovered as a
+surprise. **Tracked follow-up, deliberately not implemented:** put a timeout
+around the `onstop` promise that on expiry surfaces a `TRANSCRIBE_FAILED`-shaped
+error and calls `teardownCapture()` / `releaseCapture()`, instead of awaiting
+forever. (`recorder.stop()` itself sitting outside the try/finally is a related
+but unreachable gap — no await separates it from the `state === "inactive"`
+guard above it.)
+
 ## Automated Model QA Harness (`src/lib/testing/`)
 
 Full design: `docs/model-qa-harness.md`. Build order and scope: `docs/briefs/qa-harness.md`.

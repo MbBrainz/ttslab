@@ -80,18 +80,30 @@ interface QueuedUtterance {
  * built, and both throw when it is missing. They are swallowed independently so
  * that destroy() — which releases the ONNX session and the microphone — is
  * always attempted even when pause() throws. A throw escaping here would
- * propagate to the caller's teardown and strand whatever it holds.
+ * propagate to the caller's teardown and strand whatever it holds, so this
+ * never rethrows.
+ *
+ * It does warn, though: a failure here is usually the harmless "graph was never
+ * built" case, but it can also be a running session refusing to shut down, in
+ * which case the microphone stays hot and the ONNX session leaks. Those must
+ * not look identical from the outside.
  */
 export async function releaseVad(instance: MicVAD): Promise<void> {
 	try {
 		await instance.pause();
-	} catch {
-		// Never fully wired up, or already paused.
+	} catch (err) {
+		console.warn(
+			"[live-transcription] VAD pause() failed; continuing to destroy()",
+			err,
+		);
 	}
 	try {
 		await instance.destroy();
-	} catch {
-		// Nothing left to release.
+	} catch (err) {
+		console.warn(
+			"[live-transcription] VAD destroy() failed — the microphone and ONNX session may still be held",
+			err,
+		);
 	}
 }
 

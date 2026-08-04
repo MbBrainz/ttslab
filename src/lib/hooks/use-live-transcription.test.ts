@@ -7,9 +7,10 @@ import { releaseVad } from "./use-live-transcription";
  * building the audio graph, which is exactly the state a failed start leaves
  * behind.
  */
-function fakeVad(
-	failing: { pause?: boolean; destroy?: boolean } = {},
-): { pause: () => Promise<void>; destroy: () => Promise<void> } {
+function fakeVad(failing: { pause?: boolean; destroy?: boolean } = {}): {
+	pause: () => Promise<void>;
+	destroy: () => Promise<void>;
+} {
 	return {
 		pause: vi.fn(async () => {
 			if (failing.pause) throw new Error("pause: no audio instances");
