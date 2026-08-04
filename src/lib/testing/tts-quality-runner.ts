@@ -1,12 +1,13 @@
-import { analyzeAudio } from "./audio-analysis";
+import { type AudioQaMetrics, analyzeAudioQa } from "../audio-qa";
+import { measureEnergy } from "./audio-analysis";
 import { computeWER, werVerdict } from "./wer";
 import type {
 	QualityReport,
 	PhraseResult,
 	TestConfig,
 	TestPhrase,
-	AudioAnalysis,
 	CheckFailure,
+	EnergyResult,
 	Verdict,
 	WERResult,
 } from "./types";
@@ -102,7 +103,8 @@ function resampleAudio(
 
 /** Everything a gating rule is allowed to look at. */
 interface CheckContext {
-	analysis: AudioAnalysis;
+	qa: AudioQaMetrics;
+	energy: EnergyResult;
 	wer: WERResult;
 }
 
@@ -120,29 +122,56 @@ interface CheckRule {
 
 const CHECK_RULES: CheckRule[] = [
 	{
-		check: "echo",
-		value: (c) => c.analysis.echo.confidence,
-		warn: THRESHOLDS.echo.warn,
-		fail: THRESHOLDS.echo.fail,
+		// Runs first. NaN compares false against every threshold, so without an
+		// explicit count a broken tensor would sail through as a pass.
+		check: "integrity",
+		value: (c) => c.qa.integrity.nanCount + c.qa.integrity.infiniteCount,
+		warn: 0,
+		fail: 0,
 		direction: "above",
 	},
 	{
+		// Replaces the old `echo` autocorrelation, which could not see the 1-5s
+		// duplication it existed to catch. See cepstrum.ts for the measurements.
+		check: "cepstral_repeat",
+		value: (c) => c.qa.cepstral.ratio,
+		warn: THRESHOLDS.cepstralRatio.warn,
+		fail: THRESHOLDS.cepstralRatio.fail,
+		direction: "above",
+	},
+	{
+		check: "duration",
+		value: (c) => Math.abs(c.qa.duration?.log2Ratio ?? 0),
+		warn: THRESHOLDS.durationLog2Ratio.warn,
+		fail: THRESHOLDS.durationLog2Ratio.fail,
+		direction: "above",
+	},
+	{
+		// Peak-relative frame RMS, replacing the level-dependent per-sample test.
 		check: "silence",
-		value: (c) => c.analysis.silence.ratio,
-		warn: THRESHOLDS.silence.warn,
-		fail: THRESHOLDS.silence.fail,
+		value: (c) => c.qa.silence.silenceFraction,
+		warn: THRESHOLDS.frameSilence.warn,
+		fail: THRESHOLDS.frameSilence.fail,
 		direction: "above",
 	},
 	{
+		// Consecutive-run based, so an isolated full-scale peak no longer counts.
 		check: "clipping",
-		value: (c) => c.analysis.clipping.ratio,
-		warn: THRESHOLDS.clipping.warn,
-		fail: THRESHOLDS.clipping.fail,
+		value: (c) => c.qa.clipping.clippedFraction,
+		warn: THRESHOLDS.clippedFraction.warn,
+		fail: THRESHOLDS.clippedFraction.fail,
+		direction: "above",
+	},
+	{
+		check: "dc_offset",
+		value: (c) => c.qa.integrity.dcOffsetDb,
+		warn: THRESHOLDS.dcOffsetDb.warn,
+		fail: THRESHOLDS.dcOffsetDb.fail,
 		direction: "above",
 	},
 	{
 		check: "energy",
-		value: (c) => c.analysis.energy.rmsDb,
+		value: (c) => c.energy.rmsDb,
 		warn: THRESHOLDS.energyDb.warn,
 		fail: THRESHOLDS.energyDb.fail,
 		direction: "below",
@@ -207,7 +236,10 @@ async function testPhrase(
 ): Promise<PhraseResult> {
 	const result = await worker.synthesize(modelSlug, phrase.text, voice);
 
-	const audioAnalysis = analyzeAudio(result.audio, result.sampleRate);
+	// Reference text is passed so the duration check has an expectation to
+	// compare against — it is the only pre-ASR detector of a rate relabel.
+	const qa = analyzeAudioQa(result.audio, result.sampleRate, phrase.text);
+	const energy = measureEnergy(result.audio);
 
 	const resampled =
 		result.sampleRate !== TARGET_SAMPLE_RATE
@@ -216,13 +248,15 @@ async function testPhrase(
 
 	const transcript = await worker.transcribe(sttModel, resampled, TARGET_SAMPLE_RATE);
 	const werResult = computeWER(phrase.text, transcript.text);
-	const { verdict, failures } = phraseVerdict({ analysis: audioAnalysis, wer: werResult });
+	const { verdict, failures } = phraseVerdict({ qa, energy, wer: werResult });
 
 	return {
 		phrase: phrase.text,
 		category: phrase.category,
 		generationMs: result.metrics.totalMs,
-		audioAnalysis,
+		sampleRate: result.sampleRate,
+		qa,
+		energy,
 		verdict,
 		failures,
 		sttRoundTrip: {

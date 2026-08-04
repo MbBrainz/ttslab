@@ -163,10 +163,39 @@ So `I/N` is the primary non-termination signal and WER is the severity ranking o
 
 **Score a defect against its own reference sentence.** Scoring the stutter transcript against an unrelated reference reports `S=9` "mispronunciation" and turns a harness bug into an apparent metric bug. Mismatched ref/hyp pairs make S/D/I meaningless.
 
+### Tier-1 DSP metrics (`src/lib/audio-qa/`, 2026-08-04, verified)
+
+`CHECK_RULES` now gates on: `integrity` (NaN/Inf), `cepstral_repeat`, `duration`, `silence` (peak-relative frame RMS), `clipping` (consecutive runs), `dc_offset`, `energy`, `wer`, `insertion_rate`. `detectEcho` / `measureSilence` / `detectClipping` in `audio-analysis.ts` are **superseded and no longer gate anything** — they are kept only so the audio-qa tests can demonstrate the improvement. Do not add them back to `CHECK_RULES`.
+
+Measured through the real `runQualityTests()` against the committed `hero-demo-1.wav`:
+
+| scenario | before | after |
+|---|---|---|
+| healthy real Kokoro render | PASS | PASS |
+| duplicated x2 (concat) | PASS | **FAIL** `cepstral=876` |
+| overlap @1.2s | PASS | **FAIL** `cepstral=629` |
+| overlap @2.5s | PASS | **FAIL** `cepstral=679` |
+| rate relabel 24k→44.1k | PASS | **FAIL** `duration=0.803` |
+| truncated to 40% | WARN | **FAIL** `duration=1.247` |
+| time-stretched x2 | PASS | **FAIL** `cepstral=1213` |
+| NaN sample injected | PASS | **FAIL** `integrity=1` |
+| variable-speed overlap | PASS | PASS ← still blind, see below |
+
+All three real clean hero-demo renders PASS with zero failures (`cepstral` 68.7 / 122.2 / 32.6, `duration log2` 0.075 / 0.098 / −0.140).
+
+### Three spec values that were wrong — do not "restore" them
+
+1. **Cepstral band is half-duration, NOT the spec's fixed 0.15–3.0 s.** A duplicated utterance repeats at a lag equal to its original length, so a duplicated 5.2 s clip peaks at 5.2 s — outside a 3.0 s band. Band 0.15–3.0 s gives clean max 118.9 vs defect min 33.3 (**margin 0.28× — defects score BELOW clean, so no threshold works at all**). Band 0.15–dur/2 gives clean max 122.2 vs defect min 446.6 (margin 3.66×).
+2. **Cepstral fail threshold is 300, NOT the spec's 50.** At 50, **three of the six committed clean samples FAIL** (kokoro 68.7, hero-demo-1 68.7, hero-demo-2 122.2).
+3. **Frame-RMS uses a peak-relative gate (peak−40 dB), NOT the spec's absolute −45 dBFS.** An absolute gate is *more* level-dependent than the per-sample test it replaces — identical speech reads 0.235 / 0.470 / 0.990 / 1.000 at 0/−20/−34/−46 dB. Peak-relative reads 0.235 at every level. An absolute −60 dBFS floor still catches genuinely dead audio.
+
 ### Live blind spots — do not trust a PASS as proof of these
 
-- **`detectEcho` cannot see long-lag duplication.** It scans 50–500 ms. Measured on `speecht5.wav`: clean `0.072`, duplicated-concat `0.070`, overlap @1.2 s `0.073` — indistinguishable. It caught the 0.4 s case only because that lag is inside its window. Autoregressive looping happens at 1–5 s. Cepstral peak prominence replaces it (spec Tier 1 #1).
-- **The silence check is level-dependent**, per-sample not frame-RMS, and its margin is thin (0.272 vs a 0.3 warn). Same clean speech at a lower output level crosses the threshold on nothing. Frame-RMS replacement is load-bearing, not cosmetic.
+- **A cepstral PASS is NOT proof that there is no overlap.** Variable-speed overlap is **invisible**: a time-warped copy has no single lag, so no fixed-lag metric can see it. Measured 7.9 vs a clean 8.7 — no separation whatsoever. This is structural, not a tuning problem, and it is asserted as a test in `cepstrum.test.ts` so it cannot quietly regress into looking solved. `pauseFraction` is the only partial cover, and it is weak (clean 0.315 vs overlapped 0.242, a 23% drop versus the 2× the spec claims), which is why it is **reported but deliberately not gated** — any threshold between those two numbers would false-fail a model that simply pauses less.
+- **The 300 cepstral threshold rests on a 6-sample, 3-model clean population** (max observed 122.2). That is a small basis for a false-positive bound. Clean speech with regular prosodic rhythm scores high — the kokoro sample peaks at exactly 2.000 s and hero-demo-2 at 0.500 s, both genuinely clean (raw waveform xcorr 0.02 and −0.003; it is their *syllable envelopes* that correlate, 0.60 and 0.53). A rhythmic new model could plausibly clear 200 and warn. **Re-measure this population as models are added** rather than assuming the threshold holds.
+- **The duration prior (2.2 words/sec) is calibrated against ONE model** — all three hero demos are Kokoro. A model speaking 1.3× off it lands at log2 0.38, right at the 0.4 warn. Override via the `wordsPerSecond` argument per model rather than moving the threshold.
+- **A 24k→16k relabel only WARNS** (measured log2 0.660 against a 0.7 fail). A duration warn must be investigated, never ignored. 24k↔22.05k is undetectable acoustically (0.197) — assert on `sampleRate` directly, which `PhraseResult` now carries.
+- **WER dilutes numeric misreadings** — see the normalizer section above.
 - **Voice cloning and streaming are untested.** `testPhrase()` calls `synthesize(slug, text, voice)` with no `speakerEmbeddingUrl`, so the known-broken cloned path is structurally untestable.
 
 ### Verifying a change to the harness

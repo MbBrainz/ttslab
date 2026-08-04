@@ -1,3 +1,5 @@
+import type { AudioQaMetrics } from "../audio-qa";
+
 export type Verdict = "pass" | "warn" | "fail";
 
 export interface EchoResult {
@@ -61,7 +63,11 @@ export interface PhraseResult {
 	phrase: string;
 	category: string;
 	generationMs: number;
-	audioAnalysis: AudioAnalysis;
+	/** Asserted directly — 48k vs 44.1k is undetectable acoustically. */
+	sampleRate: number;
+	/** Tier-1 DSP metrics. These are what gate. */
+	qa: AudioQaMetrics;
+	energy: EnergyResult;
 	/** Combined acoustic + STT verdict for this phrase. */
 	verdict: Verdict;
 	/** Every check that warned or failed. Empty when `verdict` is "pass". */

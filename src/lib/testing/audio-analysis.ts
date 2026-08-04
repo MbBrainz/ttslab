@@ -24,6 +24,15 @@ function autocorrelationAt(pcm: Float32Array, delaySamples: number): number {
 	return denom === 0 ? 0 : sum / denom;
 }
 
+/**
+ * SUPERSEDED by `cepstralPeakProminence` in src/lib/audio-qa/cepstrum.ts.
+ * No longer gates any verdict.
+ *
+ * Its 50-500ms search window cannot see the 1-5s duplication it existed to
+ * catch: measured clean 0.072, duplicated 0.070, overlap@1.2s 0.073. Kept only
+ * because the audio-qa tests compare against it to demonstrate the improvement.
+ * Do not add it back to CHECK_RULES.
+ */
 export function detectEcho(
 	pcm: Float32Array,
 	sampleRate: number,
@@ -50,6 +59,13 @@ export function detectEcho(
 	};
 }
 
+/**
+ * SUPERSEDED by `measureFrameSilence` in src/lib/audio-qa/silence.ts.
+ * No longer gates any verdict.
+ *
+ * Level-dependent (0.230 at full level vs 0.900 at -46dB on identical speech)
+ * and counts a tone's zero crossings as silence. Kept for comparison tests.
+ */
 export function measureSilence(
 	pcm: Float32Array,
 	sampleRate: number,
@@ -84,6 +100,11 @@ export function measureSilence(
 	};
 }
 
+/**
+ * SUPERSEDED by `detectRunClipping` in src/lib/audio-qa/clipping.ts.
+ * No longer gates any verdict. Counts isolated full-scale samples, which are
+ * legitimate waveform peaks. Kept for comparison tests.
+ */
 export function detectClipping(pcm: Float32Array): ClippingResult {
 	const threshold = 0.99;
 	let count = 0;
