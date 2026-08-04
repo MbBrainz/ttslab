@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { speechLike, withNaNAt } from "../audio-qa/synthetic-signals";
 import { type InferenceWorkerAPI, runQualityTests } from "./tts-quality-runner";
 import type { TestVariant } from "./types";
@@ -19,6 +19,12 @@ interface FakeOptions {
 	transcript?: string;
 	/** Emit no chunks before onEnd — a stream that produced nothing. */
 	emitNoChunks?: boolean;
+	/** Never call onEnd — a hung generation. */
+	hang?: boolean;
+	/** Drop cancelStream from the adapter. */
+	noCancel?: boolean;
+	/** Records cancelStream() calls. */
+	cancels?: { count: number };
 }
 
 function fakeWorker(
@@ -52,6 +58,13 @@ function fakeWorker(
 
 	return {
 		...base,
+		...(options.noCancel
+			? {}
+			: {
+					cancelStream: () => {
+						if (options.cancels) options.cancels.count++;
+					},
+				}),
 		synthesizeStream: (
 			_slug,
 			_text,
@@ -60,6 +73,7 @@ function fakeWorker(
 			callbacks,
 		) => {
 			calls.push({ kind: "synthesizeStream", speakerEmbeddingUrl });
+			if (options.hang) return; // never calls onEnd
 			setTimeout(() => {
 				if (!options.emitNoChunks) {
 					const chunkLength = Math.floor(audio.length / 4);
@@ -199,6 +213,65 @@ describe("streaming path", () => {
 		expect(report.overall).toBe("fail");
 		expect(report.errors[0]).toMatch(/no synthesizeStream/);
 		expect(calls.filter((c) => c.kind === "synthesize")).toHaveLength(0);
+	});
+
+	it("CANCELS a hung stream instead of abandoning it", async () => {
+		// Rejecting without cancelling leaves the generation running inside the
+		// worker while the runner disposes the model and loads the next one, so
+		// an orphan can contaminate the following model's results.
+		vi.useFakeTimers();
+		try {
+			const cancels = { count: 0 };
+			const promise = run(fakeWorker([], { hang: true, cancels }), [
+				{ id: "s", streaming: true },
+			]);
+			await vi.advanceTimersByTimeAsync(121_000);
+			const [report] = await promise;
+
+			expect(cancels.count).toBe(1);
+			expect(report.overall).toBe("fail");
+			expect(report.errors[0]).toMatch(/did not finish/);
+			expect(report.errors[0]).toMatch(/\(cancelled\)/);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("says so explicitly when the adapter cannot cancel", async () => {
+		vi.useFakeTimers();
+		try {
+			const promise = run(fakeWorker([], { hang: true, noCancel: true }), [
+				{ id: "s", streaming: true },
+			]);
+			await vi.advanceTimersByTimeAsync(121_000);
+			const [report] = await promise;
+			expect(report.errors[0]).toMatch(/NOT cancelled/);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("ignores callbacks that fire after a timeout", async () => {
+		// Cancellation is not instantaneous; a late onEnd must not resolve a
+		// promise that already rejected, nor double-settle.
+		vi.useFakeTimers();
+		try {
+			let late: (() => void) | undefined;
+			const worker: InferenceWorkerAPI = {
+				...fakeWorker([], { hang: true }),
+				synthesizeStream: (_s, _t, _v, _e, callbacks) => {
+					late = () =>
+						callbacks.onEnd({ totalMs: 1, sampleRate: SR, totalChunks: 0 });
+				},
+			};
+			const promise = run(worker, [{ id: "s", streaming: true }]);
+			await vi.advanceTimersByTimeAsync(121_000);
+			late?.();
+			const [report] = await promise;
+			expect(report.errors[0]).toMatch(/did not finish/);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("fails a stream that ends without emitting audio", async () => {

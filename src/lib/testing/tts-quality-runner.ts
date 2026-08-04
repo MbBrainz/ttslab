@@ -60,11 +60,22 @@ export interface InferenceWorkerAPI {
 				totalChunks: number;
 				sentenceText: string;
 			}) => void;
-			onEnd: (data: { totalMs: number; sampleRate: number; totalChunks: number }) => void;
+			onEnd: (data: {
+				totalMs: number;
+				sampleRate: number;
+				totalChunks: number;
+			}) => void;
 			onError: (error: Error) => void;
 		},
 		language?: string,
 	): void;
+	/**
+	 * Aborts an in-flight stream. Optional only because a minimal adapter may
+	 * not have one, but an adapter that provides `synthesizeStream` should
+	 * provide this too — without it a timed-out generation keeps running inside
+	 * the worker after the harness has given up on it.
+	 */
+	cancelStream?(): void;
 	transcribe(
 		slug: string,
 		audio: Float32Array,
@@ -217,7 +228,11 @@ const CHECK_RULES: CheckRule[] = [
 	},
 ];
 
-function breaches(value: number, threshold: number, direction: "above" | "below"): boolean {
+function breaches(
+	value: number,
+	threshold: number,
+	direction: "above" | "below",
+): boolean {
 	return direction === "above" ? value > threshold : value < threshold;
 }
 
@@ -233,12 +248,16 @@ function evaluateRule(rule: CheckRule, ctx: CheckContext): CheckFailure | null {
 }
 
 /** Worst severity wins. */
-function phraseVerdict(ctx: CheckContext): { verdict: Verdict; failures: CheckFailure[] } {
+function phraseVerdict(ctx: CheckContext): {
+	verdict: Verdict;
+	failures: CheckFailure[];
+} {
 	const failures = CHECK_RULES.map((r) => evaluateRule(r, ctx)).filter(
 		(f): f is CheckFailure => f !== null,
 	);
 
-	if (failures.some((f) => f.severity === "fail")) return { verdict: "fail", failures };
+	if (failures.some((f) => f.severity === "fail"))
+		return { verdict: "fail", failures };
 	if (failures.length > 0) return { verdict: "warn", failures };
 	return { verdict: "pass", failures };
 }
@@ -259,7 +278,13 @@ interface SynthesisResult {
 	streaming?: { chunkCount: number; firstChunkMs: number };
 }
 
-/** A hung stream must fail the case, not hang the whole run. */
+/**
+ * A hung stream must fail the case, not hang the whole run — and must be
+ * CANCELLED, not merely abandoned. Rejecting the harness-side promise without
+ * cancelling leaves the generation running inside the worker while the runner
+ * moves on to disposeModel() and the next model, so an orphaned generation can
+ * race or contaminate the following model's results.
+ */
 const STREAM_TIMEOUT_MS = 120_000;
 
 function concatChunks(chunks: Float32Array[]): Float32Array {
@@ -290,7 +315,9 @@ function synthesizeStreaming(
 ): Promise<SynthesisResult> {
 	if (!worker.synthesizeStream) {
 		return Promise.reject(
-			new Error("Streaming variant requested but the worker adapter has no synthesizeStream"),
+			new Error(
+				"Streaming variant requested but the worker adapter has no synthesizeStream",
+			),
 		);
 	}
 
@@ -299,35 +326,69 @@ function synthesizeStreaming(
 		const startedAt = Date.now();
 		let firstChunkMs = 0;
 		let sampleRate = 0;
+		let settled = false;
+
+		/** Callbacks can still fire after cancellation; ignore them. */
+		const settle = (action: () => void) => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timer);
+			action();
+		};
 
 		const timer = setTimeout(() => {
-			reject(new Error(`Stream did not finish within ${STREAM_TIMEOUT_MS}ms`));
+			settle(() => {
+				// Cancel BEFORE rejecting. The caller marks the phrase an error and
+				// moves straight on to disposeModel() and the next model; an
+				// uncancelled generation would still be running through that.
+				if (worker.cancelStream) {
+					try {
+						worker.cancelStream();
+					} catch {
+						// A failed cancel must not mask the timeout error.
+					}
+				}
+				reject(
+					new Error(
+						worker.cancelStream
+							? `Stream did not finish within ${STREAM_TIMEOUT_MS}ms (cancelled)`
+							: `Stream did not finish within ${STREAM_TIMEOUT_MS}ms (NOT cancelled — adapter has no cancelStream, generation may still be running)`,
+					),
+				);
+			});
 		}, STREAM_TIMEOUT_MS);
 
-		worker.synthesizeStream?.(modelSlug, text, voice, speakerEmbeddingUrl ?? null, {
-			onChunk: (data) => {
-				if (chunks.length === 0) firstChunkMs = Date.now() - startedAt;
-				chunks.push(data.audio);
-				sampleRate = data.sampleRate;
+		worker.synthesizeStream?.(
+			modelSlug,
+			text,
+			voice,
+			speakerEmbeddingUrl ?? null,
+			{
+				onChunk: (data) => {
+					if (settled) return;
+					if (chunks.length === 0) firstChunkMs = Date.now() - startedAt;
+					chunks.push(data.audio);
+					sampleRate = data.sampleRate;
+				},
+				onEnd: (data) => {
+					settle(() => {
+						if (chunks.length === 0) {
+							reject(new Error("Stream ended without emitting any audio"));
+							return;
+						}
+						resolve({
+							audio: concatChunks(chunks),
+							sampleRate: sampleRate || data.sampleRate,
+							totalMs: data.totalMs,
+							streaming: { chunkCount: chunks.length, firstChunkMs },
+						});
+					});
+				},
+				onError: (error) => {
+					settle(() => reject(error));
+				},
 			},
-			onEnd: (data) => {
-				clearTimeout(timer);
-				if (chunks.length === 0) {
-					reject(new Error("Stream ended without emitting any audio"));
-					return;
-				}
-				resolve({
-					audio: concatChunks(chunks),
-					sampleRate: sampleRate || data.sampleRate,
-					totalMs: data.totalMs,
-					streaming: { chunkCount: chunks.length, firstChunkMs },
-				});
-			},
-			onError: (error) => {
-				clearTimeout(timer);
-				reject(error);
-			},
-		});
+		);
 	});
 }
 
@@ -339,7 +400,13 @@ async function synthesizeVariant(
 	variant: TestVariant,
 ): Promise<SynthesisResult> {
 	if (variant.streaming) {
-		return synthesizeStreaming(worker, modelSlug, text, voice, variant.speakerEmbeddingUrl);
+		return synthesizeStreaming(
+			worker,
+			modelSlug,
+			text,
+			voice,
+			variant.speakerEmbeddingUrl,
+		);
 	}
 
 	const result = await worker.synthesize(
@@ -370,7 +437,13 @@ interface PhraseTestArgs {
 
 async function testPhrase(args: PhraseTestArgs): Promise<PhraseResult> {
 	const { worker, modelSlug, sttModel, phrase, voice, variant } = args;
-	const result = await synthesizeVariant(worker, modelSlug, phrase.text, voice, variant);
+	const result = await synthesizeVariant(
+		worker,
+		modelSlug,
+		phrase.text,
+		voice,
+		variant,
+	);
 
 	args.onAudio?.(result.audio, result.sampleRate);
 
@@ -384,7 +457,11 @@ async function testPhrase(args: PhraseTestArgs): Promise<PhraseResult> {
 			? resampleAudio(result.audio, result.sampleRate, TARGET_SAMPLE_RATE)
 			: result.audio;
 
-	const transcript = await worker.transcribe(sttModel, resampled, TARGET_SAMPLE_RATE);
+	const transcript = await worker.transcribe(
+		sttModel,
+		resampled,
+		TARGET_SAMPLE_RATE,
+	);
 	const werResult = computeWER(phrase.text, transcript.text);
 	const { verdict, failures } = phraseVerdict({ qa, energy, wer: werResult });
 
@@ -427,7 +504,8 @@ interface ModelTestArgs {
 }
 
 async function testModel(args: ModelTestArgs): Promise<QualityReport> {
-	const { worker, slug, sttModel, phrases, variant, backend, onProgress } = args;
+	const { worker, slug, sttModel, phrases, variant, backend, onProgress } =
+		args;
 	const errors: string[] = [];
 	const tests: PhraseResult[] = [];
 	let loadTimeMs = 0;
@@ -461,15 +539,25 @@ async function testModel(args: ModelTestArgs): Promise<QualityReport> {
 					voice,
 					variant,
 					onAudio: (audio, sampleRate) =>
-						args.onAudio?.({ slug, variant: variant.id, phraseIndex: i, audio, sampleRate }),
+						args.onAudio?.({
+							slug,
+							variant: variant.id,
+							phraseIndex: i,
+							audio,
+							sampleRate,
+						}),
 				});
 				tests.push(result);
 			} catch (err) {
-				errors.push(`Phrase "${phrases[i].text}": ${err instanceof Error ? err.message : String(err)}`);
+				errors.push(
+					`Phrase "${phrases[i].text}": ${err instanceof Error ? err.message : String(err)}`,
+				);
 			}
 		}
 	} catch (err) {
-		errors.push(`Load failed: ${err instanceof Error ? err.message : String(err)}`);
+		errors.push(
+			`Load failed: ${err instanceof Error ? err.message : String(err)}`,
+		);
 	}
 
 	try {
@@ -518,15 +606,22 @@ export async function runQualityTests(
 			: allPhrases;
 	const sttModel = config.sttModel ?? DEFAULT_STT_MODEL;
 	const backend = config.backend ?? "auto";
-	const variants = config.variants?.length ? config.variants : [DEFAULT_VARIANT];
+	const variants = config.variants?.length
+		? config.variants
+		: [DEFAULT_VARIANT];
 
 	// 1. Load STT judge model
-	onProgress?.({ phase: "loading-stt", message: `Loading STT judge: ${sttModel}` });
+	onProgress?.({
+		phase: "loading-stt",
+		message: `Loading STT judge: ${sttModel}`,
+	});
 
 	try {
 		await worker.loadModel(sttModel, { backend: "wasm" });
 	} catch (err) {
-		throw new Error(`Failed to load STT judge (${sttModel}): ${err instanceof Error ? err.message : String(err)}`);
+		throw new Error(
+			`Failed to load STT judge (${sttModel}): ${err instanceof Error ? err.message : String(err)}`,
+		);
 	}
 
 	// 2. Test each TTS model

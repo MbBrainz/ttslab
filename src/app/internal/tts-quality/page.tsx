@@ -131,6 +131,9 @@ function buildWorkerAdapter(
 		loadModel: hook.loadModel,
 		synthesize: hook.synthesize,
 		synthesizeStream: hook.synthesizeStream,
+		// Without this a timed-out stream is abandoned rather than cancelled,
+		// and keeps generating while the next model loads.
+		cancelStream: hook.cancelStream,
 		transcribe: hook.transcribe,
 		disposeModel: hook.dispose,
 	};
