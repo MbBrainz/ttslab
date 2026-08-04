@@ -69,7 +69,40 @@ You are testing the TTS Lab web app at http://localhost:3001. Perform an end-to-
 | Kokoro 82M | PASS (249s load, 2.4s gen) | Not tested | Baseline reference |
 | Chatterbox Turbo | PASS (181s load, 6.3s gen) | BLOCKED — WASM-only | Browser JSEP WebGPU EP has no INT64 Cast kernel; ONNX spec requires INT64 for Shape/Unsqueeze. Unsolvable by model patching. |
 
-### WebGPU-Specific Debugging
+## Automated Model QA Harness (`src/lib/testing/`)
+
+Full design: `docs/model-qa-harness.md`. Build order and scope: `docs/briefs/qa-harness.md`.
+
+### Acoustic checks now gate the verdict (2026-08-04, verified)
+
+`phraseVerdict()` was dead code and `overallVerdict()` read only `sttRoundTrip.verdict`, so every detector in `audio-analysis.ts` ran but **could not fail a test** — WER was the sole gate. Fixed: `phraseVerdict()` returns `{verdict, failures}`, is called from `testPhrase()`, and `overallVerdict()` reads the combined phrase verdict.
+
+Checks are a rule table in `tts-quality-runner.ts` (value getter + warn/fail threshold + direction). Each breach is reported as `CheckFailure {check, value, threshold, severity}` on `PhraseResult.failures` — not a bare `"fail"` — which is the shape `report.json` needs. Add a check by appending to `CHECK_RULES`, not by editing verdict logic.
+
+Verified through the real `runQualityTests()` with a fake worker (before = old STT-only logic):
+
+| scenario | before | after |
+|---|---|---|
+| healthy speecht5 / kokoro / piper / hero-demo | PASS | PASS |
+| overlap @0.4s, transcript perfect | PASS | **FAIL** `echo=0.527` |
+| dead audio (zeros) + Whisper hallucination | PASS | **FAIL** `silence=1.000`, `energy=-Inf` |
+| too quiet (−60 dB), transcript perfect | PASS | **FAIL** `silence=1.000`, `energy=−89.7` |
+| clipped (12× overdrive) | PASS | **FAIL** `clipping=0.076` |
+| garbage transcript | FAIL | FAIL `wer=1.000` |
+
+**False-fail margins measured on the committed `public/audio-samples/*.wav`** — re-check these before changing any threshold: echo `0.023–0.072` vs 0.3 warn; silence `0.191–0.272` vs 0.3; clipping `0.00000` vs 0.001; rms `−22…−27 dB` vs −40.
+
+### Live blind spots — do not trust a PASS as proof of these
+
+- **`detectEcho` cannot see long-lag duplication.** It scans 50–500 ms. Measured on `speecht5.wav`: clean `0.072`, duplicated-concat `0.070`, overlap @1.2 s `0.073` — indistinguishable. It caught the 0.4 s case only because that lag is inside its window. Autoregressive looping happens at 1–5 s. Cepstral peak prominence replaces it (spec Tier 1 #1).
+- **The silence check is level-dependent**, per-sample not frame-RMS, and its margin is thin (0.272 vs a 0.3 warn). Same clean speech at a lower output level crosses the threshold on nothing. Frame-RMS replacement is load-bearing, not cosmetic.
+- **Voice cloning and streaming are untested.** `testPhrase()` calls `synthesize(slug, text, voice)` with no `speakerEmbeddingUrl`, so the known-broken cloned path is structurally untestable.
+
+### Verifying a change to the harness
+
+There is **no test runner configured** in this repo (no vitest/jest). Until there is, prove scoring changes with `npx tsx` against a fake `InferenceWorkerAPI` and the committed WAVs — drive the real `runQualityTests()`, not a reimplementation, and report actual before/after numbers. "It compiles" is not evidence; that failure mode is exactly why this harness exists.
+
+## WebGPU-Specific Debugging
 
 When a model fails on WebGPU:
 1. Check if `navigator.gpu.requestAdapter()` returns an adapter (not null)
