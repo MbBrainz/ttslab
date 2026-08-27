@@ -10,6 +10,17 @@ let model: any = null;
 let pastKeyValues: any = null;
 let cancelled = false;
 
+// Pin HF revisions where the current upstream export no longer runs on the
+// onnxruntime-web build pinned in pnpm-workspace.yaml. The Apr 22 2026
+// re-export of Qwen3.5 ("Upload optimized models (#2)") fuses its conv layers
+// into com.microsoft::CausalConvWithState, which ORT 1.25.0-dev does not
+// register — session creation throws before any inference. This revision is
+// the last pre-re-export commit (Mar 24 2026), the same files the voice agent
+// shipped against in April.
+const HF_REVISIONS: Record<string, string> = {
+	"onnx-community/Qwen3.5-0.8B-Text-ONNX": "c76a8adddf6019838b0041ee7f29e8136d43f15b",
+};
+
 const SYSTEM_PROMPT =
 	"You are a helpful voice assistant having a real-time conversation. Keep responses concise — 1-3 sentences maximum. Never use markdown formatting, bullet points, or numbered lists. Never use emojis. Be natural and conversational. Remember what the user said earlier in the conversation and refer back to it when relevant. Begin each reply with a brief, natural acknowledgment — one or two words followed by a period — the way a person would naturally react before responding. Vary these freely and match them to the context of what was said.";
 
@@ -61,13 +72,17 @@ async function handleCommand(cmd: LlmWorkerCommand) {
 					}
 				};
 
+				const revision = HF_REVISIONS[cmd.hfId];
+
 				tokenizer = await AutoTokenizer.from_pretrained(cmd.hfId, {
+					revision,
 					progress_callback: progressCallback,
 				});
 
 				model = await AutoModelForCausalLM.from_pretrained(cmd.hfId, {
 					device,
 					dtype,
+					revision,
 					progress_callback: progressCallback,
 				});
 
