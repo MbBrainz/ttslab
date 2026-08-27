@@ -325,7 +325,7 @@ Within *one* model the rate spans 2.05–3.16 w/s — a **1.54× spread, log2 0.
 
 ### Verifying a change to the harness
 
-`pnpm test` (vitest, 131 tests). Prove scoring changes with real before/after numbers — drive the real `runQualityTests()` against a fake `InferenceWorkerAPI` and the committed WAVs, not a reimplementation. "It compiles" is not evidence; that failure mode is exactly why this harness exists.
+`pnpm test` (vitest, 170 tests). Prove scoring changes with real before/after numbers — drive the real `runQualityTests()` against a fake `InferenceWorkerAPI` and the committed WAVs, not a reimplementation. "It compiles" is not evidence; that failure mode is exactly why this harness exists.
 
 Calibrate thresholds against **real** output, not synthetic fixtures alone. Every threshold that turned out wrong here was wrong because it had only been checked against synthetic signals: the cepstral 50, the absolute silence gate, and the duration 0.4 all survived synthetic testing and failed on real audio.
 
