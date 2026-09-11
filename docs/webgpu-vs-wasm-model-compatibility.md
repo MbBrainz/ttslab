@@ -74,6 +74,55 @@ This is not a temporary implementation gap — it is a language-level limitation
 - **Tracking issue**: [gpuweb/gpuweb#5152](https://github.com/gpuweb/gpuweb/issues/5152) discusses adding 64-bit integer support to WGSL
 - **Potential workaround**: Emulating INT64 via `vec2<u32>` (two 32-bit values), but ONNX Runtime has not adopted this approach
 
+### `@huggingface/kernels` does NOT solve this — evaluated 2026-09-11, rejected
+
+The [WebGPU kernels announcement](https://huggingface.co/blog/webgpu-kernels)
+(`@huggingface/kernels`, 200+ WGSL kernels served from the Hub) reads like the
+`vec2<u32>` workaround above finally landing. **It is not.** Two independent
+reasons, either one sufficient — check both before re-opening this.
+
+**1. It shares the exact same INT64 limitation.** From its own `index.d.ts`:
+
+```ts
+export type KernelStorageDtype = Exclude<KernelDtype, "int64">;
+// "WebGPU storage buffers have no sub-32-bit integer element type, so int8,
+//  int16 and bool travel as 32-bit words, and int64 has no direct
+//  representation at all."
+```
+
+The runtime accepts a `BigInt64Array` only where the kernel author declares a
+lossy **narrowing projection** to int32/uint32 (`"int64 port must project to
+int32 or uint32 storage"`, `"int64 input must declare narrowing as checked or
+saturating"`). That is a per-kernel opt-in to truncation, not 64-bit emulation.
+The constraint chain above is untouched.
+
+**2. There is no seam to plug it into.** It is a *single-op* loader —
+`getKernel("webgpu-kernels/ai.onnx.Relu")` returns a function you call with
+named tensors. It is not an execution provider and does not run an ONNX graph.
+To use it for Chatterbox you would have to re-implement the model's whole graph
+by hand, op by op, in JS.
+
+- `@huggingface/transformers` does not depend on it — verified against the npm
+  registry through **4.2.0** (latest); deps are `onnxruntime-web`,
+  `onnxruntime-node`, `@huggingface/jinja`, `@huggingface/tokenizers`, `sharp`.
+- `onnxruntime-web` exposes **no** custom-kernel registration API — no
+  `registerCustomOp` / `registerKernel` / `externalKernel` symbol anywhere in
+  its published type surface.
+
+It is also `0.0.1-preview.2`, self-described as "Early preview — the API may
+still change."
+
+**Re-checked at the same time: ORT Web's WebGPU EP is still JSEP-based, through
+1.27.0 (latest stable).** There is no native WebGPU EP in the web build
+(`lib/wasm/jsep/webgpu/` is still the only one), and `ops/common.ts` still
+throws `'currently not supported vecX of uint64 yet'`, handling 64-bit types
+only at `components === 1` via 32-bit projection. Every claim in this section
+holds as of 2026-09-11.
+
+**What would actually change this:** WGSL gaining a 64-bit integer type
+([gpuweb#5152](https://github.com/gpuweb/gpuweb/issues/5152)), or ORT adopting
+`vec2<u32>` emulation inside its own EP. Watch those two, not the kernels repo.
+
 ### Operator Coverage Gaps
 
 Beyond INT64, the WebGPU EP only supports a subset of ONNX operators. The canonical list is maintained in the ONNX Runtime repo at `js/web/docs/webgpu-operators.md`. Models using unsupported operators will fail at session creation time. There is no partial fallback — if any operator in the graph is unsupported by the WebGPU EP, the entire model must use WASM.
@@ -358,6 +407,7 @@ For the near term (2026), expect WASM to remain the reliable default for all mod
 | WGSL INT64 proposal | [github.com/gpuweb/gpuweb/issues/5152](https://github.com/gpuweb/gpuweb/issues/5152) |
 | WGSL spec (type system) | [w3.org/TR/WGSL/#types](https://www.w3.org/TR/WGSL/#types) |
 | Transformers.js v4 blog | [huggingface.co/blog/transformersjs-v4](https://huggingface.co/blog/transformersjs-v4) |
+| `@huggingface/kernels` (evaluated, rejected — see above) | [huggingface.co/blog/webgpu-kernels](https://huggingface.co/blog/webgpu-kernels) |
 
 ### TTSLab Source Files
 

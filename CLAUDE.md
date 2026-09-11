@@ -339,3 +339,14 @@ When a model fails on WebGPU:
 3. Check console for "unsupported operator" or "execution provider" errors
 4. Verify the model repo has WebGPU-compatible ONNX files (no INT64 ops)
 5. Test on WASM first to isolate whether the issue is WebGPU-specific
+
+**`@huggingface/kernels` does not unblock the INT64 models — do not retry this.**
+The Hub's 200+ WebGPU kernels (`getKernel("webgpu-kernels/ai.onnx.Relu")`) are a
+*single-op* loader, not an execution provider: nothing in it runs an ONNX graph,
+`@huggingface/transformers` does not depend on it (checked through 4.2.0), and
+`onnxruntime-web` has no custom-kernel registration API to plug it into. It also
+shares the identical limitation — its own types say `KernelStorageDtype =
+Exclude<KernelDtype, "int64">`, and int64 inputs require a declared *narrowing*
+projection to int32/uint32, i.e. truncation rather than emulation. ORT Web's
+WebGPU EP is still JSEP-based through 1.27.0. Full evidence and the two signals
+actually worth watching: `docs/webgpu-vs-wasm-model-compatibility.md`.
