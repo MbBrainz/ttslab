@@ -286,6 +286,62 @@ Measured populations:
 - **WER dilutes numeric misreadings** — see the normalizer section above.
 - **Voice cloning and streaming are untested.** `testPhrase()` calls `synthesize(slug, text, voice)` with no `speakerEmbeddingUrl`, so the known-broken cloned path is structurally untestable.
 
+### A real, partial cloning fix: the WavLM embedding was ~6x too large (2026-09-16, verified)
+
+`extractEmbeddingFromPCM()` (`speaker-embedding.ts`) fed SpeechT5 the raw
+`Xenova/wavlm-base-plus-sv` output with **no normalization**, while the
+`last_hidden_state` fallback branch two lines down *did* L2-normalize.
+Measured directly (standalone Node script driving the real WavLM model via
+`@huggingface/transformers`, no browser/DB needed): raw embedding L2 norm on
+real reference clips is **5.65–7.36**, while the shipped default embedding
+(`speaker_embeddings.bin`, from `Xenova/transformers.js-docs`) has norm
+**1.000** — and the HF reference recipe that produced the CMU ARCTIC
+x-vectors SpeechT5 was fine-tuned against explicitly calls
+`torch.nn.functional.normalize()` before conditioning. A ~6x-oversized
+conditioning vector is plausibly a contributor to the voicing-collapse
+("stutter") defect above, on top of the already-documented embedding-space
+mismatch.
+
+**Fixed:** the primary branch now L2-normalizes, matching the fallback
+branch. **Verified with the real SpeechT5 + WavLM pipeline in Node**
+(no browser needed — `@huggingface/transformers` runs isomorphically) and
+scored with the WeSpeaker judge from `scripts/speaker-similarity.mjs`:
+cloned-vs-reference similarity went **0.087 (raw) → 0.116 (normalized)**
+on the same reference clip and text — a real, measurable ~33% relative
+improvement, for near-zero risk.
+
+**This does NOT fix cloning.** After normalizing, the clone (0.116) still
+scores *below* its own reference and even below two unrelated stock voices
+compared to each other (0.154) — consistent with the already-documented
+"cloning changes the voice; it does not clone the speaker" finding. The
+root cause is still the embedding **space**, not just its scale: WavLM-SV
+was never the model that produced the x-vectors SpeechT5 was conditioned
+on (`speechbrain/spkrec-xvect-voxceleb` was — confirmed via that dataset's
+own model card). Two candidate ONNX replacements were evaluated and
+**rejected**, so don't re-attempt either without new evidence:
+- `t-neethesh/spkrec-xvect-voxceleb-onnx` — tagged as that base model, but
+  its `config.json` is a stock `Wav2Vec2ForXVector` (768 hidden, 12-layer
+  transformer) — the wrong architecture family entirely, most likely a
+  mislabeled re-export of something like `anton-l/wav2vec2-base-superb-sv`.
+- `arneyjfs/spkrec-xvect-voxceleb-onnx` — graph inspection (`onnxruntime-node`,
+  intermediate tensor shapes `512/512/512/512/1500`) confirms it **is** the
+  real TDNN xvector architecture, but it was exported with a **hardcoded
+  16000-sample (1s) input length** — running it on any real reference clip
+  throws a dimension-mismatch error. Unusable without re-exporting.
+
+A real fix would mean converting `speechbrain/spkrec-xvect-voxceleb` to
+ONNX from scratch (Python + torch + speechbrain, with `dynamic_axes` set on
+the time dimension) and hosting the result — a substantially bigger, riskier
+task than the one shipped here. Not attempted this pass.
+
+Also fixed in the same pass: the cached WavLM model (~100MB) was never
+released — `disposeSpeakerModel()` now runs when the SpeechT5 session (its
+only consumer) is disposed. Unrelated to cloning but found in the same
+review: `whisper.ts`, `moonshine.ts`, `cohere-transcribe.ts`, and
+`supertonic.ts` only dropped the JS reference on dispose instead of calling
+`model?.dispose?.()` like `kokoro.ts`/`chatterbox.ts`/`granite-speech.ts`
+already do — now consistent, most notable for `cohere-transcribe` (~2.1GB).
+
 ### Running the harness (`scripts/model-qa.mjs`)
 
 ```bash
