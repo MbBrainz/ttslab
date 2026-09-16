@@ -91,7 +91,14 @@ export class SupertonicLoader implements ModelLoader {
 
 		this.pipeline = synthesizer;
 		this.session = {
-			dispose: () => {
+			dispose: async () => {
+				// Release the underlying ONNX session to free WASM/WebGPU memory
+				const instance = this.pipeline as {
+					model?: { dispose?: () => Promise<unknown> };
+				} | null;
+				if (instance?.model?.dispose) {
+					await instance.model.dispose();
+				}
 				this.pipeline = null;
 				this.session = null;
 			},
@@ -137,22 +144,6 @@ export class SupertonicLoader implements ModelLoader {
 
 		if (!result.audio || result.audio.length === 0) {
 			throw new Error("Model returned empty audio data. Try reloading the model.");
-		}
-
-		// Debug: log audio stats to help diagnose quality issues
-		if (typeof console !== "undefined") {
-			let min = Infinity;
-			let max = -Infinity;
-			for (let i = 0; i < result.audio.length; i++) {
-				if (result.audio[i] < min) min = result.audio[i];
-				if (result.audio[i] > max) max = result.audio[i];
-			}
-			console.log(
-				`[Supertonic] audio: ${result.audio.length} samples, ` +
-					`${result.sampling_rate}Hz, ` +
-					`range [${min.toFixed(4)}, ${max.toFixed(4)}], ` +
-					`duration ${(result.audio.length / result.sampling_rate).toFixed(2)}s`,
-			);
 		}
 
 		const duration = result.audio.length / result.sampling_rate;
