@@ -59,7 +59,14 @@ export class MoonshineLoader implements ModelLoader {
 
 		this.pipeline = transcriber;
 		this.session = {
-			dispose: () => {
+			dispose: async () => {
+				// Release the underlying ONNX session to free WASM/WebGPU memory
+				const instance = this.pipeline as {
+					model?: { dispose?: () => Promise<unknown> };
+				} | null;
+				if (instance?.model?.dispose) {
+					await instance.model.dispose();
+				}
 				this.pipeline = null;
 				this.session = null;
 			},

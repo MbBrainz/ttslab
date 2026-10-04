@@ -28,6 +28,16 @@ Rules to keep compute at ~zero:
 
 **Idle dynamic routes:** `/api/models`, `/api/models/[slug]`, `/api/stats` are `ƒ` but unreferenced by the frontend — they cost compute only if hit directly. Left in place as a public API surface; delete or cache them if they ever show up in runtime logs.
 
+### Gotcha: unbatched per-page DB queries can intermittently fail the whole deploy (2026-10-04)
+
+Two separate production deployments (weeks apart, on unrelated commits) failed with the identical signature: `NeonDbError: Error connecting to database: TypeError: fetch failed ... code: 'ETIMEDOUT'` on a `select ... from "models" where "models"."id" = $1` query, always inside `/compare/[slug]/opengraph-image`, always on a different random comparison slug, always well into "Generating static pages" (not on the first query). Confirmed via `mcp__Vercel__list_deployment_events` on both failed deployment IDs from the GitHub commit-status comment — same query, same error, different slug each time.
+
+**Root cause was never "Neon is down" — it was call volume.** `compare/[slug]/page.tsx` (both `generateMetadata` and the page component — 2 call sites) and `compare/[slug]/opengraph-image.tsx` each independently called `getComparisonBySlug(slug)` + `getModelById(modelAId)` + `getModelById(modelBId)` — 3 individual Neon HTTP round trips per call site, per compare page. `unstable_cache` dedupes *repeated* calls with the same args across the build, but with ~150 distinct comparison slugs and ~3 call sites, that's still on the order of 150–200 unique DB connections opened during a single `next build`, serially, on top of everything models/pages already need — plenty of surface for Neon's serverless HTTP endpoint to intermittently time out one of them, which is fatal: Next.js aborts the *entire* build on any prerender error, so one flaky query killed a deploy that otherwise built ~370 other pages fine.
+
+**Fixed:** added `getComparisonWithModelsBySlug(slug)` (`src/lib/db/queries/comparisons.ts`), which looks up the slug in-memory from the already-existing `getAllComparisonsWithModels()` batch — **2 DB queries total, for every compare page in the build**, not 3 per call site. All three call sites (`page.tsx` x2, `opengraph-image.tsx`) now use it. This is a direct analogue of the "Idle dynamic routes" note above — the queries always worked, they just cost more round trips than the data actually required. If you add a new compare-page call site, use `getComparisonWithModelsBySlug`, not `getComparisonBySlug` + `getModelById` — reintroducing the per-page pattern reintroduces the flake.
+
+**Not independently verified against the live Neon instance** (no DB credentials in the environment that found this) — verified by: (1) reading the exact failing query and its call sites, (2) confirming `getAllComparisonsWithModels` already existed and does the same batching for the homepage, (3) `tsc --noEmit` + `pnpm test` clean after the change. If deploys still intermittently fail after this, the next place to look is the equivalent (lower-volume, ~1 query per model page) pattern in `models/[slug]/opengraph-image.tsx`, or Neon's own compute size/autoscaling settings.
+
 ## E2E TTS Model Testing
 
 ### Why This Matters
@@ -285,6 +295,62 @@ Measured populations:
 - **A 24k→16k relabel only WARNS** (measured log2 0.660 against a 0.7 fail). A duration warn must be investigated, never ignored. 24k↔22.05k is undetectable acoustically (0.197) — assert on `sampleRate` directly, which `PhraseResult` now carries.
 - **WER dilutes numeric misreadings** — see the normalizer section above.
 - **Voice cloning and streaming are untested.** `testPhrase()` calls `synthesize(slug, text, voice)` with no `speakerEmbeddingUrl`, so the known-broken cloned path is structurally untestable.
+
+### A real, partial cloning fix: the WavLM embedding was ~6x too large (2026-09-16, verified)
+
+`extractEmbeddingFromPCM()` (`speaker-embedding.ts`) fed SpeechT5 the raw
+`Xenova/wavlm-base-plus-sv` output with **no normalization**, while the
+`last_hidden_state` fallback branch two lines down *did* L2-normalize.
+Measured directly (standalone Node script driving the real WavLM model via
+`@huggingface/transformers`, no browser/DB needed): raw embedding L2 norm on
+real reference clips is **5.65–7.36**, while the shipped default embedding
+(`speaker_embeddings.bin`, from `Xenova/transformers.js-docs`) has norm
+**1.000** — and the HF reference recipe that produced the CMU ARCTIC
+x-vectors SpeechT5 was fine-tuned against explicitly calls
+`torch.nn.functional.normalize()` before conditioning. A ~6x-oversized
+conditioning vector is plausibly a contributor to the voicing-collapse
+("stutter") defect above, on top of the already-documented embedding-space
+mismatch.
+
+**Fixed:** the primary branch now L2-normalizes, matching the fallback
+branch. **Verified with the real SpeechT5 + WavLM pipeline in Node**
+(no browser needed — `@huggingface/transformers` runs isomorphically) and
+scored with the WeSpeaker judge from `scripts/speaker-similarity.mjs`:
+cloned-vs-reference similarity went **0.087 (raw) → 0.116 (normalized)**
+on the same reference clip and text — a real, measurable ~33% relative
+improvement, for near-zero risk.
+
+**This does NOT fix cloning.** After normalizing, the clone (0.116) still
+scores *below* its own reference and even below two unrelated stock voices
+compared to each other (0.154) — consistent with the already-documented
+"cloning changes the voice; it does not clone the speaker" finding. The
+root cause is still the embedding **space**, not just its scale: WavLM-SV
+was never the model that produced the x-vectors SpeechT5 was conditioned
+on (`speechbrain/spkrec-xvect-voxceleb` was — confirmed via that dataset's
+own model card). Two candidate ONNX replacements were evaluated and
+**rejected**, so don't re-attempt either without new evidence:
+- `t-neethesh/spkrec-xvect-voxceleb-onnx` — tagged as that base model, but
+  its `config.json` is a stock `Wav2Vec2ForXVector` (768 hidden, 12-layer
+  transformer) — the wrong architecture family entirely, most likely a
+  mislabeled re-export of something like `anton-l/wav2vec2-base-superb-sv`.
+- `arneyjfs/spkrec-xvect-voxceleb-onnx` — graph inspection (`onnxruntime-node`,
+  intermediate tensor shapes `512/512/512/512/1500`) confirms it **is** the
+  real TDNN xvector architecture, but it was exported with a **hardcoded
+  16000-sample (1s) input length** — running it on any real reference clip
+  throws a dimension-mismatch error. Unusable without re-exporting.
+
+A real fix would mean converting `speechbrain/spkrec-xvect-voxceleb` to
+ONNX from scratch (Python + torch + speechbrain, with `dynamic_axes` set on
+the time dimension) and hosting the result — a substantially bigger, riskier
+task than the one shipped here. Not attempted this pass.
+
+Also fixed in the same pass: the cached WavLM model (~100MB) was never
+released — `disposeSpeakerModel()` now runs when the SpeechT5 session (its
+only consumer) is disposed. Unrelated to cloning but found in the same
+review: `whisper.ts`, `moonshine.ts`, `cohere-transcribe.ts`, and
+`supertonic.ts` only dropped the JS reference on dispose instead of calling
+`model?.dispose?.()` like `kokoro.ts`/`chatterbox.ts`/`granite-speech.ts`
+already do — now consistent, most notable for `cohere-transcribe` (~2.1GB).
 
 ### Running the harness (`scripts/model-qa.mjs`)
 

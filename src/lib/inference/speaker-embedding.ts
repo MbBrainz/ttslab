@@ -63,6 +63,18 @@ function toDownloadProgress(event: HubProgress): DownloadProgress | null {
 	};
 }
 
+/**
+ * Release the cached WavLM speaker-verification model (~100MB resident once
+ * loaded). It has no automatic lifecycle of its own — it is only used by the
+ * voice-clone embedding-extraction step, so the caller disposes it when the
+ * SpeechT5 session (its only consumer) is torn down.
+ */
+export function disposeSpeakerModel(): void {
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	(cachedModel?.model as any)?.dispose?.();
+	cachedModel = null;
+}
+
 async function loadSpeakerModel(
 	onProgress?: (progress: DownloadProgress) => void,
 ): Promise<{ model: unknown; processor: unknown }> {
@@ -123,7 +135,26 @@ export async function extractEmbeddingFromPCM(
 	// Get embeddings — wavlm-sv outputs embeddings directly, or fall back to last_hidden_state with mean pooling
 	let embeddingData: Float32Array;
 	if (output.embeddings) {
-		embeddingData = output.embeddings.data as Float32Array;
+		// wavlm-sv's raw output has L2 norm ~5-7 (verified empirically), but the
+		// speaker embeddings SpeechT5 was fine-tuned against (the CMU ARCTIC
+		// x-vectors — see speaker_embeddings.bin) are unit-normalized: the
+		// reference HF SpeechT5 training recipe calls
+		// torch.nn.functional.normalize() on the x-vector before conditioning.
+		// Feeding SpeechT5 a ~6x-larger-magnitude vector than it was trained on
+		// pushes the decoder out of its trained input distribution — a likely
+		// contributor to the voicing-collapse ("stutter") defect documented in
+		// CLAUDE.md, and measurably hurts speaker similarity (WeSpeaker judge:
+		// 0.087 raw vs 0.116 normalized against the same reference clip).
+		// Normalizing does NOT fully fix cloning — wavlm-sv's embedding space is
+		// still architecturally different from the speechbrain x-vector space
+		// SpeechT5 was actually conditioned on — but it removes a real,
+		// unintended scale mismatch for near-zero cost.
+		const raw = output.embeddings.data as Float32Array;
+		let rawNorm = 0;
+		for (let i = 0; i < raw.length; i++) rawNorm += raw[i] * raw[i];
+		rawNorm = Math.sqrt(rawNorm);
+		embeddingData =
+			rawNorm > 0 ? Float32Array.from(raw, (v) => v / rawNorm) : raw;
 	} else if (output.last_hidden_state) {
 		// Mean pooling over the sequence dimension (assumes batch size 1)
 		const hidden = output.last_hidden_state;

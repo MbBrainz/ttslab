@@ -222,6 +222,14 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 					sessions.delete(cmd.modelSlug);
 				}
 				loaders.delete(cmd.modelSlug);
+				// The cached WavLM speaker-embedding model (~100MB) has no
+				// consumer besides SpeechT5 cloning — release it alongside.
+				if (cmd.modelSlug === "speecht5") {
+					const { disposeSpeakerModel } = await import(
+						"./speaker-embedding"
+					);
+					disposeSpeakerModel();
+				}
 				post({ type: "disposed" });
 				break;
 			}

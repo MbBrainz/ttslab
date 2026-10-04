@@ -3,6 +3,7 @@ export {
 	getAllComparisons,
 	getAllComparisonsWithModels,
 	getComparisonBySlug,
+	getComparisonWithModelsBySlug,
 	getPopularComparisons,
 } from "./comparisons";
 export {
