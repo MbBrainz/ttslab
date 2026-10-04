@@ -1,8 +1,7 @@
 import { ImageResponse } from "next/og";
 import {
 	getAllComparisonSlugs,
-	getComparisonBySlug,
-	getModelById,
+	getComparisonWithModelsBySlug,
 } from "@/lib/db/queries";
 
 export const revalidate = false;
@@ -24,26 +23,16 @@ export default async function OGImage({
 	params: Promise<{ slug: string }>;
 }) {
 	const { slug } = await params;
-	const comparison = await getComparisonBySlug(slug);
+	const data = await getComparisonWithModelsBySlug(slug);
 
 	let modelAName = "Model A";
 	let modelBName = "Model B";
 	let modelAType = "MODEL";
-	let modelBType = "MODEL";
 
-	if (comparison) {
-		const [modelA, modelB] = await Promise.all([
-			getModelById(comparison.modelAId),
-			getModelById(comparison.modelBId),
-		]);
-		if (modelA) {
-			modelAName = modelA.name;
-			modelAType = modelA.type.toUpperCase();
-		}
-		if (modelB) {
-			modelBName = modelB.name;
-			modelBType = modelB.type.toUpperCase();
-		}
+	if (data) {
+		modelAName = data.modelA.name;
+		modelAType = data.modelA.type.toUpperCase();
+		modelBName = data.modelB.name;
 	}
 
 	return new ImageResponse(

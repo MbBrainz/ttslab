@@ -1,5 +1,5 @@
-import { unstable_cache } from "next/cache";
 import { eq, or } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import { db } from "..";
 import { comparisons, models } from "../schema";
 import type { ComparisonWithModels } from "../types";
@@ -84,15 +84,30 @@ export const getAllComparisonsWithModels = unstable_cache(
 );
 
 /**
+ * Fetch one comparison with both models resolved, by slug.
+ *
+ * Goes through the cached `getAllComparisonsWithModels()` batch (2 DB round
+ * trips total, cached across the whole build) instead of
+ * `getComparisonBySlug` + 2x `getModelById` per page. Compare pages used to
+ * each pay 3 individual Neon connections — ~150 compare pages x 3 queries
+ * across page.tsx (2 call sites) and opengraph-image.tsx was enough
+ * concurrent load to intermittently time out mid-build and abort the whole
+ * deploy (observed ETIMEDOUT on `models` lookups during static generation).
+ */
+export async function getComparisonWithModelsBySlug(
+	slug: string,
+): Promise<ComparisonWithModels | null> {
+	const all = await getAllComparisonsWithModels();
+	return all.find((c) => c.comparison.slug === slug) ?? null;
+}
+
+/**
  * Fetch a limited set of comparisons with model details (for homepage).
  */
 async function _getPopularComparisons(
 	limit: number,
 ): Promise<ComparisonWithModels[]> {
-	const limitedComparisons = await db
-		.select()
-		.from(comparisons)
-		.limit(limit);
+	const limitedComparisons = await db.select().from(comparisons).limit(limit);
 
 	if (limitedComparisons.length === 0) return [];
 

@@ -28,6 +28,16 @@ Rules to keep compute at ~zero:
 
 **Idle dynamic routes:** `/api/models`, `/api/models/[slug]`, `/api/stats` are `ƒ` but unreferenced by the frontend — they cost compute only if hit directly. Left in place as a public API surface; delete or cache them if they ever show up in runtime logs.
 
+### Gotcha: unbatched per-page DB queries can intermittently fail the whole deploy (2026-10-04)
+
+Two separate production deployments (weeks apart, on unrelated commits) failed with the identical signature: `NeonDbError: Error connecting to database: TypeError: fetch failed ... code: 'ETIMEDOUT'` on a `select ... from "models" where "models"."id" = $1` query, always inside `/compare/[slug]/opengraph-image`, always on a different random comparison slug, always well into "Generating static pages" (not on the first query). Confirmed via `mcp__Vercel__list_deployment_events` on both failed deployment IDs from the GitHub commit-status comment — same query, same error, different slug each time.
+
+**Root cause was never "Neon is down" — it was call volume.** `compare/[slug]/page.tsx` (both `generateMetadata` and the page component — 2 call sites) and `compare/[slug]/opengraph-image.tsx` each independently called `getComparisonBySlug(slug)` + `getModelById(modelAId)` + `getModelById(modelBId)` — 3 individual Neon HTTP round trips per call site, per compare page. `unstable_cache` dedupes *repeated* calls with the same args across the build, but with ~150 distinct comparison slugs and ~3 call sites, that's still on the order of 150–200 unique DB connections opened during a single `next build`, serially, on top of everything models/pages already need — plenty of surface for Neon's serverless HTTP endpoint to intermittently time out one of them, which is fatal: Next.js aborts the *entire* build on any prerender error, so one flaky query killed a deploy that otherwise built ~370 other pages fine.
+
+**Fixed:** added `getComparisonWithModelsBySlug(slug)` (`src/lib/db/queries/comparisons.ts`), which looks up the slug in-memory from the already-existing `getAllComparisonsWithModels()` batch — **2 DB queries total, for every compare page in the build**, not 3 per call site. All three call sites (`page.tsx` x2, `opengraph-image.tsx`) now use it. This is a direct analogue of the "Idle dynamic routes" note above — the queries always worked, they just cost more round trips than the data actually required. If you add a new compare-page call site, use `getComparisonWithModelsBySlug`, not `getComparisonBySlug` + `getModelById` — reintroducing the per-page pattern reintroduces the flake.
+
+**Not independently verified against the live Neon instance** (no DB credentials in the environment that found this) — verified by: (1) reading the exact failing query and its call sites, (2) confirming `getAllComparisonsWithModels` already existed and does the same batching for the homepage, (3) `tsc --noEmit` + `pnpm test` clean after the change. If deploys still intermittently fail after this, the next place to look is the equivalent (lower-volume, ~1 query per model page) pattern in `models/[slug]/opengraph-image.tsx`, or Neon's own compute size/autoscaling settings.
+
 ## E2E TTS Model Testing
 
 ### Why This Matters

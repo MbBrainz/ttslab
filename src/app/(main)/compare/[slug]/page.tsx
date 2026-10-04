@@ -19,8 +19,7 @@ import { UpvoteButton } from "@/components/upvote-button";
 import { APP_NAME, APP_URL } from "@/lib/constants";
 import {
 	getAllComparisonSlugs,
-	getComparisonBySlug,
-	getModelById,
+	getComparisonWithModelsBySlug,
 } from "@/lib/db/queries";
 
 export const revalidate = false;
@@ -43,20 +42,13 @@ export async function generateMetadata({
 }: PageProps): Promise<Metadata> {
 	const { slug } = await params;
 
-	const comparison = await getComparisonBySlug(slug);
+	const data = await getComparisonWithModelsBySlug(slug);
 
-	if (!comparison) {
+	if (!data) {
 		return { title: "Comparison Not Found" };
 	}
 
-	const [modelA, modelB] = await Promise.all([
-		getModelById(comparison.modelAId),
-		getModelById(comparison.modelBId),
-	]);
-
-	if (!modelA || !modelB) {
-		return { title: "Comparison Not Found" };
-	}
+	const { modelA, modelB } = data;
 
 	const type =
 		modelA.type === modelB.type ? modelA.type.toUpperCase() : "Speech AI";
@@ -79,20 +71,13 @@ export async function generateMetadata({
 export default async function ComparisonPage({ params }: PageProps) {
 	const { slug } = await params;
 
-	const comparison = await getComparisonBySlug(slug);
+	const data = await getComparisonWithModelsBySlug(slug);
 
-	if (!comparison) {
+	if (!data) {
 		notFound();
 	}
 
-	const [modelA, modelB] = await Promise.all([
-		getModelById(comparison.modelAId),
-		getModelById(comparison.modelBId),
-	]);
-
-	if (!modelA || !modelB) {
-		notFound();
-	}
+	const { comparison, modelA, modelB } = data;
 
 	const modelASupported = modelA.status === "supported";
 	const modelBSupported = modelB.status === "supported";
