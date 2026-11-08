@@ -7,7 +7,12 @@ import { useVad } from "@/lib/hooks/use-vad";
 import { AudioQueue } from "@/lib/inference/audio-queue";
 import { createDownloadTracker } from "@/lib/inference/download-tracker";
 import { fitMessagesToContext } from "@/lib/inference/llm-history";
-import type { ChatMessage, LlmModel } from "@/lib/inference/llm-types";
+import { LlmLoadGuard } from "@/lib/inference/llm-load-guard";
+import {
+	type ChatMessage,
+	LlmLoadSupersededError,
+	type LlmModel,
+} from "@/lib/inference/llm-types";
 import type { DownloadProgress } from "@/lib/inference/types";
 import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
 
@@ -124,6 +129,18 @@ export function useVoiceAgent({
 	const ttsChainRef = useRef<Promise<void>>(Promise.resolve());
 	// Track which LLM model is currently loaded in the worker
 	const loadedLlmIdRef = useRef<string | null>(null);
+	// Latest selected model. loadLlm reads this instead of closing over the
+	// model object, so its identity stays stable across renders and the
+	// auto-reload effect below keys on the id string only — it cannot
+	// double-fire on object churn.
+	const llmModelRef = useRef(llmModel);
+	// One selection → one load: dedupes concurrent triggers for the same id
+	// (see LlmLoadGuard).
+	const llmLoadGuardRef = useRef(new LlmLoadGuard());
+
+	useEffect(() => {
+		llmModelRef.current = llmModel;
+	}, [llmModel]);
 
 	// Barge-in: track enqueued sentences and how many finished playing
 	const enqueuedSentencesRef = useRef<string[]>([]);
@@ -172,10 +189,16 @@ export function useVoiceAgent({
 
 	const loadLlm = useCallback(
 		async (onProgress?: (p: DownloadProgress) => void) => {
+			const model = llmModelRef.current;
+			// One selection → one load: a duplicate trigger for the id already in
+			// flight (effect re-run, drawer re-set, boot Retry racing the effect)
+			// is a no-op. A genuine switch to a different id always loads — the
+			// transports' epoch guards then cancel the superseded in-flight load.
+			if (!llmLoadGuardRef.current.begin(model.id)) return;
 			setLlmState({ status: "initializing" });
 			const tracker = createDownloadTracker();
 			try {
-				const result = await llmLoad(llmModel, {
+				const result = await llmLoad(model, {
 					backend: "auto",
 					onProgress: (p) => {
 						const state = tracker.process(p);
@@ -183,7 +206,7 @@ export function useVoiceAgent({
 						onProgress?.(p);
 					},
 				});
-				loadedLlmIdRef.current = llmModel.id;
+				loadedLlmIdRef.current = model.id;
 				setLlmState({
 					status: "ready",
 					backend: result.backend,
@@ -191,9 +214,19 @@ export function useVoiceAgent({
 				});
 				return result;
 			} catch (err) {
-				// Ignore cancellation from model-switch (transport rejects the old command)
-				if (err instanceof Error && err.message === "Cancelled by new command")
+				// Expected cancellations, not failures — the successor owns the
+				// state line, so a superseded tier must not flash "failed":
+				// - "Cancelled by new command": transformers.js worker rejected the
+				//   superseded command on model switch.
+				// - LlmLoadSupersededError: webllm/wllama load cancelled by a
+				//   genuinely newer load()/dispose().
+				if (
+					(err instanceof Error &&
+						err.message === "Cancelled by new command") ||
+					err instanceof LlmLoadSupersededError
+				) {
 					return;
+				}
 				setLlmState({
 					status: "error",
 					code: "LOAD_FAILED",
@@ -201,9 +234,11 @@ export function useVoiceAgent({
 					recoverable: true,
 				});
 				throw err;
+			} finally {
+				llmLoadGuardRef.current.end(model.id);
 			}
 		},
-		[llmLoad, llmModel],
+		[llmLoad],
 	);
 
 	const loadTts = useCallback(
@@ -242,7 +277,11 @@ export function useVoiceAgent({
 		await Promise.all([loadStt(), loadLlm(), loadTts()]);
 	}, [loadStt, loadLlm, loadTts]);
 
-	// Auto-reload LLM when model selection changes while already loaded
+	// Auto-reload LLM when the selection changes while a model is already
+	// loaded. Both deps are stable per selection — llmModel.id is the id
+	// string (never the model object) and loadLlm reads the model from a ref —
+	// so this fires exactly once per genuine selection change, and the guard
+	// inside loadLlm dedupes anything racing it.
 	useEffect(() => {
 		if (loadedLlmIdRef.current && loadedLlmIdRef.current !== llmModel.id) {
 			loadLlm().catch(() => {});

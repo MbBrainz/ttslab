@@ -148,3 +148,17 @@ export type LlmWorkerResponse =
 	| { type: "cancelled"; genId?: number }
 	| { type: "error"; code: string; message: string }
 	| { type: "disposed" };
+
+/**
+ * Thrown by the WebLLM/wllama transports when an in-flight load() is
+ * invalidated by a genuinely newer load() (model switch) or dispose().
+ * This is an expected cancellation, not a load failure — the voice-agent
+ * hook swallows it so a superseded tier never flashes "failed" while its
+ * successor is loading.
+ */
+export class LlmLoadSupersededError extends Error {
+	constructor(engine: string) {
+		super(`${engine} load cancelled by a newer load`);
+		this.name = "LlmLoadSupersededError";
+	}
+}

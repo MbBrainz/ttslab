@@ -7,7 +7,11 @@ import type { Wllama } from "@wllama/wllama/esm/index.js";
 import type { DownloadProgress } from "@/lib/inference/types";
 import { buildVoiceMessages } from "./llm-prompt";
 import type { LlmLoadedResult } from "./llm-transport";
-import type { ChatMessage, LlmModel } from "./llm-types";
+import {
+	type ChatMessage,
+	LlmLoadSupersededError,
+	type LlmModel,
+} from "./llm-types";
 import { ThinkTagFilter } from "./think-filter";
 import type {
 	LlmGenerateCallbacks,
@@ -59,7 +63,10 @@ export class WllamaTransport {
 
 		const epoch = ++this.loadEpoch;
 
-		await this.dispose();
+		// Internal teardown only — disposeCore() must not bump the epoch, or
+		// this load would fail its own staleness check below (the regression
+		// where every load died with "wllama load cancelled by a newer load").
+		await this.disposeCore();
 
 		// Dynamic import — @wllama/wllama is only fetched when this tier runs.
 		const { Wllama: WllamaCtor, LoggerWithoutDebug } = await import(
@@ -111,14 +118,14 @@ export class WllamaTransport {
 		}
 
 		if (epoch !== this.loadEpoch) {
-			// Superseded mid-load by a newer load()/dispose(): release this
-			// instance cleanly and reject the stale caller.
+			// Superseded mid-load by a genuinely newer load()/dispose(): release
+			// this instance cleanly and reject the stale caller.
 			try {
 				await instance.exit();
 			} catch {
 				// Instance may already be gone.
 			}
-			throw new Error("wllama load cancelled by a newer load");
+			throw new LlmLoadSupersededError("wllama");
 		}
 
 		this.instance = instance;
@@ -244,6 +251,13 @@ export class WllamaTransport {
 	async dispose(): Promise<void> {
 		// Invalidate any in-flight load() (see loadEpoch in load()).
 		this.loadEpoch++;
+		await this.disposeCore();
+	}
+
+	/** Tear the instance down WITHOUT invalidating an in-flight load(). Used
+	 *  by load() itself between attempts; the public dispose() bumps the epoch
+	 *  first so a concurrent load() rejects as superseded. */
+	private async disposeCore(): Promise<void> {
 		this.cancel();
 		// A queued re-generate belongs to a disappearing engine — error it so
 		// its caller is not left hanging.

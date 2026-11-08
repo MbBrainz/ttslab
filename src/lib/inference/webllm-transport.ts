@@ -5,7 +5,11 @@ import {
 import type { DownloadProgress } from "@/lib/inference/types";
 import { buildVoiceMessages } from "./llm-prompt";
 import type { LlmLoadedResult } from "./llm-transport";
-import type { ChatMessage, LlmModel } from "./llm-types";
+import {
+	type ChatMessage,
+	LlmLoadSupersededError,
+	type LlmModel,
+} from "./llm-types";
 import { ThinkTagFilter } from "./think-filter";
 
 export interface LlmGenerateOptions {
@@ -61,8 +65,10 @@ export class WebLlmTransport {
 		const epoch = ++this.loadEpoch;
 
 		// Free any previous engine + worker (VRAM is held by the old worker until
-		// it is terminated).
-		await this.dispose();
+		// it is terminated). Internal teardown only — disposeCore() must not bump
+		// the epoch, or this load would fail its own staleness check below (the
+		// regression where every load died with "cancelled by a newer load").
+		await this.disposeCore();
 
 		const worker = new Worker(new URL("./webllm-worker.ts", import.meta.url), {
 			type: "module",
@@ -75,7 +81,7 @@ export class WebLlmTransport {
 		const loadStart = performance.now();
 
 		try {
-			this.client = await CreateWebWorkerMLCEngine(
+			const client = await CreateWebWorkerMLCEngine(
 				worker,
 				model.mlcModelId,
 				{
@@ -95,28 +101,32 @@ export class WebLlmTransport {
 					sliding_window_size: -1,
 				},
 			);
-		} catch (err) {
-			// The engine never attached, so this worker holds nothing useful —
-			// terminate it or the failed load leaks a live worker (and its memory).
-			if (epoch === this.loadEpoch) {
+
+			if (epoch !== this.loadEpoch) {
+				// Superseded mid-load by a genuinely newer load()/dispose(): tear
+				// down what we built through the LOCAL refs — this.client/
+				// this.worker may already belong to the newer operation.
+				try {
+					await client.unload();
+				} catch {
+					// Engine may already be gone.
+				}
 				worker.terminate();
-				this.worker = null;
+				if (this.client === client) this.client = null;
+				if (this.worker === worker) this.worker = null;
+				throw new LlmLoadSupersededError("WebLLM");
+			}
+
+			this.client = client;
+		} catch (err) {
+			if (epoch === this.loadEpoch) {
+				// The engine never attached, so this worker holds nothing useful —
+				// terminate it or the failed load leaks a live worker (and memory).
+				// (When superseded, the newer operation already owns both refs.)
+				worker.terminate();
+				if (this.worker === worker) this.worker = null;
 			}
 			throw err;
-		}
-
-		if (epoch !== this.loadEpoch) {
-			// Superseded mid-load by a newer load()/dispose(): tear down what we
-			// built and reject this caller cleanly — no orphan worker, no VRAM.
-			try {
-				await this.client.unload();
-			} catch {
-				// Engine may already be gone.
-			}
-			worker.terminate();
-			this.client = null;
-			if (this.worker === worker) this.worker = null;
-			throw new Error("WebLLM load cancelled by a newer load");
 		}
 
 		return {
@@ -245,6 +255,13 @@ export class WebLlmTransport {
 	async dispose(): Promise<void> {
 		// Invalidate any in-flight load() (see loadEpoch in load()).
 		this.loadEpoch++;
+		await this.disposeCore();
+	}
+
+	/** Tear the engine + worker down WITHOUT invalidating an in-flight load().
+	 *  Used by load() itself between attempts; the public dispose() bumps the
+	 *  epoch first so a concurrent load() rejects as superseded. */
+	private async disposeCore(): Promise<void> {
 		this.cancel();
 		// A queued re-generate belongs to a disappearing engine — error it so
 		// its caller is not left hanging.
