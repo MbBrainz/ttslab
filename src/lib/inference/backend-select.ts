@@ -46,7 +46,7 @@ export async function getWebGPUDiagnostics(): Promise<WebGPUDiagnostics> {
 	}
 
 	try {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		// biome-ignore lint/suspicious/noExplicitAny: WebGPU not in TS lib target yet — probing navigator.gpu
 		const gpu = (navigator as any).gpu;
 		const adapter = await gpu.requestAdapter();
 		if (!adapter) {

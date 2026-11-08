@@ -38,42 +38,134 @@ const PRESETS: Preset[] = [
 ];
 
 const CHATTERBOX_PRESETS: Preset[] = [
-	{ label: "Expressive", text: "Oh wow [laugh] that's absolutely hilarious! I can't believe you actually did that." },
-	{ label: "Emotional", text: "I have something important to tell you. [cough] Sorry, let me start over. This really means a lot to me." },
-	{ label: "Storytelling", text: "And then, right at the last moment [chuckle] he realized he'd been holding the map upside down the entire time." },
-	{ label: "Quick Test", text: "Hello, this is a quick test of the Chatterbox text to speech model." },
-	{ label: "Conversational", text: "Hey [laugh] have you heard the news? They're opening a new place downtown and apparently it's amazing." },
+	{
+		label: "Expressive",
+		text: "Oh wow [laugh] that's absolutely hilarious! I can't believe you actually did that.",
+	},
+	{
+		label: "Emotional",
+		text: "I have something important to tell you. [cough] Sorry, let me start over. This really means a lot to me.",
+	},
+	{
+		label: "Storytelling",
+		text: "And then, right at the last moment [chuckle] he realized he'd been holding the map upside down the entire time.",
+	},
+	{
+		label: "Quick Test",
+		text: "Hello, this is a quick test of the Chatterbox text to speech model.",
+	},
+	{
+		label: "Conversational",
+		text: "Hey [laugh] have you heard the news? They're opening a new place downtown and apparently it's amazing.",
+	},
+];
+
+// Underdog Woof reads text exactly as written — the model's number/date/money
+// normalizer is NOT ported (see loaders/woof.ts), so digits and currency
+// ("$25", "1994") would be read oddly. Keep every preset spelled-out prose.
+const WOOF_PRESETS: Preset[] = [
+	{
+		label: "Quick Test",
+		text: "Hello, this is a quick test of the Underdog Woof text to speech model.",
+	},
+	{
+		label: "Conversational",
+		text: "Hey, have you tried that new coffee shop on Main Street? I went there yesterday and honestly, it might be the best latte I have ever had.",
+	},
+	{
+		label: "Spelled-out numbers",
+		text: "The tickets cost twenty-five dollars each, and the show starts at eight thirty. That makes one hundred dollars for the four of us.",
+	},
+	{
+		label: "Narration",
+		text: "The old house stood at the end of the lane, its windows dark and watchful. She hesitated at the gate, her hand trembling on the cold iron latch.",
+	},
 ];
 
 const MODEL_PRESETS: Record<string, Preset[]> = {
-	"chatterbox": CHATTERBOX_PRESETS,
+	"woof-tts": WOOF_PRESETS,
+	chatterbox: CHATTERBOX_PRESETS,
 	"chatterbox-turbo": CHATTERBOX_PRESETS,
 	"chatterbox-multilingual": [
-		{ label: "English", text: "Hello! [laugh] This is Chatterbox speaking in English. Isn't this amazing?" },
-		{ label: "Spanish", text: "¡Hola! Esta es una demostración de síntesis de voz en español." },
-		{ label: "French", text: "Bonjour! Ceci est une démonstration de synthèse vocale en français." },
-		{ label: "Japanese", text: "こんにちは！これは日本語の音声合成のデモンストレーションです。" },
-		{ label: "Arabic", text: "مرحبًا! هذا عرض توضيحي لتركيب الكلام باللغة العربية." },
-		{ label: "Korean", text: "안녕하세요! 이것은 한국어 음성 합성 시연입니다." },
+		{
+			label: "English",
+			text: "Hello! [laugh] This is Chatterbox speaking in English. Isn't this amazing?",
+		},
+		{
+			label: "Spanish",
+			text: "¡Hola! Esta es una demostración de síntesis de voz en español.",
+		},
+		{
+			label: "French",
+			text: "Bonjour! Ceci est une démonstration de synthèse vocale en français.",
+		},
+		{
+			label: "Japanese",
+			text: "こんにちは！これは日本語の音声合成のデモンストレーションです。",
+		},
+		{
+			label: "Arabic",
+			text: "مرحبًا! هذا عرض توضيحي لتركيب الكلام باللغة العربية.",
+		},
+		{
+			label: "Korean",
+			text: "안녕하세요! 이것은 한국어 음성 합성 시연입니다.",
+		},
 		{ label: "Chinese", text: "你好！这是中文语音合成的演示。" },
-		{ label: "German", text: "Hallo! Dies ist eine Demonstration der Sprachsynthese auf Deutsch." },
+		{
+			label: "German",
+			text: "Hallo! Dies ist eine Demonstration der Sprachsynthese auf Deutsch.",
+		},
 	],
 	"supertonic-2": [
-		{ label: "English", text: "Hello, this is a demonstration of Supertonic text to speech." },
-		{ label: "Korean", text: "안녕하세요, 이것은 수퍼토닉 음성 합성 시연입니다." },
-		{ label: "Spanish", text: "Hola, esta es una demostración de síntesis de voz de Supertonic." },
-		{ label: "Portuguese", text: "Olá, esta é uma demonstração de síntese de voz do Supertonic." },
-		{ label: "French", text: "Bonjour, ceci est une démonstration de synthèse vocale Supertonic." },
-		{ label: "Quick Test", text: "Hello, this is a quick test of the text to speech model." },
+		{
+			label: "English",
+			text: "Hello, this is a demonstration of Supertonic text to speech.",
+		},
+		{
+			label: "Korean",
+			text: "안녕하세요, 이것은 수퍼토닉 음성 합성 시연입니다.",
+		},
+		{
+			label: "Spanish",
+			text: "Hola, esta es una demostración de síntesis de voz de Supertonic.",
+		},
+		{
+			label: "Portuguese",
+			text: "Olá, esta é uma demonstração de síntese de voz do Supertonic.",
+		},
+		{
+			label: "French",
+			text: "Bonjour, ceci est une démonstration de synthèse vocale Supertonic.",
+		},
+		{
+			label: "Quick Test",
+			text: "Hello, this is a quick test of the text to speech model.",
+		},
 	],
 	"kokoro-82m": [
-		{ label: "Quick Test", text: "Hello, this is a quick test of the Kokoro text to speech model." },
-		{ label: "French", text: "Bonjour, ceci est une démonstration de la synthèse vocale Kokoro." },
+		{
+			label: "Quick Test",
+			text: "Hello, this is a quick test of the Kokoro text to speech model.",
+		},
+		{
+			label: "French",
+			text: "Bonjour, ceci est une démonstration de la synthèse vocale Kokoro.",
+		},
 		{ label: "Japanese", text: "こんにちは、これはKokoroの音声合成デモです。" },
-		{ label: "Korean", text: "안녕하세요, 이것은 코코로 음성 합성 시연입니다." },
+		{
+			label: "Korean",
+			text: "안녕하세요, 이것은 코코로 음성 합성 시연입니다.",
+		},
 		{ label: "Chinese", text: "你好，这是Kokoro语音合成的演示。" },
-		{ label: "Conversational", text: "Hey, have you tried that new coffee shop on Main Street? I went there yesterday and honestly, it might be the best latte I've ever had." },
-		{ label: "Long Form", text: "Artificial intelligence has transformed the way we interact with technology. From voice assistants that understand natural language to recommendation systems that predict our preferences, AI is woven into the fabric of our daily lives." },
+		{
+			label: "Conversational",
+			text: "Hey, have you tried that new coffee shop on Main Street? I went there yesterday and honestly, it might be the best latte I've ever had.",
+		},
+		{
+			label: "Long Form",
+			text: "Artificial intelligence has transformed the way we interact with technology. From voice assistants that understand natural language to recommendation systems that predict our preferences, AI is woven into the fabric of our daily lives.",
+		},
 	],
 };
 
@@ -88,7 +180,11 @@ type TextPresetsProps = {
 	modelSlug?: string;
 };
 
-export function TextPresets({ onSelect, disabled, modelSlug }: TextPresetsProps) {
+export function TextPresets({
+	onSelect,
+	disabled,
+	modelSlug,
+}: TextPresetsProps) {
 	const presets = getPresets(modelSlug);
 
 	return (
@@ -101,7 +197,9 @@ export function TextPresets({ onSelect, disabled, modelSlug }: TextPresetsProps)
 						type="button"
 						onClick={() => onSelect(preset.text)}
 						disabled={disabled}
-						title={preset.text.slice(0, 60) + (preset.text.length > 60 ? "..." : "")}
+						title={
+							preset.text.slice(0, 60) + (preset.text.length > 60 ? "..." : "")
+						}
 						className="shrink-0 rounded-md border border-border px-2.5 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
 					>
 						{preset.label}

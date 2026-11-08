@@ -7,9 +7,8 @@ function editDistance(ref: string[], hyp: string[]): [number, number, number] {
 	const n = hyp.length;
 
 	// dp[i][j] = [substitutions, deletions, insertions]
-	const dp: [number, number, number][][] = Array.from(
-		{ length: m + 1 },
-		() => Array.from({ length: n + 1 }, () => [0, 0, 0] as [number, number, number]),
+	const dp: [number, number, number][][] = Array.from({ length: m + 1 }, () =>
+		Array.from({ length: n + 1 }, () => [0, 0, 0] as [number, number, number]),
 	);
 
 	for (let i = 1; i <= m; i++) dp[i][0] = [0, i, 0];
@@ -21,9 +20,8 @@ function editDistance(ref: string[], hyp: string[]): [number, number, number] {
 			const [sD, dD, iD] = dp[i - 1][j];
 			const [sI, dI, iI] = dp[i][j - 1];
 
-			const costSub = ref[i - 1] === hyp[j - 1]
-				? sS + dS + iS
-				: sS + 1 + dS + iS;
+			const costSub =
+				ref[i - 1] === hyp[j - 1] ? sS + dS + iS : sS + 1 + dS + iS;
 			const costDel = sD + dD + 1 + iD;
 			const costIns = sI + dI + iI + 1;
 
@@ -78,7 +76,10 @@ export function computeWER(reference: string, hypothesis: string): WERResult {
 		};
 	}
 
-	const [substitutions, deletions, insertions] = editDistance(refWords, hypWords);
+	const [substitutions, deletions, insertions] = editDistance(
+		refWords,
+		hypWords,
+	);
 	const totalErrors = substitutions + deletions + insertions;
 
 	// Deliberately UNCAPPED. Clamping to 1.0 made "said it twice" and "emitted

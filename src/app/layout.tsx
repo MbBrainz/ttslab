@@ -2,6 +2,7 @@ import { Analytics } from "@vercel/analytics/next";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { APP_DESCRIPTION, APP_NAME, APP_TITLE, APP_URL } from "@/lib/constants";
+import { serializeJsonLd } from "@/lib/jsonld";
 import "./globals.css";
 
 const inter = Inter({
@@ -84,13 +85,13 @@ export default function RootLayout({
 				<script
 					type="application/ld+json"
 					dangerouslySetInnerHTML={{
-						__html: JSON.stringify(organizationJsonLd),
+						__html: serializeJsonLd(organizationJsonLd),
 					}}
 				/>
 				<script
 					type="application/ld+json"
 					dangerouslySetInnerHTML={{
-						__html: JSON.stringify(softwareJsonLd),
+						__html: serializeJsonLd(softwareJsonLd),
 					}}
 				/>
 			</head>

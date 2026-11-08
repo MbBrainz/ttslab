@@ -1,3 +1,4 @@
+import { splitIntoSentences } from "../streaming";
 import type {
 	AudioResult,
 	LoadOptions,
@@ -5,7 +6,6 @@ import type {
 	ModelSession,
 	Voice,
 } from "../types";
-import { splitIntoSentences } from "../streaming";
 
 /**
  * Split text into chunks suitable for VITS synthesis.

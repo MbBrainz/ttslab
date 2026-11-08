@@ -76,7 +76,9 @@ export function VoiceCloneUpload({
 				if (recorder.state !== "inactive") recorder.stop();
 			}
 			if (streamRef.current) {
-				streamRef.current.getTracks().forEach((t) => t.stop());
+				streamRef.current.getTracks().forEach((t) => {
+					t.stop();
+				});
 			}
 		};
 	}, []);
@@ -151,7 +153,12 @@ export function VoiceCloneUpload({
 				});
 			}
 		},
-		[onEmbeddingReady, extractEmbedding, setProgressLine, handleDownloadProgress],
+		[
+			onEmbeddingReady,
+			extractEmbedding,
+			setProgressLine,
+			handleDownloadProgress,
+		],
 	);
 
 	const handleFile = useCallback(
@@ -189,7 +196,9 @@ export function VoiceCloneUpload({
 					clearInterval(timerRef.current);
 					timerRef.current = null;
 				}
-				stream.getTracks().forEach((t) => t.stop());
+				stream.getTracks().forEach((t) => {
+					t.stop();
+				});
 				streamRef.current = null;
 
 				if (audioChunksRef.current.length === 0) {
@@ -294,11 +303,7 @@ export function VoiceCloneUpload({
 
 			{state.status === "recording" && (
 				<div className="flex items-center gap-2">
-					<Button
-						variant="destructive"
-						size="sm"
-						onClick={stopRecording}
-					>
+					<Button variant="destructive" size="sm" onClick={stopRecording}>
 						<MicOff className="size-3.5" />
 						Stop
 					</Button>

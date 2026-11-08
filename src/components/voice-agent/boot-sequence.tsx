@@ -1,8 +1,8 @@
 "use client";
 
 import { Zap } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import type { ModelState } from "@/components/model-status";
+import { Button } from "@/components/ui/button";
 
 interface BootSequenceProps {
 	sttState: ModelState;

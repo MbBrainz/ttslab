@@ -54,6 +54,18 @@ export default function MainLayout({
 									Compare
 								</Link>
 								<Link
+									href="/limits"
+									className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+								>
+									Limits
+								</Link>
+								<Link
+									href="/faq"
+									className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+								>
+									FAQ
+								</Link>
+								<Link
 									href="/about"
 									className="text-sm text-muted-foreground transition-colors hover:text-foreground"
 								>
@@ -73,19 +85,6 @@ export default function MainLayout({
 								<p className="text-xs text-muted-foreground">
 									MIT License &copy; {new Date().getFullYear()} {APP_NAME}
 								</p>
-								<a
-									href="https://seo-report.ai/verified/eyJkYXRhIjp7ImRvbWFpbiI6InR0c2xhYi5kZXYiLCJ0aWVyIjoicHJvIiwiY3JlYXRlZEF0IjoiMjAyNi0wMi0xOFQyMjo1NTo0Ny45MTJaIn0sInNpZ25hdHVyZSI6ImYyOTEzNDBmZDRkM2IwZjFkYjQ4NDgwNTJjYzY4NTAzYzM4ZTRhYzEyMGVmMDAxMWViNTk5ZTJhZmEyYTU2ZGQifQ?utm_source=badge&utm_medium=referral&utm_campaign=seo-verified"
-									target="_blank"
-									rel="noopener"
-								>
-									<img
-										src="https://seo-report.ai/badges/seo-verified-premium.svg"
-										alt="SEO Verified by SEO Report AI"
-										width={96}
-										height={38}
-										loading="lazy"
-									/>
-								</a>
 							</div>
 						</div>
 

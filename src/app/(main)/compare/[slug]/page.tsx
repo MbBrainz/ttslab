@@ -22,6 +22,7 @@ import {
 	getComparisonBySlug,
 	getModelById,
 } from "@/lib/db/queries";
+import { serializeJsonLd } from "@/lib/jsonld";
 
 export const revalidate = false;
 // Every real comparison slug is prerendered via generateStaticParams below.
@@ -66,6 +67,9 @@ export async function generateMetadata({
 	return {
 		title,
 		description,
+		alternates: {
+			canonical: `/compare/${slug}`,
+		},
 		openGraph: {
 			title: `${modelA.name} vs ${modelB.name} | ${APP_NAME}`,
 			description,
@@ -97,8 +101,38 @@ export default async function ComparisonPage({ params }: PageProps) {
 	const modelASupported = modelA.status === "supported";
 	const modelBSupported = modelB.status === "supported";
 
+	const breadcrumbJsonLd = {
+		"@context": "https://schema.org",
+		"@type": "BreadcrumbList",
+		itemListElement: [
+			{
+				"@type": "ListItem",
+				position: 1,
+				name: APP_NAME,
+				item: APP_URL,
+			},
+			{
+				"@type": "ListItem",
+				position: 2,
+				name: "Compare",
+				item: `${APP_URL}/compare`,
+			},
+			{
+				"@type": "ListItem",
+				position: 3,
+				name: `${modelA.name} vs ${modelB.name}`,
+				item: `${APP_URL}/compare/${slug}`,
+			},
+		],
+	};
+
 	return (
 		<div className="space-y-8">
+			<script
+				type="application/ld+json"
+				dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbJsonLd) }}
+			/>
+
 			{/* Header */}
 			<div className="space-y-4">
 				<div className="flex flex-wrap items-center gap-3">

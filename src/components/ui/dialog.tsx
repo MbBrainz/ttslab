@@ -1,7 +1,7 @@
 "use client";
 
-import * as React from "react";
 import { X } from "lucide-react";
+import * as React from "react";
 import { cn } from "@/lib/utils";
 
 function Dialog({
@@ -84,9 +84,7 @@ function DialogTitle({
 	children: React.ReactNode;
 	className?: string;
 }) {
-	return (
-		<h2 className={cn("text-lg font-semibold", className)}>{children}</h2>
-	);
+	return <h2 className={cn("text-lg font-semibold", className)}>{children}</h2>;
 }
 
 function DialogClose({

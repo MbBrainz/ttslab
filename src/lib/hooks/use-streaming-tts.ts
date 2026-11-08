@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { AudioQueue } from "@/lib/inference/audio-queue";
-import { float32ToWav } from "@/lib/audio-utils";
 import type { ModelState } from "@/components/model-status";
+import { float32ToWav } from "@/lib/audio-utils";
+import { AudioQueue } from "@/lib/inference/audio-queue";
 import type { StreamCallbacks } from "@/lib/inference/use-inference-worker";
 
 interface UseStreamingTtsOptions {
@@ -18,7 +18,9 @@ interface UseStreamingTtsOptions {
 	cancelStream: () => void;
 	modelSlug: string;
 	backend: "webgpu" | "wasm";
-	setModelState: (state: ModelState | ((prev: ModelState) => ModelState)) => void;
+	setModelState: (
+		state: ModelState | ((prev: ModelState) => ModelState),
+	) => void;
 	onAudioReady: (url: string) => void;
 }
 
@@ -90,7 +92,12 @@ export function useStreamingTts({
 	}, [cancelStream, cleanup, setModelState, backend]);
 
 	const startStream = useCallback(
-		(text: string, voice: string, speakerEmbeddingUrl?: string | null, language?: string) => {
+		(
+			text: string,
+			voice: string,
+			speakerEmbeddingUrl?: string | null,
+			language?: string,
+		) => {
 			if (!text.trim()) return;
 
 			// Clean up any previous stream
@@ -202,9 +209,7 @@ export function useStreamingTts({
 
 						const duration = fullAudio.length / streamSampleRate;
 						const rtf =
-							duration > 0
-								? data.totalMs / 1000 / duration
-								: undefined;
+							duration > 0 ? data.totalMs / 1000 / duration : undefined;
 
 						setModelState({
 							status: "result",
@@ -262,7 +267,14 @@ export function useStreamingTts({
 				language,
 			);
 		},
-		[synthesizeStream, modelSlug, backend, setModelState, onAudioReady, cleanup],
+		[
+			synthesizeStream,
+			modelSlug,
+			backend,
+			setModelState,
+			onAudioReady,
+			cleanup,
+		],
 	);
 
 	return {

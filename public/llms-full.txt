@@ -1,0 +1,82 @@
+# TTSLab — full reference for language models and generative engines
+
+## What TTSLab is
+
+TTSLab (https://ttslab.dev) is an open-source platform for testing and comparing speech AI models directly in a web browser. Every model on the site runs client-side: inference happens in a Web Worker through ONNX Runtime Web, using the WebGPU execution provider when the browser offers a GPU adapter and falling back to WebAssembly (CPU) otherwise. There is no inference server. Text a user types and audio a user records are processed on the device and never uploaded; the site loads Vercel Analytics for anonymous page-view counting only.
+
+No accounts or API keys are required. Upvotes are anonymous: a localStorage flag plus a counter increment, removable at any time. The codebase is MIT-licensed at https://github.com/MbBrainz/ttslab.
+
+## The limits thesis (November 2026)
+
+TTSLab's stated thesis is that WebGPU and WebAssembly have crossed the threshold where real speech AI runs in a tab, but hard platform limits define exactly where that stops. The full sourced report is at https://ttslab.dev/limits. Summary of the documented findings, each with sources on that page:
+
+- WebGPU is default-on in Chrome/Edge 113+ (May 2023, including Android 12+), Safari 26.0 (September 15, 2025, all Apple platforms), and Firefox 141 Windows (July 2025) / 145 macOS 26 Tahoe (November 2025) / 147 Apple-Silicon Macs (January 2026) — roughly 88.6% of browsers globally (caniuse, November 2026). Remaining gaps: Firefox on Linux and Android, Safari on Intel Macs, Chrome on Windows ARM64.
+- Spec defaults are modest: maxBufferSize 256 MiB and maxStorageBufferBindingSize 128 MiB, requestable up to 4 GiB on capable desktops; storage bindings of 2 GiB or more exist on only ~16% of real devices (web3dsurvey). shader-f16 is available on ~94% of adapters; subgroups landed Chromium-only (Chrome 151-152, August 2026); timestamp-query is Chromium-skewed.
+- Real out-of-memory behavior on iOS: Safari hard-kills the tab at roughly 1.5-2 GB of committed memory (measured on iPhone 15 Pro) with no device.lost event and no JavaScript error (nearform/crashbox). GPU and WASM allocations share one per-tab budget.
+- WebAssembly: a wasm32 module still tops out at 4 GiB. Wasm 3.0 (memory64, GC, multi-memory) was completed September 17, 2025; memory64 shipped in Chrome 133 / Firefox 134 and Safari's 27 line, but llama.cpp and wllama do not use it yet. relaxed-simd was unflagged in Firefox 145 (February 2026) and remains flag-only in Safari. SharedArrayBuffer/threads still require COOP/COEP everywhere — TTSLab sets COOP same-origin and COEP credentialless site-wide for this reason.
+- Measured costs: WebGPU dispatch overhead of ~24-36 microseconds per dispatch on Vulkan and 32-71 microseconds on Metal at batch size 1 (arXiv 2604.02344, arXiv 2608.08730, 2026). Kokoro-82M on an M1 Max: RTF 0.105 over WebGPU (about 9.5x real time) versus RTF 2.002 over single-threaded WASM q8 — a 19x backend spread (briantung.me, August 2026). WebLLM runs Llama-3.1-8B at 41.1 tokens/second on an M3 Max, about 71% of native Metal (arXiv 2412.15803). Speculative-decoding research shows 3.5-8.6x WebLLM decode speedups (arXiv 2610.39761, October 2026).
+- Storage: Chrome/Edge grant ~60% of free disk, Firefox min(10%, 10 GiB), Safari up to 60% but evicts site data after 7 days without interaction unless the origin calls navigator.storage.persist() — the reason a large cached model can vanish on iOS.
+- WebNN: Chrome's origin trial closed August 2026; the API remains flag-gated and not production-ready.
+
+## Model catalog
+
+All models run in the browser. Unsupported entries are listed for completeness with the blocking reason. Slugs are URL paths under https://ttslab.dev/models/.
+
+### Text-to-speech (supported)
+
+- Kokoro 82M (kokoro-82m): 82M-parameter TTS, multiple English voices, WebGPU and WASM. The site's reference TTS model; about 9.5x real time over WebGPU on capable hardware.
+- Kitten TTS Nano (kitten-tts-nano): ultra-lightweight 15M-parameter English TTS at roughly 24 MB quantized (q8) — the smallest and fastest-loading model in the lab. 8 expressive voices, 24 kHz output. WASM-only: the model repository ships a single q8 ONNX file with no fp32 variant, so there is no WebGPU path. Phonemization runs locally through a vendored eSpeak NG WebAssembly module.
+- Underdog Woof (woof-tts): tiny English TTS (38.2M parameters, ~41 MB, two voices) with fewer errors on hard sentences than Kitten Nano per Underdog's evals. Ships no runtime — the site runs two hand-written backends over the repo's numpy weights: a hand-written WGSL WebGPU compute-kernel path (22 kernels) and a typed-array JavaScript CPU path, both drawing the same seeded noise stream so a fixed seed produces the same audio on either. Browser-verified 2026-11-08: CPU vs GPU Pearson correlation 0.9999998 on a fixed seed, about 6.1 s CPU versus 0.19 s GPU per sentence (31x). Licensed Underdog Non-Commercial 1.0: free for non-commercial use with credit ("Voice by Underdog Woof"); commercial use needs a license.
+- Chatterbox (chatterbox): expressive TTS with emotion control and voice cloning, ~1.5 GB download, WASM-only (its WebGPU path is blocked by the INT64 kernel gap — see the limits report).
+- Chatterbox Turbo (chatterbox-turbo): faster Chatterbox variant, roughly 720 MB download, WebGPU and WASM.
+- Piper EN-US Lessac Medium (piper-en-us-lessac-medium): lightweight, fast CPU-friendly English TTS.
+- SpeechT5 (speecht5): TTS with experimental voice-cloning via speaker embeddings extracted from reference audio by a ~100 MB WavLM model. Verified result: cloning changes the voice but does not yet resemble the reference speaker (measured with an independent speaker-verification model as judge).
+- Supertonic 2 (supertonic-2): compact TTS.
+
+### Speech-to-text (supported)
+
+- Whisper Tiny (whisper-tiny), Whisper Base (whisper-base), Whisper Small (whisper-small): OpenAI Whisper variants, fastest to smallest on CPU.
+- DistilWhisper Small English (distil-whisper-small-en): distilled English-only Whisper Small, 166M parameters — roughly 172 MB quantized over WASM, roughly 665 MB fp32 over WebGPU. Trades multilingual coverage for accuracy on English; within 3% WER of Whisper Large v2 at 5.6x the speed, per the Distil-Whisper project's own evals (distil-whisper/distil-small.en model card).
+- Whisper Large V3 Turbo (whisper-large-v3-turbo): large high-accuracy variant.
+- LiteWhisper Large v3 Turbo (lite-whisper-large-v3-turbo): distilled large-turbo variant with a reduced footprint.
+- Moonshine Tiny (moonshine-tiny) and Moonshine Base (moonshine-base): distilled ASR optimized for low CPU latency; Tiny ships language variants moonshine-tiny-ja (Japanese), moonshine-tiny-ko (Korean), moonshine-tiny-zh (Chinese), moonshine-tiny-ar (Arabic); Base ships moonshine-base-ja, moonshine-base-ko, moonshine-base-zh.
+- Cohere Transcribe (cohere-transcribe): multilingual STT.
+- Granite 4.0 1B Speech (granite-speech): IBM Granite Speech 1B STT.
+
+### Not currently supported
+
+- Chatterbox Multilingual (chatterbox-multilingual): blocked because the browser WebGPU backend lacks an INT64 cast kernel that the ONNX spec requires for this model's Shape/Unsqueeze operations; impractically slow on CPU.
+- StyleTTS 2 (styletts2): unsupported in current browser runtimes.
+- Supertonic 3: evaluated and skipped — no official full ONNX export exists (only text_encoder and duration_predictor are published), so the model cannot be loaded in the browser.
+
+### Planned
+
+- F5-TTS (f5-tts): upvote-gated, with email notification when support lands.
+
+## Voice agent
+
+https://ttslab.dev/voice-agent runs a complete speech-to-speech assistant locally: Whisper transcribes microphone input, a Qwen3.5 language model generates the reply, and Kokoro speaks it. Microphone audio never leaves the device.
+
+The LLM stage is a three-engine tier system over the same Qwen3.5 family, so users pick the trade-off that fits their hardware (all engines are context-pinned to 4096 tokens):
+
+- Qwen3.5 0.8B (default tier, transformers.js on ONNX Runtime Web): ~490 MB download, q4f16 weights on WebGPU with automatic q4/WASM fallback — runs on any backend, no GPU required.
+- Qwen3.5 2B (WebLLM tier, MLC q4f16_1 weights): ~1.08 GB download, ~2.2 GB VRAM, requires a WebGPU adapter with the shader-f16 feature.
+- Qwen3.5 4B (WebLLM tier): ~2.39 GB download, ~3.9 GB VRAM, same WebGPU + shader-f16 requirement.
+- Qwen3.5 0.8B WASM (wllama tier, llama.cpp GGUF Q4_K_M): ~533 MB download, pure CPU inference with GPU offload deliberately disabled — the no-WebGPU exhibit.
+
+All tiers share one system prompt and identical response post-processing, so switching tiers changes size and quality, not behavior. The context window is honestly capped at 4096 tokens on every engine (KV-cache memory and real-time voice latency, not the models' nominal 262k window). Verification status (honest, 2026-11-08): the WebLLM and wllama engines are compile- and unit-tested, but their in-browser load/inference pass is still pending — the default transformers.js tier is the one exercised end to end so far.
+
+## FAQ
+
+https://ttslab.dev/faq answers the twelve most common questions: nothing is uploaded (all inference is local in a Web Worker); backends are auto-selected (WebGPU when an adapter exists, WASM otherwise); which browsers support WebGPU (~88.6% globally, November 2026); why first downloads are large (weights come from the Hugging Face CDN, ~24 MB to ~2 GB); where models are cached (browser Cache API, with per-browser quotas and Safari's 7-day eviction caveat); why some models are unsupported (missing INT64 WebGPU kernels, using Chatterbox Multilingual as the worked example); the honest status of voice cloning (changes the voice, does not yet clone the speaker); what the Voice Agent is; that upvotes are anonymous (localStorage flag plus a counter); iOS/iPadOS support with the ~1.5-2 GB tab-kill caveat; that the project is MIT-licensed; and why the benchmark page only carries external, attributed measurements.
+
+## Benchmarks and metrics
+
+https://ttslab.dev/benchmark explains the metrics — real-time factor (RTF) for TTS (generation time divided by audio duration; below 1.0 is faster than real time), tokens/second for the LLM stage, word error rate (WER) for STT accuracy — and lists only external, published measurements with citations (Kokoro RTF pair on M1 Max; WebLLM Llama-3.1-8B at 41.1 tok/s on M3 Max; whisper.cpp roughly 2-3x real time for tiny/base on modern CPU; Moonshine's paper claim of 5-15x faster than comparably accurate Whisper on CPU). TTSLab deliberately does not publish its own leaderboard because in-browser results depend on the visitor's hardware; every model page shows live metrics for the visitor's own device.
+
+## Citing TTSLab
+
+- Site: https://ttslab.dev
+- Limits report: https://ttslab.dev/limits (dated November 8, 2026)
+- FAQ: https://ttslab.dev/faq
+- Source: https://github.com/MbBrainz/ttslab (MIT)

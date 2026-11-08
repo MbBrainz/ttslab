@@ -26,12 +26,12 @@ const VOICES: Voice[] = [
  * Patch _postprocess_waveform to handle unexpected tensor shapes from the
  * voice decoder ONNX model (1D or 3D instead of expected 2D).
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: patching untyped transformers.js pipeline internals
 function patchPostprocessWaveform(pipelineInstance: any): void {
 	const orig = pipelineInstance._postprocess_waveform;
 	if (!orig) return;
 	pipelineInstance._postprocess_waveform = function (
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		// biome-ignore lint/suspicious/noExplicitAny: patching untyped transformers.js pipeline internals
 		...args: any[]
 	) {
 		const waveform = args[1];
@@ -107,8 +107,7 @@ export class SupertonicLoader implements ModelLoader {
 	): Promise<AudioResult> {
 		if (!this.pipeline) throw new Error("Model not loaded");
 
-		const resolvedVoice =
-			voice === "default" ? VOICES[0].id : voice;
+		const resolvedVoice = voice === "default" ? VOICES[0].id : voice;
 		const embeddingUrl = `${VOICE_BASE_URL}/${resolvedVoice}.bin`;
 
 		const synthesizer = this.pipeline as (
@@ -136,7 +135,9 @@ export class SupertonicLoader implements ModelLoader {
 		const totalMs = performance.now() - start;
 
 		if (!result.audio || result.audio.length === 0) {
-			throw new Error("Model returned empty audio data. Try reloading the model.");
+			throw new Error(
+				"Model returned empty audio data. Try reloading the model.",
+			);
 		}
 
 		// Debug: log audio stats to help diagnose quality issues

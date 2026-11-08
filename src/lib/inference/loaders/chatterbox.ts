@@ -11,9 +11,7 @@ const DEFAULT_VOICE_URL =
 	"https://huggingface.co/onnx-community/chatterbox-ONNX/resolve/main/default_voice.wav";
 const SAMPLE_RATE = 24000;
 
-const VOICES: Voice[] = [
-	{ id: "default", name: "Default", gender: "male" },
-];
+const VOICES: Voice[] = [{ id: "default", name: "Default", gender: "male" }];
 
 /** Parse a WAV buffer into raw PCM Float32 data. */
 function decodeWav(buffer: ArrayBuffer): Float32Array {
@@ -38,9 +36,7 @@ function decodeWav(buffer: ArrayBuffer): Float32Array {
 	}
 
 	const bytesPerSample = bitsPerSample / 8;
-	const numSamples = Math.floor(
-		(buffer.byteLength - offset) / bytesPerSample,
-	);
+	const numSamples = Math.floor((buffer.byteLength - offset) / bytesPerSample);
 	const audio = new Float32Array(numSamples);
 
 	if (bitsPerSample === 16) {
@@ -68,9 +64,9 @@ export class ChatterboxLoader implements ModelLoader {
 	private allQuantized: boolean;
 	private languages: string[];
 
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	// biome-ignore lint/suspicious/noExplicitAny: transformers.js model/processor surface is untyped at this boundary
 	private model: any = null;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	// biome-ignore lint/suspicious/noExplicitAny: transformers.js model/processor surface is untyped at this boundary
 	private processor: any = null;
 	private defaultVoiceAudio: Float32Array | null = null;
 	private session: ModelSession | null = null;
@@ -119,7 +115,7 @@ export class ChatterboxLoader implements ModelLoader {
 		const backend = options.backend === "webgpu" ? "webgpu" : "wasm";
 		this.loadedBackend = backend;
 
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		// biome-ignore lint/suspicious/noExplicitAny: transformers.js model/processor surface is untyped at this boundary
 		const transformers: any = await import("@huggingface/transformers");
 		const { configureOnnxWasmPaths } = await import("../onnx-config");
 		configureOnnxWasmPaths(transformers.env);
@@ -127,7 +123,9 @@ export class ChatterboxLoader implements ModelLoader {
 		const dtype = this.getDtype(backend);
 		const modelId = this.getModelId(backend);
 
-		console.log(`[chatterbox] Loading ${this.slug} from ${modelId} (backend: ${backend}, dtype: ${JSON.stringify(dtype)})`);
+		console.log(
+			`[chatterbox] Loading ${this.slug} from ${modelId} (backend: ${backend}, dtype: ${JSON.stringify(dtype)})`,
+		);
 
 		const progressCallback = (progress: {
 			status: string;
@@ -161,13 +159,20 @@ export class ChatterboxLoader implements ModelLoader {
 			this.processor = processor;
 			this.defaultVoiceAudio = decodeWav(voiceBuffer);
 
-			console.log(`[chatterbox] Model loaded successfully on ${backend} (model: ${modelId})`);
+			console.log(
+				`[chatterbox] Model loaded successfully on ${backend} (model: ${modelId})`,
+			);
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
 			const stack = err instanceof Error ? err.stack : undefined;
-			console.error(`[chatterbox] Load failed (model: ${modelId}, backend: ${backend}, dtype: ${JSON.stringify(dtype)}):`, message);
+			console.error(
+				`[chatterbox] Load failed (model: ${modelId}, backend: ${backend}, dtype: ${JSON.stringify(dtype)}):`,
+				message,
+			);
 			if (stack) console.error(`[chatterbox] Stack:`, stack);
-			throw new Error(`Chatterbox ${backend} load failed (model: ${modelId}): ${message}`);
+			throw new Error(
+				`Chatterbox ${backend} load failed (model: ${modelId}): ${message}`,
+			);
 		}
 
 		this.session = {
@@ -195,7 +200,7 @@ export class ChatterboxLoader implements ModelLoader {
 
 		// The processor returns { input_ids, attention_mask, input_values }
 		// but the model expects audio_values, so rename the key
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		// biome-ignore lint/suspicious/noExplicitAny: transformers.js model/processor surface is untyped at this boundary
 		const generateInputs: Record<string, any> = {};
 		for (const [key, value] of Object.entries(inputs)) {
 			if (key === "input_values") {
@@ -205,7 +210,7 @@ export class ChatterboxLoader implements ModelLoader {
 			}
 		}
 
-		let waveform;
+		let waveform: { data: Float32Array | Uint8Array | number[] };
 		try {
 			// Generate waveform — returns a Tensor directly
 			waveform = await this.model.generate({
@@ -215,9 +220,15 @@ export class ChatterboxLoader implements ModelLoader {
 			});
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
-			console.error(`[chatterbox] Generation failed (backend: ${this.loadedBackend}):`, message);
-			if (err instanceof Error && err.stack) console.error(`[chatterbox] Stack:`, err.stack);
-			throw new Error(`Chatterbox ${this.loadedBackend} generation failed: ${message}`);
+			console.error(
+				`[chatterbox] Generation failed (backend: ${this.loadedBackend}):`,
+				message,
+			);
+			if (err instanceof Error && err.stack)
+				console.error(`[chatterbox] Stack:`, err.stack);
+			throw new Error(
+				`Chatterbox ${this.loadedBackend} generation failed: ${message}`,
+			);
 		}
 
 		const totalMs = performance.now() - start;

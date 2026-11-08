@@ -3,6 +3,7 @@
 import { Check } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
+import { Button } from "@/components/ui/button";
 import {
 	Dialog,
 	DialogClose,
@@ -10,7 +11,6 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 
 export function VerifiedDialog() {
 	const searchParams = useSearchParams();
@@ -32,8 +32,8 @@ export function VerifiedDialog() {
 					<Check className="h-6 w-6 text-green-500" />
 				</div>
 				<p className="text-sm text-muted-foreground">
-					Your subscription is confirmed. You'll receive updates on new
-					models, features, and benchmarks from TTSLab.
+					Your subscription is confirmed. You'll receive updates on new models,
+					features, and benchmarks from TTSLab.
 				</p>
 				<Button onClick={handleClose} className="mt-2">
 					Got it

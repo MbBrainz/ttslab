@@ -210,7 +210,11 @@ export function SttDemo({ model }: SttDemoProps) {
 
 	const handleRetry = useCallback(() => {
 		if (modelReadyRef.current) {
-			setModelState({ status: "ready", backend: backendRef.current, loadTime: loadTimeRef.current });
+			setModelState({
+				status: "ready",
+				backend: backendRef.current,
+				loadTime: loadTimeRef.current,
+			});
 		} else {
 			dispose(model.slug);
 			modelReadyRef.current = false;
@@ -561,7 +565,9 @@ export function SttDemo({ model }: SttDemoProps) {
 
 			{/* Metrics — one-shot only; live mode reports per segment */}
 			{modelState.status === "result" && !live.isListening && (
-				<div className={`grid gap-4 rounded-lg border border-border bg-secondary/30 p-4 ${modelState.metrics.backend === "wasm" ? "grid-cols-4" : "grid-cols-3"}`}>
+				<div
+					className={`grid gap-4 rounded-lg border border-border bg-secondary/30 p-4 ${modelState.metrics.backend === "wasm" ? "grid-cols-4" : "grid-cols-3"}`}
+				>
 					<div className="text-center">
 						<p className="text-xs text-muted-foreground">Processing time</p>
 						<p className="text-lg font-semibold tabular-nums">
@@ -594,7 +600,10 @@ export function SttDemo({ model }: SttDemoProps) {
 							)}
 						</p>
 					</div>
-					<GpuEstimate totalMs={modelState.metrics.totalMs} backend={modelState.metrics.backend} />
+					<GpuEstimate
+						totalMs={modelState.metrics.totalMs}
+						backend={modelState.metrics.backend}
+					/>
 				</div>
 			)}
 		</div>

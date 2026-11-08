@@ -27,6 +27,7 @@ import {
 	getModelBySlugWithUpvotes,
 	getSimilarSupportedModels,
 } from "@/lib/db/queries";
+import { serializeJsonLd } from "@/lib/jsonld";
 
 export const revalidate = false;
 // All model slugs are prerendered via generateStaticParams; unknown paths get a
@@ -68,6 +69,9 @@ export async function generateMetadata({
 	return {
 		title,
 		description,
+		alternates: {
+			canonical: `/models/${model.slug}`,
+		},
 		openGraph: {
 			title: `${model.name} | ${APP_NAME}`,
 			description,
@@ -99,6 +103,31 @@ export default async function ModelPage({ params }: PageProps) {
 
 	const isSupported = model.status === "supported";
 
+	const breadcrumbJsonLd = {
+		"@context": "https://schema.org",
+		"@type": "BreadcrumbList",
+		itemListElement: [
+			{
+				"@type": "ListItem",
+				position: 1,
+				name: APP_NAME,
+				item: APP_URL,
+			},
+			{
+				"@type": "ListItem",
+				position: 2,
+				name: "Models",
+				item: `${APP_URL}/models`,
+			},
+			{
+				"@type": "ListItem",
+				position: 3,
+				name: model.name,
+				item: `${APP_URL}/models/${model.slug}`,
+			},
+		],
+	};
+
 	const jsonLd = {
 		"@context": "https://schema.org",
 		"@type": "SoftwareApplication",
@@ -129,7 +158,11 @@ export default async function ModelPage({ params }: PageProps) {
 		<div className="space-y-8">
 			<script
 				type="application/ld+json"
-				dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+				dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbJsonLd) }}
+			/>
+			<script
+				type="application/ld+json"
+				dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
 			/>
 
 			{/* Header */}

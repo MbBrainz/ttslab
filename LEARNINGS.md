@@ -129,3 +129,15 @@ If both are `false`, you have the old v1.14.0 Tensor — check your webpack alia
 | ~52 words | ~14s | ~18s | ~0.76x |
 
 RTF (Real-Time Factor) below 1.0x means faster-than-realtime generation.
+
+## ORT 1.25.0-dev → 1.31.1 stable, paired with transformers.js 4.3.2 (2026-11-08)
+
+The onnxruntime-web pin lived at `1.25.0-dev.20260212` (a dev snapshot) under `@huggingface/transformers` 4.1.0. Upgrading transformers.js to **4.3.2** forced a re-pairing: 4.3.2 declares an onnxruntime-web `1.31.0-dev` branch as its dependency, and staying on the 1.25.0-dev snapshot would have split the JS glue and the WASM binaries across API generations again — the exact class of failure documented at the top of this file.
+
+What the move taught:
+
+- **Pin to the closest *released* build of the branch the wrapper declares.** `1.31.1` stable is the released point nearest transformers 4.3.2's `1.31.0-dev` requirement, and it preserves the two invariants that made the old pin work: the `onnxruntime-web-use-extern-wasm` export condition (non-bundled entry, so the `wasmPaths` override stays authoritative) and the six `ort-wasm-simd-threaded*` binaries `scripts/copy-onnx-wasm.mjs` copies to `public/onnx/`. Check both after any future bump.
+- **Single-binary-pin philosophy preserved — but the override moved house.** The override now lives in `pnpm-workspace.yaml` (`overrides:`) because pnpm 11 ignores package.json `pnpm.overrides`; `onnxruntime-web@1.31.1` is *additionally* a direct dependency so the resolved version is visible in `pnpm list` instead of hiding behind an override. All nested ORT consumers (transformers.js, kokoro-js, vits-web, vad-web) still resolve to exactly one build — ORT requires the JS glue and the `.wasm` binary to be the same version.
+- **Dev snapshots are a liability, not a feature.** A `-dev.20260212` pin is unreproducible by version number alone, can vanish upstream, and reads as a mistake to every contributor. Only accept one when no released version can actually run the graph — and budget a follow-up to replace it.
+- **Runtime pin ≠ weights pin.** `HF_REVISIONS` in `llm-worker.ts` still pins Qwen3.5-0.8B to `c76a8add…` because a re-export upstream changes the graph; a newer runtime only *adds* kernels, so an older exported graph stays safe. Do not drop a weights pin because the runtime moved, and vice versa.
+- **A library's types can force your tsconfig target.** `@wllama/wllama` ships TypeScript with BigInt literals, which ES2017 cannot parse — target went ES2017 → ES2020. If a new dependency fails `tsc` with BigInt-literal syntax errors, this is why; do not patch the library's types.

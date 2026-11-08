@@ -19,6 +19,7 @@ export function ConversationLog({
 	const scrollRef = useRef<HTMLDivElement>(null);
 
 	// Auto-scroll to bottom on new content
+	// biome-ignore lint/correctness/useExhaustiveDependencies: turns/streamingText are re-run triggers — scroll the log whenever content changes
 	useEffect(() => {
 		const el = scrollRef.current;
 		if (el) {

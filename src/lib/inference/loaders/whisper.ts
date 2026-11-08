@@ -12,7 +12,10 @@ export class WhisperLoader implements ModelLoader {
 
 	private modelId: string;
 	private dtype:
-		| Record<string, "q8" | "fp32" | "q4" | "fp16" | "auto" | "int8" | "uint8" | "q4f16">
+		| Record<
+				string,
+				"q8" | "fp32" | "q4" | "fp16" | "auto" | "int8" | "uint8" | "q4f16"
+		  >
 		| undefined;
 	private pipeline: unknown = null;
 	private session: ModelSession | null = null;
@@ -21,7 +24,10 @@ export class WhisperLoader implements ModelLoader {
 	constructor(
 		slug: string,
 		modelId: string,
-		dtype?: Record<string, "q8" | "fp32" | "q4" | "fp16" | "auto" | "int8" | "uint8" | "q4f16">,
+		dtype?: Record<
+			string,
+			"q8" | "fp32" | "q4" | "fp16" | "auto" | "int8" | "uint8" | "q4f16"
+		>,
 	) {
 		this.slug = slug;
 		this.modelId = modelId;

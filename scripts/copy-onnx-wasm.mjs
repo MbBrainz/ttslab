@@ -6,8 +6,8 @@
  * Runs automatically via the "postinstall" npm script.
  */
 
-import { createRequire } from "node:module";
 import { cpSync, mkdirSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 
 const require = createRequire(import.meta.url);
@@ -20,7 +20,12 @@ const distDir = dirname(
 		paths: [dirname(require.resolve("@huggingface/transformers"))],
 	}),
 );
-const outDir = join(dirname(import.meta.url.replace("file://", "")), "..", "public", "onnx");
+const outDir = join(
+	dirname(import.meta.url.replace("file://", "")),
+	"..",
+	"public",
+	"onnx",
+);
 
 mkdirSync(outDir, { recursive: true });
 
@@ -40,10 +45,13 @@ for (const file of files) {
 console.log(`Copied ${files.length} ONNX WASM files to public/onnx/`);
 
 // --- Copy VAD assets (Silero ONNX models + worklet) to public/vad/ ---
-const vadDistDir = join(
-	dirname(require.resolve("@ricky0123/vad-web")),
+const vadDistDir = join(dirname(require.resolve("@ricky0123/vad-web")));
+const vadOutDir = join(
+	dirname(import.meta.url.replace("file://", "")),
+	"..",
+	"public",
+	"vad",
 );
-const vadOutDir = join(dirname(import.meta.url.replace("file://", "")), "..", "public", "vad");
 
 mkdirSync(vadOutDir, { recursive: true });
 

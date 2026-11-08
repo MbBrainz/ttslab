@@ -69,6 +69,7 @@ export function RecentTexts({ onSelect, currentText }: RecentTextsProps) {
 						)}
 					>
 						<span className="truncate">{text}</span>
+						{/* biome-ignore lint/a11y/useSemanticElements: remove affordance nested inside the chip button — a real <button> inside a <button> is invalid HTML */}
 						<span
 							role="button"
 							tabIndex={0}

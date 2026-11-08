@@ -73,7 +73,7 @@ interface ModelConfig {
 // ---------------------------------------------------------------------------
 
 function generateTtsLoader(config: ModelConfig): string {
-	const className = toPascalCase(config.slug) + "Loader";
+	const className = `${toPascalCase(config.slug)}Loader`;
 	const voicesArray = (config.voices ?? [])
 		.map(
 			(v) =>
@@ -209,7 +209,7 @@ ${synthBody}
 }
 
 function generateSttLoader(config: ModelConfig): string {
-	const className = toPascalCase(config.slug) + "Loader";
+	const className = `${toPascalCase(config.slug)}Loader`;
 
 	const backends = [];
 	if (config.supportsWebgpu) backends.push('"webgpu"');
@@ -321,7 +321,7 @@ export class ${className} implements ModelLoader {
 }
 
 function generateRegistryEntry(config: ModelConfig): string {
-	const className = toPascalCase(config.slug) + "Loader";
+	const className = `${toPascalCase(config.slug)}Loader`;
 	const loaderFile = config.slug.replace(/-/g, "-");
 
 	return `loaders.set("${config.slug}", async () => {
@@ -413,7 +413,9 @@ async function main() {
 			sizeMb: Number(await ask(rl, "Size in MB: ")),
 			paramsMillions: Number(await ask(rl, "Parameters in millions: ")),
 			architecture: await ask(rl, "Architecture: "),
-			languages: (await ask(rl, "Languages (comma-separated): ")).split(",").map((l) => l.trim()),
+			languages: (await ask(rl, "Languages (comma-separated): "))
+				.split(",")
+				.map((l) => l.trim()),
 			supportsWebgpu: (await ask(rl, "Supports WebGPU? (y/n): ")) === "y",
 			supportsWasm: (await ask(rl, "Supports WASM? (y/n): ")) === "y",
 			description: await ask(rl, "Description: "),
@@ -489,7 +491,9 @@ Example (TTS with transformers.js):
 	}
 
 	// 2. Print registry entry
-	console.log("\n--- Registry entry (add to src/lib/inference/registry.ts) ---");
+	console.log(
+		"\n--- Registry entry (add to src/lib/inference/registry.ts) ---",
+	);
 	console.log(generateRegistryEntry(config));
 
 	// 3. Print seed entry
@@ -501,7 +505,7 @@ Example (TTS with transformers.js):
 	console.log("2. Add the seed entry to scripts/seed-models.ts");
 	console.log("3. Run: pnpm tsc --noEmit");
 	console.log("4. Run: pnpm tsx scripts/seed-models.ts");
-	console.log("5. Test at localhost:3000/models/" + config.slug);
+	console.log(`5. Test at localhost:3000/models/${config.slug}`);
 }
 
 main().catch(console.error);

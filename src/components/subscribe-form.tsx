@@ -60,13 +60,10 @@ export function SubscribeForm({
 
 	if (status === "success") {
 		return (
-			<div
-				role="status"
-				className="flex items-center justify-center gap-2 text-sm text-success"
-			>
+			<output className="flex items-center justify-center gap-2 text-sm text-success">
 				<Check className="h-4 w-4" />
 				<span>Subscribed! Check your email to confirm.</span>
-			</div>
+			</output>
 		);
 	}
 

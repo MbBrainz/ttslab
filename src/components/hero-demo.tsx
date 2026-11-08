@@ -73,9 +73,7 @@ export function HeroDemo({ onAnalyserReady, onPlayingChange }: HeroDemoProps) {
 		if (audioCtxRef.current || !audioRef.current) return;
 		try {
 			const audioCtx = new AudioContext();
-			const source = audioCtx.createMediaElementSource(
-				audioRef.current,
-			);
+			const source = audioCtx.createMediaElementSource(audioRef.current);
 			const analyser = audioCtx.createAnalyser();
 			analyser.fftSize = 256;
 			analyser.smoothingTimeConstant = 0.8;
@@ -112,6 +110,7 @@ export function HeroDemo({ onAnalyserReady, onPlayingChange }: HeroDemoProps) {
 	}, [sample.audioSrc, ensureAudioContext]);
 
 	// Start typewriter + audio simultaneously when active sample changes
+	// biome-ignore lint/correctness/useExhaustiveDependencies: sampleIdx/restartKey are intentional re-run triggers (restartKey forces re-run when replaying from sample 0)
 	useEffect(() => {
 		if (!active) return;
 
@@ -142,7 +141,6 @@ export function HeroDemo({ onAnalyserReady, onPlayingChange }: HeroDemoProps) {
 		return () => {
 			if (typeTimerRef.current) clearInterval(typeTimerRef.current);
 		};
-	// eslint-disable-next-line react-hooks/exhaustive-deps -- restartKey forces re-run when replaying from sample 0
 	}, [active, sampleIdx, restartKey, sample.text, playAudio]);
 
 	// Advance to next sample when audio ends
@@ -211,15 +209,13 @@ export function HeroDemo({ onAnalyserReady, onPlayingChange }: HeroDemoProps) {
 
 	return (
 		<div className="mx-auto w-full max-w-2xl text-center">
-			{/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+			{/* biome-ignore lint/a11y/useMediaCaption: audio is TTS of the text shown above it — the page itself is the caption */}
 			<audio ref={audioRef} preload="auto" />
 
 			{/* Typewriter text — large, italic, in curly quotes */}
 			<div className="relative min-h-[5rem] px-4 sm:min-h-[6rem]">
 				<p className="text-xl leading-relaxed text-foreground/90 italic sm:text-2xl">
-					<span className="select-none text-muted-foreground/40">
-						&ldquo;
-					</span>
+					<span className="select-none text-muted-foreground/40">&ldquo;</span>
 					{displayedText}
 					{isTyping && (
 						<span
@@ -229,9 +225,7 @@ export function HeroDemo({ onAnalyserReady, onPlayingChange }: HeroDemoProps) {
 							}}
 						/>
 					)}
-					<span className="select-none text-muted-foreground/40">
-						&rdquo;
-					</span>
+					<span className="select-none text-muted-foreground/40">&rdquo;</span>
 				</p>
 			</div>
 
@@ -250,16 +244,14 @@ export function HeroDemo({ onAnalyserReady, onPlayingChange }: HeroDemoProps) {
 							className="hero-eq-bar w-[3px] origin-bottom rounded-full bg-primary"
 							style={{
 								height: "100%",
-								animation:
-									"hero-eq 0.6s ease-in-out infinite 0.15s",
+								animation: "hero-eq 0.6s ease-in-out infinite 0.15s",
 							}}
 						/>
 						<span
 							className="hero-eq-bar w-[3px] origin-bottom rounded-full bg-primary"
 							style={{
 								height: "100%",
-								animation:
-									"hero-eq 0.6s ease-in-out infinite 0.3s",
+								animation: "hero-eq 0.6s ease-in-out infinite 0.3s",
 							}}
 						/>
 					</span>
@@ -278,14 +270,13 @@ export function HeroDemo({ onAnalyserReady, onPlayingChange }: HeroDemoProps) {
 						strokeWidth="2"
 						strokeLinecap="round"
 						strokeLinejoin="round"
+						aria-hidden="true"
 					>
 						<polyline points="1 4 1 10 7 10" />
 						<path d="M3.51 15a9 9 0 102.13-9.36L1 10" />
 					</svg>
 				</button>
-				<span className="text-xs text-muted-foreground">
-					{sample.label}
-				</span>
+				<span className="text-xs text-muted-foreground">{sample.label}</span>
 				<button
 					onClick={handleToggleMute}
 					type="button"
@@ -301,6 +292,7 @@ export function HeroDemo({ onAnalyserReady, onPlayingChange }: HeroDemoProps) {
 							strokeWidth="2"
 							strokeLinecap="round"
 							strokeLinejoin="round"
+							aria-hidden="true"
 						>
 							<path d="M11 5L6 9H2v6h4l5 4V5z" />
 							<line x1="23" y1="9" x2="17" y2="15" />
@@ -315,6 +307,7 @@ export function HeroDemo({ onAnalyserReady, onPlayingChange }: HeroDemoProps) {
 							strokeWidth="2"
 							strokeLinecap="round"
 							strokeLinejoin="round"
+							aria-hidden="true"
 						>
 							<path d="M11 5L6 9H2v6h4l5 4V5z" />
 							<path d="M19.07 4.93a10 10 0 010 14.14" />
@@ -328,6 +321,7 @@ export function HeroDemo({ onAnalyserReady, onPlayingChange }: HeroDemoProps) {
 			<div className="mt-4 flex justify-center gap-1.5">
 				{SAMPLES.map((_, i) => (
 					<div
+						// biome-ignore lint/suspicious/noArrayIndexKey: SAMPLES is a static constant — index is a stable identity
 						key={i}
 						className={`h-1.5 rounded-full transition-all duration-300 ${
 							i === sampleIdx

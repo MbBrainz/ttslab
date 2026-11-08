@@ -1,8 +1,13 @@
-import type { ChatMessage, LlmWorkerCommand, LlmWorkerResponse } from "./llm-types";
+import type { LlmWorkerCommand, LlmWorkerResponse } from "./llm-types";
 
 export interface LlmTokenCallback {
 	onToken: (token: string) => void;
-	onDone: (data: { fullText: string; totalMs: number; tokenCount: number; tokensPerSec: number }) => void;
+	onDone: (data: {
+		fullText: string;
+		totalMs: number;
+		tokenCount: number;
+		tokensPerSec: number;
+	}) => void;
 	onError: (error: Error) => void;
 }
 
@@ -27,11 +32,28 @@ export class LlmTransport {
 		resolve: (value: any) => void;
 		reject: (error: Error) => void;
 	} | null = null;
-	private progressCallback: ((progress: { status: string; file: string; loaded: number; total: number }) => void) | null = null;
+	private progressCallback:
+		| ((progress: {
+				status: string;
+				file: string;
+				loaded: number;
+				total: number;
+		  }) => void)
+		| null = null;
 	private tokenCallback: LlmTokenCallback | null = null;
 	private callbacks: LlmTransportCallbacks;
 	/** Number of "load" commands sent that haven't received "loaded" responses yet. */
 	private pendingLoads = 0;
+	/**
+	 * Generation ids: the transport assigns one per generate command and the
+	 * worker echoes it on token/done/cancelled responses. Without it, a stale
+	 * "cancelled" response from a just-cancelled generation would arrive after
+	 * a fresh generate was posted (cancel clears isGenerating immediately so
+	 * re-generation can start before the worker finished unwinding) and wipe
+	 * the new generation's token callback mid-stream.
+	 */
+	private nextGenId = 0;
+	private activeGenId: number | null = null;
 
 	constructor(callbacks: LlmTransportCallbacks) {
 		this.callbacks = callbacks;
@@ -39,9 +61,7 @@ export class LlmTransport {
 
 	ensureWorker(): Worker {
 		if (!this.worker) {
-			this.worker = new Worker(
-				new URL("./llm-worker.ts", import.meta.url),
-			);
+			this.worker = new Worker(new URL("./llm-worker.ts", import.meta.url));
 
 			this.worker.onmessage = (e: MessageEvent<LlmWorkerResponse>) => {
 				this.handleMessage(e.data);
@@ -76,10 +96,13 @@ export class LlmTransport {
 			}
 
 			case "token":
+				if (this.isStaleGeneration(msg.genId)) break;
 				this.tokenCallback?.onToken(msg.token);
 				break;
 
-			case "done":
+			case "done": {
+				if (this.isStaleGeneration(msg.genId)) break;
+				this.activeGenId = null;
 				this.callbacks.onStateChange({ isGenerating: false });
 				this.tokenCallback?.onDone({
 					fullText: msg.fullText,
@@ -89,13 +112,17 @@ export class LlmTransport {
 				});
 				this.tokenCallback = null;
 				break;
+			}
 
-			case "cancelled":
+			case "cancelled": {
+				if (this.isStaleGeneration(msg.genId)) break;
+				this.activeGenId = null;
 				this.callbacks.onStateChange({ isGenerating: false });
 				this.tokenCallback = null;
 				this.pending?.resolve(undefined);
 				this.pending = null;
 				break;
+			}
 
 			case "disposed":
 				this.pending?.resolve(undefined);
@@ -131,6 +158,18 @@ export class LlmTransport {
 		this.pending = null;
 	}
 
+	/** True when a response belongs to a generation that has already been
+	 *  superseded by a newer generate command. Responses without a genId
+	 *  (defensive: the worker always sends one on generate responses) are
+	 *  treated as current. */
+	private isStaleGeneration(genId?: number): boolean {
+		return (
+			genId !== undefined &&
+			this.activeGenId !== null &&
+			genId !== this.activeGenId
+		);
+	}
+
 	sendCommand<T>(cmd: LlmWorkerCommand): Promise<T> {
 		return new Promise<T>((resolve, reject) => {
 			// Reject any in-flight command before overwriting
@@ -144,6 +183,14 @@ export class LlmTransport {
 
 	postCommand(cmd: LlmWorkerCommand): void {
 		const worker = this.ensureWorker();
+		if (cmd.type === "generate") {
+			// Assign the generation id here so responses can be matched to the
+			// current generation (see isStaleGeneration).
+			const genId = this.nextGenId++;
+			this.activeGenId = genId;
+			worker.postMessage({ ...cmd, genId });
+			return;
+		}
 		worker.postMessage(cmd);
 	}
 
@@ -151,7 +198,16 @@ export class LlmTransport {
 		this.tokenCallback = cb;
 	}
 
-	setProgressCallback(cb: ((progress: { status: string; file: string; loaded: number; total: number }) => void) | null): void {
+	setProgressCallback(
+		cb:
+			| ((progress: {
+					status: string;
+					file: string;
+					loaded: number;
+					total: number;
+			  }) => void)
+			| null,
+	): void {
 		this.progressCallback = cb;
 	}
 
@@ -161,5 +217,6 @@ export class LlmTransport {
 		this.pending = null;
 		this.tokenCallback = null;
 		this.progressCallback = null;
+		this.activeGenId = null;
 	}
 }

@@ -50,8 +50,7 @@ export function WaveformPlayer({ audioUrl, duration }: WaveformPlayerProps) {
 		// Resolve CSS custom properties — canvas API can't handle var() references
 		const style = getComputedStyle(containerRef.current);
 		const gradientTo =
-			style.getPropertyValue("--gradient-to").trim() ||
-			"oklch(0.65 0.20 230)";
+			style.getPropertyValue("--gradient-to").trim() || "oklch(0.65 0.20 230)";
 		const mutedFg =
 			style.getPropertyValue("--muted-foreground").trim() ||
 			"oklch(0.65 0.02 275)";
@@ -152,10 +151,7 @@ export function WaveformPlayer({ audioUrl, duration }: WaveformPlayerProps) {
 
 			<div
 				ref={containerRef}
-				className={cn(
-					"min-w-0 flex-1",
-					!isReady && "opacity-50",
-				)}
+				className={cn("min-w-0 flex-1", !isReady && "opacity-50")}
 			/>
 
 			<span className="shrink-0 text-xs tabular-nums text-muted-foreground">

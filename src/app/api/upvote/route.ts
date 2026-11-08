@@ -5,6 +5,12 @@ import {
 	getUpvoteStatus,
 	recordUpvote,
 } from "@/lib/db/queries";
+import {
+	getClientIp,
+	tooManyRequests,
+	upvoteFingerprintLimiter,
+	upvoteIpLimiter,
+} from "@/lib/rate-limit";
 
 const FINGERPRINT_REGEX = /^[a-f0-9]{64}$/;
 
@@ -41,6 +47,14 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
 	try {
+		// IP bucket first (cheap rejection before parsing the body), then the
+		// fingerprint bucket once we have the body. Both per serverless
+		// instance — see src/lib/rate-limit.ts for the honest limitation.
+		const ipCheck = upvoteIpLimiter.check(getClientIp(request));
+		if (!ipCheck.ok) {
+			return tooManyRequests(ipCheck.retryAfterSeconds);
+		}
+
 		const body = await request.json();
 		const { modelSlug, fingerprint } = body;
 
@@ -59,6 +73,13 @@ export async function POST(request: Request) {
 				{ error: "fingerprint must be a 64-character hex string" },
 				{ status: 400 },
 			);
+		}
+
+		// Client-supplied, so spoofable — the per-IP bucket above is the
+		// backstop; this bucket throttles one fingerprint hammering one model.
+		const fingerprintCheck = upvoteFingerprintLimiter.check(fingerprint);
+		if (!fingerprintCheck.ok) {
+			return tooManyRequests(fingerprintCheck.retryAfterSeconds);
 		}
 
 		const model = await getModelBySlug(modelSlug);

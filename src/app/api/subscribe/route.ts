@@ -2,6 +2,12 @@ import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { createSubscription, getModelBySlug } from "@/lib/db/queries";
+import {
+	getClientIp,
+	subscribeHourIpLimiter,
+	subscribeIpLimiter,
+	tooManyRequests,
+} from "@/lib/rate-limit";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -9,6 +15,19 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(request: Request) {
 	try {
+		// Gate the Resend email send: per-IP burst + sustained windows, per
+		// serverless instance (see src/lib/rate-limit.ts for the honest
+		// limitation). The hourly bucket is the real email-bomb cap; the
+		// minute bucket binds earlier only in the first minute of an hour.
+		const ipCheck = subscribeIpLimiter.check(getClientIp(request));
+		if (!ipCheck.ok) {
+			return tooManyRequests(ipCheck.retryAfterSeconds);
+		}
+		const hourCheck = subscribeHourIpLimiter.check(getClientIp(request));
+		if (!hourCheck.ok) {
+			return tooManyRequests(hourCheck.retryAfterSeconds);
+		}
+
 		const body = await request.json();
 		const { email, modelSlug, comparisonSlug } = body;
 

@@ -1,5 +1,5 @@
-import type { DownloadProgress } from "@/lib/inference/types";
 import type { ModelState } from "@/components/model-status";
+import type { DownloadProgress } from "@/lib/inference/types";
 
 /**
  * Creates a throttled download progress tracker that aggregates multi-file
@@ -23,7 +23,9 @@ export function createDownloadTracker(estimatedBytes = 0) {
 		 * Process a download progress event. Returns a ModelState to apply,
 		 * or null if throttled (< 500ms since last update).
 		 */
-		process(progress: DownloadProgress): (ModelState & { status: "downloading" | "initializing" }) | null {
+		process(
+			progress: DownloadProgress,
+		): (ModelState & { status: "downloading" | "initializing" }) | null {
 			fileMap.set(progress.file, {
 				loaded: progress.loaded,
 				total: progress.total,
@@ -52,7 +54,8 @@ export function createDownloadTracker(estimatedBytes = 0) {
 			smoothSpeed = smoothSpeed === 0 ? speed : smoothSpeed * 0.7 + speed * 0.3;
 			lastDisplayTime = now;
 
-			const pct = totalBytes > 0 ? Math.round((downloadedBytes / totalBytes) * 100) : 0;
+			const pct =
+				totalBytes > 0 ? Math.round((downloadedBytes / totalBytes) * 100) : 0;
 
 			return {
 				status: "downloading",

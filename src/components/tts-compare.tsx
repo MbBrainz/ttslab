@@ -1,11 +1,11 @@
 "use client";
 
 import { Loader2, Volume2 } from "lucide-react";
-import { GpuEstimate } from "@/components/gpu-estimate";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { GpuEstimate } from "@/components/gpu-estimate";
 import { type ModelState, ModelStatus } from "@/components/model-status";
-import { RecentTexts, addRecentText } from "@/components/recent-texts";
+import { addRecentText, RecentTexts } from "@/components/recent-texts";
 import { ShareButton } from "@/components/share-button";
 import { TextPresets } from "@/components/text-presets";
 import { Button } from "@/components/ui/button";
@@ -14,9 +14,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { WaveformPlayer } from "@/components/waveform-player";
 import { float32ToWav } from "@/lib/audio-utils";
 import type { Model } from "@/lib/db/schema";
-import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
-import type { Voice } from "@/lib/inference/types";
 import { getLanguageName } from "@/lib/inference/language-names";
+import type { Voice } from "@/lib/inference/types";
+import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
 import { getShareParams } from "@/lib/share-params";
 
 type TtsCompareProps = {
@@ -25,8 +25,7 @@ type TtsCompareProps = {
 	comparisonSlug?: string;
 };
 
-const DEFAULT_PLACEHOLDER =
-	"Type or paste text here to compare both models...";
+const DEFAULT_PLACEHOLDER = "Type or paste text here to compare both models...";
 const MAX_TEXT_LENGTH = 5000;
 
 type PanelState = {
@@ -51,7 +50,11 @@ function createInitialPanel(): PanelState {
 	};
 }
 
-export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) {
+export function TtsCompare({
+	modelA,
+	modelB,
+	comparisonSlug,
+}: TtsCompareProps) {
 	const [text, setText] = useState("");
 	const [panelA, setPanelA] = useState<PanelState>(createInitialPanel);
 	const [panelB, setPanelB] = useState<PanelState>(createInitialPanel);
@@ -130,7 +133,10 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 					if (totalBytes === 0) totalBytes = estimatedBytesA;
 
 					if (downloadedBytes >= totalBytes && totalBytes > 0) {
-						setPanelA((p) => ({ ...p, modelState: { status: "initializing" } }));
+						setPanelA((p) => ({
+							...p,
+							modelState: { status: "initializing" },
+						}));
 						return;
 					}
 
@@ -174,8 +180,14 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 				voices: result.voices,
 				voice: result.voices.length > 0 ? result.voices[0].id : "default",
 				languages: result.languages,
-				language: result.languages.includes("en") ? "en" : (result.languages[0] ?? "en"),
-				modelState: { status: "ready", backend: result.backend, loadTime: result.loadTime },
+				language: result.languages.includes("en")
+					? "en"
+					: (result.languages[0] ?? "en"),
+				modelState: {
+					status: "ready",
+					backend: result.backend,
+					loadTime: result.loadTime,
+				},
 			}));
 		} catch (err) {
 			setPanelA((p) => ({
@@ -183,8 +195,7 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 				modelState: {
 					status: "error",
 					code: "LOAD_FAILED",
-					message:
-						err instanceof Error ? err.message : "Failed to load model",
+					message: err instanceof Error ? err.message : "Failed to load model",
 					recoverable: true,
 				},
 			}));
@@ -233,7 +244,10 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 					if (totalBytes === 0) totalBytes = estimatedBytesB;
 
 					if (downloadedBytes >= totalBytes && totalBytes > 0) {
-						setPanelB((p) => ({ ...p, modelState: { status: "initializing" } }));
+						setPanelB((p) => ({
+							...p,
+							modelState: { status: "initializing" },
+						}));
 						return;
 					}
 
@@ -277,8 +291,14 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 				voices: result.voices,
 				voice: result.voices.length > 0 ? result.voices[0].id : "default",
 				languages: result.languages,
-				language: result.languages.includes("en") ? "en" : (result.languages[0] ?? "en"),
-				modelState: { status: "ready", backend: result.backend, loadTime: result.loadTime },
+				language: result.languages.includes("en")
+					? "en"
+					: (result.languages[0] ?? "en"),
+				modelState: {
+					status: "ready",
+					backend: result.backend,
+					loadTime: result.loadTime,
+				},
 			}));
 		} catch (err) {
 			setPanelB((p) => ({
@@ -286,8 +306,7 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 				modelState: {
 					status: "error",
 					code: "LOAD_FAILED",
-					message:
-						err instanceof Error ? err.message : "Failed to load model",
+					message: err instanceof Error ? err.message : "Failed to load model",
 					recoverable: true,
 				},
 			}));
@@ -339,10 +358,7 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 	}, [modelB.slug, workerB]);
 
 	const generateForPanel = useCallback(
-		async (
-			panel: "A" | "B",
-			textToSpeak: string,
-		) => {
+		async (panel: "A" | "B", textToSpeak: string) => {
 			const generatingRef = panel === "A" ? generatingARef : generatingBRef;
 			const backendRef = panel === "A" ? backendARef : backendBRef;
 			const setPanel = panel === "A" ? setPanelA : setPanelB;
@@ -382,7 +398,14 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 			}, 100);
 
 			try {
-				const result = await worker.synthesize(model.slug, textToSpeak, currentVoice, undefined, undefined, currentLanguage);
+				const result = await worker.synthesize(
+					model.slug,
+					textToSpeak,
+					currentVoice,
+					undefined,
+					undefined,
+					currentLanguage,
+				);
 				clearInterval(timer);
 
 				const wavBlob = float32ToWav(result.audio, result.sampleRate);
@@ -417,9 +440,7 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 						status: "error",
 						code: "SYNTHESIS_FAILED",
 						message:
-							err instanceof Error
-								? err.message
-								: "Failed to generate speech",
+							err instanceof Error ? err.message : "Failed to generate speech",
 						recoverable: true,
 					},
 				}));
@@ -448,8 +469,7 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 	const isReadyOrResult = (state: ModelState) =>
 		state.status === "ready" || state.status === "result";
 	const canGenerateModel = (state: ModelState, modelReady: boolean) =>
-		isReadyOrResult(state) ||
-		(state.status === "error" && modelReady);
+		isReadyOrResult(state) || (state.status === "error" && modelReady);
 
 	const bothCanGenerate =
 		canGenerateModel(panelA.modelState, modelReadyARef.current) &&
@@ -606,7 +626,10 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 									{panelA.modelState.metrics.backend}
 								</p>
 							</div>
-							<GpuEstimate totalMs={panelA.modelState.metrics.totalMs} backend={panelA.modelState.metrics.backend} />
+							<GpuEstimate
+								totalMs={panelA.modelState.metrics.totalMs}
+								backend={panelA.modelState.metrics.backend}
+							/>
 						</div>
 					)}
 					<Link
@@ -706,7 +729,10 @@ export function TtsCompare({ modelA, modelB, comparisonSlug }: TtsCompareProps) 
 									{panelB.modelState.metrics.backend}
 								</p>
 							</div>
-							<GpuEstimate totalMs={panelB.modelState.metrics.totalMs} backend={panelB.modelState.metrics.backend} />
+							<GpuEstimate
+								totalMs={panelB.modelState.metrics.totalMs}
+								backend={panelB.modelState.metrics.backend}
+							/>
 						</div>
 					)}
 					<Link

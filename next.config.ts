@@ -8,9 +8,7 @@ import type { NextConfig } from "next";
 const require_ = createRequire(import.meta.url);
 const ortWebDir = path.dirname(
 	require_.resolve("onnxruntime-web", {
-		paths: [
-			path.dirname(require_.resolve("@huggingface/transformers")),
-		],
+		paths: [path.dirname(require_.resolve("@huggingface/transformers"))],
 	}),
 );
 const ortCommonPath = path.dirname(
@@ -43,6 +41,34 @@ const nextConfig: NextConfig = {
 						key: "Cross-Origin-Opener-Policy",
 						value: "same-origin",
 					},
+					{
+						key: "X-Content-Type-Options",
+						value: "nosniff",
+					},
+					{
+						key: "Referrer-Policy",
+						value: "strict-origin-when-cross-origin",
+					},
+					// Site uses the microphone for STT demos: allow same-origin,
+					// deny cross-origin embedding; deny camera/geolocation entirely.
+					{
+						key: "Permissions-Policy",
+						value:
+							"camera=(), geolocation=(), microphone=(self), interest-cohort=()",
+					},
+					{
+						key: "Strict-Transport-Security",
+						value: "max-age=63072000; includeSubDomains",
+					},
+				],
+			},
+			{
+				source: "/internal/:path*",
+				headers: [
+					{
+						key: "X-Robots-Tag",
+						value: "noindex, nofollow",
+					},
 				],
 			},
 		];
@@ -69,9 +95,10 @@ const nextConfig: NextConfig = {
 			};
 
 			// CRITICAL: Force resolve onnxruntime-common to the correct version.
-			// Multiple versions can exist; the alias ensures the v1.25.0-dev version
-			// (with the `location` getter) is used everywhere, preventing
-			// "invalid data location: undefined" errors at inference time.
+			// Multiple versions can exist; the alias ensures the pinned
+			// onnxruntime-web 1.31.1 version (with the `location` getter) is used
+			// everywhere, preventing "invalid data location: undefined" errors at
+			// inference time.
 			//
 			// The "onnxruntime-web-use-extern-wasm" condition tells onnxruntime-web
 			// to use the non-bundle entry (e.g. ort.webgpu.min.mjs instead of

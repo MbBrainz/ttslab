@@ -1,14 +1,17 @@
 import { selectBackend } from "./backend-select";
+import { fitMessagesToContext } from "./llm-history";
+import { SYSTEM_PROMPT } from "./llm-prompt";
+import type {
+	ChatMessage,
+	LlmWorkerCommand,
+	LlmWorkerResponse,
+} from "./llm-types";
 import { configureOnnxWasmPaths } from "./onnx-config";
-import type { LlmWorkerCommand, LlmWorkerResponse, ChatMessage } from "./llm-types";
 
 // biome-ignore lint/suspicious/noExplicitAny: dynamically loaded transformers types
 let tokenizer: any = null;
 // biome-ignore lint/suspicious/noExplicitAny: dynamically loaded transformers types
 let model: any = null;
-// biome-ignore lint/suspicious/noExplicitAny: dynamically loaded transformers types
-let pastKeyValues: any = null;
-let cancelled = false;
 
 // Pin HF revisions where the current upstream export no longer runs on the
 // onnxruntime-web build pinned in pnpm-workspace.yaml. The Apr 22 2026
@@ -16,23 +19,47 @@ let cancelled = false;
 // into com.microsoft::CausalConvWithState, which ORT 1.25.0-dev does not
 // register — session creation throws before any inference. This revision is
 // the last pre-re-export commit (Mar 24 2026), the same files the voice agent
-// shipped against in April.
+// shipped against in April. NOTE: this revision graph plus ORT 1.31.1 is
+// BROWSER-UNVERIFIED (the 2026-11-08 pending-pass disclosure) — the pin is
+// known-good on 1.25.0-dev only. Distil-Whisper and the engine picker have
+// browser passes; the LLM engines do not yet.
 const HF_REVISIONS: Record<string, string> = {
-	"onnx-community/Qwen3.5-0.8B-Text-ONNX": "c76a8adddf6019838b0041ee7f29e8136d43f15b",
+	"onnx-community/Qwen3.5-0.8B-Text-ONNX":
+		"c76a8adddf6019838b0041ee7f29e8136d43f15b",
 };
-
-const SYSTEM_PROMPT =
-	"You are a helpful voice assistant having a real-time conversation. Keep responses concise — 1-3 sentences maximum. Never use markdown formatting, bullet points, or numbered lists. Never use emojis. Be natural and conversational. Remember what the user said earlier in the conversation and refer back to it when relevant. Begin each reply with a brief, natural acknowledgment — one or two words followed by a period — the way a person would naturally react before responding. Vary these freely and match them to the context of what was said.";
 
 // Serialize all commands — async onmessage yields at first await, which would
 // let the next message start concurrently causing race conditions.
 let commandQueue: Promise<void> = Promise.resolve();
 
+// Cancel is handled OUT OF BAND, before queueing: routing it through the
+// serialized queue would park it behind the very generation it must interrupt
+// (a queued promise cannot preempt the running one), leaving the cancel
+// button dead until generation finished on its own. Each generate gets a
+// monotonic id; a cancel marks every generate dispatched so far as cancelled
+// (the running one plus any still-queued ones), and the generate loop polls
+// isCancelled(genId) between tokens.
+let nextGenerateId = 0;
+let cancelledThrough = -1;
+
 self.onmessage = (e: MessageEvent<LlmWorkerCommand>) => {
+	if (e.data.type === "cancel") {
+		cancelledThrough = nextGenerateId - 1;
+		return;
+	}
+	if (e.data.type === "generate") {
+		const genId = nextGenerateId++;
+		commandQueue = commandQueue.then(() => handleCommand(e.data, genId));
+		return;
+	}
 	commandQueue = commandQueue.then(() => handleCommand(e.data));
 };
 
-async function handleCommand(cmd: LlmWorkerCommand) {
+function isCancelled(genId: number): boolean {
+	return genId <= cancelledThrough;
+}
+
+async function handleCommand(cmd: LlmWorkerCommand, genId?: number) {
 	try {
 		switch (cmd.type) {
 			case "load": {
@@ -40,14 +67,10 @@ async function handleCommand(cmd: LlmWorkerCommand) {
 				if (model?.dispose) await model.dispose();
 				model = null;
 				tokenizer = null;
-				pastKeyValues = null;
 
-				const {
-					AutoTokenizer,
-					AutoModelForCausalLM,
-					DynamicCache,
-					env,
-				} = await import("@huggingface/transformers");
+				const { AutoTokenizer, AutoModelForCausalLM, env } = await import(
+					"@huggingface/transformers"
+				);
 
 				configureOnnxWasmPaths(env);
 
@@ -58,7 +81,12 @@ async function handleCommand(cmd: LlmWorkerCommand) {
 
 				const loadStart = performance.now();
 
-				const progressCallback = (progress: { status: string; file?: string; loaded?: number; total?: number }) => {
+				const progressCallback = (progress: {
+					status: string;
+					file?: string;
+					loaded?: number;
+					total?: number;
+				}) => {
 					if (progress.status === "progress" && progress.file) {
 						post({
 							type: "progress",
@@ -93,23 +121,53 @@ async function handleCommand(cmd: LlmWorkerCommand) {
 
 			case "generate": {
 				if (!tokenizer || !model) {
-					post({ type: "error", code: "NOT_LOADED", message: "Model not loaded" });
+					post({
+						type: "error",
+						code: "NOT_LOADED",
+						message: "Model not loaded",
+					});
+					return;
+				}
+				if (genId === undefined) {
+					post({
+						type: "error",
+						code: "LLM_WORKER_ERROR",
+						message: "Generate command is missing its generation id",
+					});
 					return;
 				}
 
-				cancelled = false;
+				// A generate cancelled before it started (barge-in during queue
+				// wait) reports cancelled without prefilling at all.
+				if (isCancelled(genId)) {
+					post({ type: "cancelled", genId });
+					return;
+				}
+
 				const genStart = performance.now();
 				let tokenCount = 0;
 				let fullText = "";
 
+				// Honest context pin: no persisted KV cache means this message
+				// list is the whole context cost of the turn, so trim the oldest
+				// turns until system + kept history + this answer fit inside the
+				// advertised window. The client (use-voice-agent) applies the
+				// same helper first; this is the enforcing backstop for any
+				// caller that sends uncapped history.
+				const fit = fitMessagesToContext(cmd.messages, cmd.contextTokens, {
+					maxNewTokens: cmd.maxNewTokens,
+					systemPrompt: SYSTEM_PROMPT,
+				});
+
 				// Build messages with system prompt
 				const messages: ChatMessage[] = [
 					{ role: "system", content: SYSTEM_PROMPT },
-					...cmd.messages,
+					...fit.kept,
 				];
 
 				// For Qwen3, prepend /no_think to system content to disable thinking
-				const isQwen3 = tokenizer.chat_template?.includes?.("Qwen3") ||
+				const isQwen3 =
+					tokenizer.chat_template?.includes?.("Qwen3") ||
 					tokenizer.name_or_path?.includes?.("Qwen3");
 				if (isQwen3) {
 					messages[0] = {
@@ -132,7 +190,7 @@ async function handleCommand(cmd: LlmWorkerCommand) {
 					skip_prompt: true,
 					skip_special_tokens: true,
 					callback_function: (token: string) => {
-						if (cancelled) return;
+						if (isCancelled(genId)) return;
 
 						// Filter <think>...</think> blocks
 						const combined = thinkBuffer + token;
@@ -146,7 +204,7 @@ async function handleCommand(cmd: LlmWorkerCommand) {
 								if (after.length > 0) {
 									tokenCount++;
 									fullText += after;
-									post({ type: "token", token: after });
+									post({ type: "token", token: after, genId });
 								}
 							}
 							// Still inside think block, discard
@@ -159,7 +217,7 @@ async function handleCommand(cmd: LlmWorkerCommand) {
 							if (before.length > 0) {
 								tokenCount++;
 								fullText += before;
-								post({ type: "token", token: before });
+								post({ type: "token", token: before, genId });
 							}
 							insideThinkBlock = true;
 							const rest = combined.slice(thinkIdx + 7);
@@ -170,7 +228,7 @@ async function handleCommand(cmd: LlmWorkerCommand) {
 								if (after.length > 0) {
 									tokenCount++;
 									fullText += after;
-									post({ type: "token", token: after });
+									post({ type: "token", token: after, genId });
 								}
 							}
 							return;
@@ -184,39 +242,46 @@ async function handleCommand(cmd: LlmWorkerCommand) {
 
 						tokenCount++;
 						fullText += combined;
-						post({ type: "token", token: combined });
+						post({ type: "token", token: combined, genId });
 					},
 				});
 
-				const output = await model.generate({
+				// NOTE: past_key_values are deliberately NOT persisted across turns.
+				// The incremental-DynamicCache pattern (send only the newest tokens,
+				// let the cache carry prior turns) is unsafe in this pipeline:
+				// (1) re-tokenizing the assistant reply as continuation text can
+				// split BPE tokens differently than the ids the model itself
+				// generated, silently shifting positions; (2) barge-in cancels
+				// leave the cache holding more assistant text than the conversation
+				// records, so client and cache diverge. Full re-prefill of the
+				// trimmed history is slower per turn but correct — history is
+				// attended exactly once.
+				await model.generate({
 					...inputs,
 					max_new_tokens: cmd.maxNewTokens,
 					temperature: cmd.temperature,
 					do_sample: cmd.temperature > 0,
-					past_key_values: pastKeyValues,
 					return_dict_in_generate: true,
 					streamer,
 				});
 
-				// Persist KV cache for faster follow-up turns
-				if (output.past_key_values) {
-					pastKeyValues = output.past_key_values;
-				}
-
-				if (cancelled) {
-					post({ type: "cancelled" });
+				if (isCancelled(genId)) {
+					post({ type: "cancelled", genId });
 					return;
 				}
 
 				// Flush any remaining buffer
 				if (thinkBuffer.length > 0 && !insideThinkBlock) {
 					fullText += thinkBuffer;
-					post({ type: "token", token: thinkBuffer });
+					post({ type: "token", token: thinkBuffer, genId });
 					tokenCount++;
 				}
 
 				const totalMs = Math.round(performance.now() - genStart);
-				const tokensPerSec = tokenCount > 0 ? Math.round((tokenCount / totalMs) * 1000 * 10) / 10 : 0;
+				const tokensPerSec =
+					tokenCount > 0
+						? Math.round((tokenCount / totalMs) * 1000 * 10) / 10
+						: 0;
 
 				post({
 					type: "done",
@@ -224,12 +289,8 @@ async function handleCommand(cmd: LlmWorkerCommand) {
 					totalMs,
 					tokenCount,
 					tokensPerSec,
+					genId,
 				});
-				break;
-			}
-
-			case "cancel": {
-				cancelled = true;
 				break;
 			}
 
@@ -237,7 +298,6 @@ async function handleCommand(cmd: LlmWorkerCommand) {
 				if (model?.dispose) await model.dispose();
 				model = null;
 				tokenizer = null;
-				pastKeyValues = null;
 				post({ type: "disposed" });
 				break;
 			}

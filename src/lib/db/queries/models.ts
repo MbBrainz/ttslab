@@ -1,5 +1,5 @@
-import { unstable_cache } from "next/cache";
 import { asc, desc, eq, or, sql } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import { db } from "..";
 import { comparisons, models } from "../schema";
 import type { ModelWithUpvotes } from "../types";

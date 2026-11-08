@@ -1,31 +1,31 @@
 "use client";
 
 import { Download, Loader2, Radio, Square, Volume2 } from "lucide-react";
-import { GpuEstimate } from "@/components/gpu-estimate";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	addToHistory,
 	GenerationHistory,
 } from "@/components/generation-history";
+import { GpuEstimate } from "@/components/gpu-estimate";
 import { type ModelState, ModelStatus } from "@/components/model-status";
 import { addRecentText, RecentTexts } from "@/components/recent-texts";
 import { ShareButton } from "@/components/share-button";
 import { SSMLHints } from "@/components/ssml-hints";
+import { StreamingVisualizer } from "@/components/streaming-visualizer";
 import { TextPresets } from "@/components/text-presets";
 import { Button } from "@/components/ui/button";
 import { Select, SelectOption } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { VoiceCloneUpload } from "@/components/voice-clone-upload";
-import { StreamingVisualizer } from "@/components/streaming-visualizer";
 import { WaveformPlayer } from "@/components/waveform-player";
 import { trackModelLoad, trackTTSGeneration } from "@/lib/analytics";
-import { createDownloadTracker } from "@/lib/inference/download-tracker";
 import { float32ToWav } from "@/lib/audio-utils";
 import type { Model } from "@/lib/db/schema";
 import { useStreamingTts } from "@/lib/hooks/use-streaming-tts";
-import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
-import type { Voice } from "@/lib/inference/types";
+import { createDownloadTracker } from "@/lib/inference/download-tracker";
 import { getLanguageName } from "@/lib/inference/language-names";
+import type { Voice } from "@/lib/inference/types";
+import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
 import { getShareParams } from "@/lib/share-params";
 import { cn } from "@/lib/utils";
 
@@ -51,7 +51,9 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 	const [voices, setVoices] = useState<Voice[]>([]);
 	const [languages, setLanguages] = useState<string[]>([]);
 	const [language, setLanguage] = useState("en");
-	const [speakerEmbeddingUrl, setSpeakerEmbeddingUrl] = useState<string | null>(null);
+	const [speakerEmbeddingUrl, setSpeakerEmbeddingUrl] = useState<string | null>(
+		null,
+	);
 
 	const {
 		loadModel,
@@ -90,12 +92,7 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 		[audioUrl, model.slug, text, voice, voices, compact],
 	);
 
-	const {
-		startStream,
-		stopStream,
-		isStreaming,
-		analyser,
-	} = useStreamingTts({
+	const { startStream, stopStream, isStreaming, analyser } = useStreamingTts({
 		synthesizeStream,
 		cancelStream,
 		modelSlug: model.slug,
@@ -132,10 +129,13 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 
 	const activeEmbeddingUrl = voice === "custom" ? speakerEmbeddingUrl : null;
 
-	const getVoiceName = useCallback((voiceId: string): string => {
-		const found = displayVoices.find((v) => v.id === voiceId);
-		return found?.name ?? voiceId;
-	}, [displayVoices]);
+	const getVoiceName = useCallback(
+		(voiceId: string): string => {
+			const found = displayVoices.find((v) => v.id === voiceId);
+			return found?.name ?? voiceId;
+		},
+		[displayVoices],
+	);
 
 	const handleDownload = useCallback(async () => {
 		if (loadingRef.current) return;
@@ -175,7 +175,9 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 
 			if (result.languages.length > 0) {
 				setLanguages(result.languages);
-				setLanguage(result.languages.includes("en") ? "en" : result.languages[0]);
+				setLanguage(
+					result.languages.includes("en") ? "en" : result.languages[0],
+				);
 			}
 
 			if (!compact) {
@@ -297,13 +299,38 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 		} finally {
 			generatingRef.current = false;
 		}
-	}, [text, voice, audioUrl, model.slug, activeEmbeddingUrl, synthesize, getVoiceName, compact, language, languages]);
+	}, [
+		text,
+		voice,
+		audioUrl,
+		model.slug,
+		activeEmbeddingUrl,
+		synthesize,
+		getVoiceName,
+		compact,
+		language,
+		languages,
+	]);
 
 	const handleStream = useCallback(() => {
 		if (!text.trim() || isStreaming) return;
 		if (!compact) addRecentText(text);
-		startStream(text, voice, activeEmbeddingUrl, languages.length > 1 ? language : undefined);
-	}, [text, voice, activeEmbeddingUrl, isStreaming, startStream, compact, language, languages]);
+		startStream(
+			text,
+			voice,
+			activeEmbeddingUrl,
+			languages.length > 1 ? language : undefined,
+		);
+	}, [
+		text,
+		voice,
+		activeEmbeddingUrl,
+		isStreaming,
+		startStream,
+		compact,
+		language,
+		languages,
+	]);
 
 	const handleRetry = useCallback(() => {
 		if (modelReadyRef.current) {
@@ -330,9 +357,15 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 	const isProcessing = modelState.status === "processing";
 	const canGenerate =
 		isReady || (modelState.status === "error" && modelReadyRef.current);
-	const showVoiceSelect = displayVoices.length > 0 && (canGenerate || isProcessing || isStreaming);
-	const showLanguageSelect = languages.length > 1 && (canGenerate || isProcessing || isStreaming);
-	const showBackendSelect = !compact && model.supportsWebgpu && model.supportsWasm && modelState.status === "not_loaded";
+	const showVoiceSelect =
+		displayVoices.length > 0 && (canGenerate || isProcessing || isStreaming);
+	const showLanguageSelect =
+		languages.length > 1 && (canGenerate || isProcessing || isStreaming);
+	const showBackendSelect =
+		!compact &&
+		model.supportsWebgpu &&
+		model.supportsWasm &&
+		modelState.status === "not_loaded";
 
 	return (
 		<div className={compact ? "mx-auto max-w-lg space-y-3" : "space-y-6"}>
@@ -355,14 +388,17 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 					<Select
 						id={`tts-backend-${model.slug}`}
 						value={backend}
-						onChange={(e) => setBackend(e.target.value as "auto" | "webgpu" | "wasm")}
+						onChange={(e) =>
+							setBackend(e.target.value as "auto" | "webgpu" | "wasm")
+						}
 					>
 						<SelectOption value="auto">Auto (recommended)</SelectOption>
 						<SelectOption value="webgpu">WebGPU</SelectOption>
 						<SelectOption value="wasm">WASM</SelectOption>
 					</Select>
 					<p className="text-xs text-muted-foreground">
-						WebGPU uses your GPU for faster inference. WASM is the reliable fallback.
+						WebGPU uses your GPU for faster inference. WASM is the reliable
+						fallback.
 					</p>
 				</div>
 			)}
@@ -382,7 +418,11 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 					)}
 					<Textarea
 						id={`tts-text-${model.slug}`}
-						placeholder={compact ? "Type text to convert to speech..." : DEFAULT_PLACEHOLDER}
+						placeholder={
+							compact
+								? "Type text to convert to speech..."
+								: DEFAULT_PLACEHOLDER
+						}
 						value={text}
 						onChange={(e) => setText(e.target.value.slice(0, maxTextLength))}
 						rows={compact ? 2 : 4}
@@ -398,13 +438,17 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 								</span>
 								{wordCount > 0 && <span>~{wordCount} words</span>}
 							</div>
-							<TextPresets onSelect={setText} disabled={isProcessing} modelSlug={model.slug} />
+							<TextPresets
+								onSelect={setText}
+								disabled={isProcessing}
+								modelSlug={model.slug}
+							/>
 						</>
 					)}
 				</div>
 
-				{showVoiceSelect && (
-					compact ? (
+				{showVoiceSelect &&
+					(compact ? (
 						<Select
 							value={voice}
 							onChange={(e) => setVoice(e.target.value)}
@@ -437,11 +481,10 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 								))}
 							</Select>
 						</div>
-					)
-				)}
+					))}
 
-				{showLanguageSelect && (
-					compact ? (
+				{showLanguageSelect &&
+					(compact ? (
 						<Select
 							value={language}
 							onChange={(e) => setLanguage(e.target.value)}
@@ -474,8 +517,7 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 								))}
 							</Select>
 						</div>
-					)
-				)}
+					))}
 
 				{!compact && model.slug === "speecht5" && (
 					<VoiceCloneUpload
@@ -536,9 +578,18 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 			{audioUrl && (
 				<div className={compact ? "space-y-1" : "space-y-2"}>
 					<div className="flex items-center justify-between">
-						<h3 className={cn("font-medium text-foreground", compact ? "text-xs" : "text-sm")}>Output</h3>
+						<h3
+							className={cn(
+								"font-medium text-foreground",
+								compact ? "text-xs" : "text-sm",
+							)}
+						>
+							Output
+						</h3>
 						<div className="flex items-center gap-1">
-							{!compact && <ShareButton modelSlug={model.slug} text={text} voice={voice} />}
+							{!compact && (
+								<ShareButton modelSlug={model.slug} text={text} voice={voice} />
+							)}
 							<a
 								href={audioUrl}
 								download={`${model.slug}-${Date.now()}.wav`}
@@ -558,54 +609,70 @@ export function TtsDemo({ model, variant = "full" }: TtsDemoProps) {
 				</div>
 			)}
 
-			{!compact && modelState.status === "result" && (() => {
-				const m = modelState.metrics;
-				const cols = 2 + (m.ttfaMs != null ? 1 : 0) + (m.rtf != null ? 1 : 0) + (m.backend === "wasm" ? 1 : 0);
-				return (
-					<div className={cn(
-						"grid gap-4 rounded-lg border border-border bg-secondary/30 p-4",
-						cols <= 3 ? "grid-cols-3" : cols === 4 ? "grid-cols-4" : "grid-cols-5",
-					)}>
-						<div className="text-center">
-							<p className="text-xs text-muted-foreground">Generation time</p>
-							<p className="text-lg font-semibold tabular-nums">
-								{m.totalMs < 1000
-									? `${m.totalMs}ms`
-									: `${(m.totalMs / 1000).toFixed(2)}s`}
-							</p>
-						</div>
-						{m.ttfaMs != null && (
+			{!compact &&
+				modelState.status === "result" &&
+				(() => {
+					const m = modelState.metrics;
+					const cols =
+						2 +
+						(m.ttfaMs != null ? 1 : 0) +
+						(m.rtf != null ? 1 : 0) +
+						(m.backend === "wasm" ? 1 : 0);
+					return (
+						<div
+							className={cn(
+								"grid gap-4 rounded-lg border border-border bg-secondary/30 p-4",
+								cols <= 3
+									? "grid-cols-3"
+									: cols === 4
+										? "grid-cols-4"
+										: "grid-cols-5",
+							)}
+						>
 							<div className="text-center">
-								<p className="text-xs text-muted-foreground">First audio</p>
+								<p className="text-xs text-muted-foreground">Generation time</p>
 								<p className="text-lg font-semibold tabular-nums">
-									{m.ttfaMs < 1000
-										? `${m.ttfaMs}ms`
-										: `${(m.ttfaMs / 1000).toFixed(2)}s`}
+									{m.totalMs < 1000
+										? `${m.totalMs}ms`
+										: `${(m.totalMs / 1000).toFixed(2)}s`}
 								</p>
 							</div>
-						)}
-						{m.rtf != null && (
+							{m.ttfaMs != null && (
+								<div className="text-center">
+									<p className="text-xs text-muted-foreground">First audio</p>
+									<p className="text-lg font-semibold tabular-nums">
+										{m.ttfaMs < 1000
+											? `${m.ttfaMs}ms`
+											: `${(m.ttfaMs / 1000).toFixed(2)}s`}
+									</p>
+								</div>
+							)}
+							{m.rtf != null && (
+								<div className="text-center">
+									<p className="text-xs text-muted-foreground">
+										Real-time Factor
+									</p>
+									<p className="text-lg font-semibold tabular-nums">
+										{m.rtf.toFixed(3)}x
+									</p>
+								</div>
+							)}
 							<div className="text-center">
-								<p className="text-xs text-muted-foreground">Real-time Factor</p>
-								<p className="text-lg font-semibold tabular-nums">
-									{m.rtf.toFixed(3)}x
-								</p>
+								<p className="text-xs text-muted-foreground">Backend</p>
+								<p className="text-lg font-semibold uppercase">{m.backend}</p>
 							</div>
-						)}
-						<div className="text-center">
-							<p className="text-xs text-muted-foreground">Backend</p>
-							<p className="text-lg font-semibold uppercase">
-								{m.backend}
-							</p>
+							<GpuEstimate totalMs={m.totalMs} backend={m.backend} />
 						</div>
-						<GpuEstimate totalMs={m.totalMs} backend={m.backend} />
-					</div>
-				);
-			})()}
+					);
+				})()}
 
-			{!compact && <RecentTexts onSelect={handleSelectRecentText} currentText={text} />}
+			{!compact && (
+				<RecentTexts onSelect={handleSelectRecentText} currentText={text} />
+			)}
 
-			{!compact && <GenerationHistory key={historyKey} modelSlug={model.slug} />}
+			{!compact && (
+				<GenerationHistory key={historyKey} modelSlug={model.slug} />
+			)}
 		</div>
 	);
 }

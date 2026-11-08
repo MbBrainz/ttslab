@@ -1,9 +1,9 @@
 import type {
-	EchoResult,
-	SilenceResult,
-	ClippingResult,
-	EnergyResult,
 	AudioAnalysis,
+	ClippingResult,
+	EchoResult,
+	EnergyResult,
+	SilenceResult,
 } from "./types";
 import { THRESHOLDS } from "./types";
 
@@ -33,10 +33,7 @@ function autocorrelationAt(pcm: Float32Array, delaySamples: number): number {
  * because the audio-qa tests compare against it to demonstrate the improvement.
  * Do not add it back to CHECK_RULES.
  */
-export function detectEcho(
-	pcm: Float32Array,
-	sampleRate: number,
-): EchoResult {
+export function detectEcho(pcm: Float32Array, sampleRate: number): EchoResult {
 	const minDelay = Math.round(sampleRate * 0.05);
 	const maxDelay = Math.round(sampleRate * 0.5);
 	const step = Math.round(sampleRate * 0.005);

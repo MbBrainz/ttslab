@@ -17,12 +17,12 @@ const SPEAKER_EMBEDDINGS_URL =
  * _postprocess_waveform expects 2D [batch_size, waveform_length].
  * Without this patch, the audio is empty (0 samples).
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: patching untyped transformers.js pipeline internals
 function patchPostprocessWaveform(pipelineInstance: any): void {
 	const orig = pipelineInstance._postprocess_waveform;
 	if (!orig) return;
 	pipelineInstance._postprocess_waveform = function (
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		// biome-ignore lint/suspicious/noExplicitAny: patching untyped transformers.js pipeline internals
 		...args: any[]
 	) {
 		const waveform = args[1];
@@ -84,7 +84,7 @@ export class SpeechT5Loader implements ModelLoader {
 		// Inject processor — the pipeline factory skips it because text-to-audio
 		// is typed as "text" (include_processor = type !== "text"), but SpeechT5
 		// needs it to route to _call_text_to_spectrogram instead of _call_text_to_waveform.
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		// biome-ignore lint/suspicious/noExplicitAny: patching untyped transformers.js pipeline internals
 		(synthesizer as any).processor = await AutoProcessor.from_pretrained(
 			"Xenova/speecht5_tts",
 			{ progress_callback: progressCallback },
@@ -93,7 +93,7 @@ export class SpeechT5Loader implements ModelLoader {
 		// Pre-load vocoder during model load instead of lazy-loading during
 		// first synthesis (which causes a "No vocoder specified" console warning
 		// and an unexpected delay).
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		// biome-ignore lint/suspicious/noExplicitAny: patching untyped transformers.js pipeline internals
 		(synthesizer as any).vocoder = await AutoModel.from_pretrained(
 			"Xenova/speecht5_hifigan",
 			{

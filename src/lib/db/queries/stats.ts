@@ -1,5 +1,5 @@
-import { unstable_cache } from "next/cache";
 import { count, eq } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import { db } from "..";
 import { comparisons, models, upvotes } from "../schema";
 import type { SiteStats } from "../types";

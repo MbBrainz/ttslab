@@ -10,4 +10,4 @@ allowBuilds:
 # glue and the .wasm binary to be the same version.
 # Moved here from package.json "pnpm.overrides", which pnpm 11 ignores.
 overrides:
-  onnxruntime-web: 1.25.0-dev.20260212-1a71a5f46e
+  onnxruntime-web: 1.31.1

@@ -35,7 +35,11 @@ export class AudioQueue {
 	 * Schedule a chunk of audio for playback immediately after any
 	 * previously-enqueued chunks finish.
 	 */
-	enqueue(audioData: Float32Array, sampleRate: number, onChunkEnded?: () => void): void {
+	enqueue(
+		audioData: Float32Array,
+		sampleRate: number,
+		onChunkEnded?: () => void,
+	): void {
 		if (this._disposed) return;
 
 		// Ensure AudioContext is running (Chrome suspends by default)
@@ -43,21 +47,14 @@ export class AudioQueue {
 			this.context.resume();
 		}
 
-		const buffer = this.context.createBuffer(
-			1,
-			audioData.length,
-			sampleRate,
-		);
+		const buffer = this.context.createBuffer(1, audioData.length, sampleRate);
 		buffer.getChannelData(0).set(audioData);
 
 		const source = this.context.createBufferSource();
 		source.buffer = buffer;
 		source.connect(this.gain);
 
-		const startTime = Math.max(
-			this.nextStartTime,
-			this.context.currentTime,
-		);
+		const startTime = Math.max(this.nextStartTime, this.context.currentTime);
 		source.start(startTime);
 		this.nextStartTime = startTime + buffer.duration;
 		this._totalDuration += buffer.duration;

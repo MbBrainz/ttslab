@@ -1,7 +1,7 @@
 "use client";
 
-import type { AgentMetrics } from "@/lib/hooks/use-voice-agent";
 import { formatMs } from "@/lib/format";
+import type { AgentMetrics } from "@/lib/hooks/use-voice-agent";
 
 interface HudMetricsProps {
 	metrics: AgentMetrics;
@@ -20,8 +20,7 @@ export function HudMetrics({ metrics, visible }: HudMetricsProps) {
 	if (metrics.sttMs !== null) parts.push(`STT ${formatMs(metrics.sttMs)}`);
 	if (metrics.llmTokensPerSec !== null)
 		parts.push(`LLM ${metrics.llmTokensPerSec.toFixed(0)} tok/s`);
-	if (metrics.ttsRtf !== null)
-		parts.push(`TTS ${metrics.ttsRtf.toFixed(2)}x`);
+	if (metrics.ttsRtf !== null) parts.push(`TTS ${metrics.ttsRtf.toFixed(2)}x`);
 
 	return (
 		<p className="text-center font-mono text-xs tabular-nums text-muted-foreground/50 transition-opacity duration-500">

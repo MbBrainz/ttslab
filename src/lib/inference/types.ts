@@ -48,7 +48,16 @@ export interface ModelSession {
 export interface ModelLoader {
 	slug: string;
 	type: "tts" | "stt";
-	framework: "transformers-js" | "kokoro-js" | "piper-web" | "sherpa-onnx";
+	/**
+	 * "custom-js" marks loaders that implement inference directly in
+	 * TypeScript typed arrays (no ONNX/WASM engine underneath).
+	 */
+	framework:
+		| "transformers-js"
+		| "kokoro-js"
+		| "piper-web"
+		| "sherpa-onnx"
+		| "custom-js";
 
 	load(options: LoadOptions): Promise<ModelSession>;
 
@@ -81,7 +90,15 @@ export interface ModelLoader {
 // Worker message types
 export type WorkerCommand =
 	| { type: "load"; modelSlug: string; options: LoadOptions }
-	| { type: "synthesize"; modelSlug: string; text: string; voice: string; speakerEmbeddingUrl?: string | null; speed?: number; language?: string }
+	| {
+			type: "synthesize";
+			modelSlug: string;
+			text: string;
+			voice: string;
+			speakerEmbeddingUrl?: string | null;
+			speed?: number;
+			language?: string;
+	  }
 	| {
 			type: "transcribe";
 			modelSlug: string;
@@ -106,7 +123,13 @@ export type WorkerCommand =
 
 export type WorkerResponse =
 	| { type: "progress"; data: DownloadProgress }
-	| { type: "loaded"; backend: "webgpu" | "wasm"; loadTime: number; voices: Voice[]; languages: string[] }
+	| {
+			type: "loaded";
+			backend: "webgpu" | "wasm";
+			loadTime: number;
+			voices: Voice[];
+			languages: string[];
+	  }
 	| { type: "audio"; data: AudioResult }
 	| { type: "transcript"; data: TranscribeResult }
 	| { type: "error"; code: string; message: string }

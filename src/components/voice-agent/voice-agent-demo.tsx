@@ -1,18 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { Mic, Settings, Square, X } from "lucide-react";
 import Link from "next/link";
-import { Settings, X, Mic, Square } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useLlmCapability } from "@/lib/hooks/use-llm-capability";
 import { useVoiceAgent } from "@/lib/hooks/use-voice-agent";
+import { availableLlmModels } from "@/lib/inference/llm-engine-select";
 import { LLM_MODELS, type LlmModel } from "@/lib/inference/llm-types";
 import type { Voice } from "@/lib/inference/types";
 import { cn } from "@/lib/utils";
-import { VoiceAgentOrb } from "./voice-agent-orb";
-import { OrbCanvas } from "./orb-canvas";
 import { BootSequence } from "./boot-sequence";
-import { HudMetrics } from "./hud-metrics";
 import { ConversationLog } from "./conversation-log";
+import { HudMetrics } from "./hud-metrics";
+import { OrbCanvas } from "./orb-canvas";
 import { SettingsDrawer } from "./settings-drawer";
+import { VoiceAgentOrb } from "./voice-agent-orb";
 
 // Default Kokoro voices — loaded after TTS model loads
 const DEFAULT_VOICES: Voice[] = [
@@ -23,6 +25,14 @@ const DEFAULT_VOICES: Voice[] = [
 ];
 
 export function VoiceAgentDemo() {
+	const capability = useLlmCapability();
+	// Gate the list by real client capability (WebGPU + shader-f16 for the
+	// WebLLM tier; WASM tiers always offered). Default stays the transformers
+	// 0.8B entry — available everywhere.
+	const availableModels = useMemo(
+		() => availableLlmModels(LLM_MODELS, capability),
+		[capability],
+	);
 	const [selectedLlm, setSelectedLlm] = useState<LlmModel>(LLM_MODELS[0]);
 	const [selectedVoice, setSelectedVoice] = useState("af_heart");
 	const [drawerOpen, setDrawerOpen] = useState(false);
@@ -147,6 +157,8 @@ export function VoiceAgentDemo() {
 				voices={DEFAULT_VOICES}
 				selectedVoice={selectedVoice}
 				onVoiceChange={setSelectedVoice}
+				models={availableModels}
+				capability={capability}
 				selectedLlm={selectedLlm}
 				onLlmChange={setSelectedLlm}
 				turns={agent.conversation}

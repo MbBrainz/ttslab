@@ -1,0 +1,25 @@
+# TTSLab
+
+> TTSLab (https://ttslab.dev) is an open-source platform for running and comparing text-to-speech (TTS), speech-to-text (STT), and a small voice-agent LLM entirely in the browser via WebGPU and WebAssembly. No server-side inference: text and audio never leave the user's device. Model weights download from a CDN once and are cached in the browser Cache API.
+
+TTSLab's secondary thesis is documenting the limits of WebGPU and WebAssembly that determine which voice models can run client-side: adapter coverage (~88.6% of browsers, Nov 2026), 256 MiB default GPU buffers, a 4 GiB wasm32 memory ceiling, iOS Safari hard-killing tabs at ~1.5-2 GB, and browser storage eviction of cached models.
+
+## Pages
+
+- [Home](https://ttslab.dev/): Landing page with live in-browser TTS demos and the model directory.
+- [Models](https://ttslab.dev/models): Directory of all supported TTS and STT models with live, runnable demos — metrics shown are measured on the visitor's own hardware.
+- [Limits](https://ttslab.dev/limits): Dated, sourced report (Nov 2026) on the limits of WebGPU and WebAssembly in the browser: availability, spec ceilings, memory kills, storage eviction, WebNN status.
+- [Benchmark](https://ttslab.dev/benchmark): What RTF, tokens/sec and WER mean and how they are measured, plus a curated table of external, published, attributed measurements. No fabricated numbers.
+- [Voice Agent](https://ttslab.dev/voice-agent): Full speech-to-speech assistant in one page — Whisper STT, a Qwen3.5 LLM in three engine tiers (0.8B ~490 MB on any backend, 2B ~1.1 GB and 4B ~2.4 GB on WebGPU, plus a CPU-only WASM option), and Kokoro TTS — all running locally.
+- [Compare](https://ttslab.dev/compare): Side-by-side model comparisons on identical input, runnable in the browser.
+- [FAQ](https://ttslab.dev/faq): How the local inference works, privacy model, browser support, caching behavior, voice cloning status.
+- [About](https://ttslab.dev/about): Project methodology, open-source licensing (MIT), and contribution links.
+
+## Key facts
+
+- All inference is client-side: WebGPU when available, WASM fallback otherwise, selected automatically per browser.
+- The voice-agent LLM is a 3-engine tier of the same Qwen3.5 family — transformers.js 0.8B, WebLLM 2B/4B (WebGPU + shader-f16), and a CPU-only wllama GGUF tier — every engine context-pinned to 4096 tokens.
+- The catalog includes Kitten TTS Nano (15M params, ~24 MB, WASM-only) and DistilWhisper Small (English-only, 166M params) alongside the existing TTS/STT roster.
+- No accounts, no API keys. Upvotes are anonymous (localStorage flag + counter).
+- Chatterbox Multilingual is unsupported because browser WebGPU lacks an INT64 kernel required by the ONNX spec for that model.
+- Source code: https://github.com/MbBrainz/ttslab

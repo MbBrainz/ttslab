@@ -1,13 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-	Card,
-	CardContent,
-	CardHeader,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 type ScatterModel = {
 	slug: string;
@@ -33,7 +29,9 @@ function niceAxis(min: number, max: number, tickCount: number) {
 	const range = max - min || 1;
 	const rough = range / tickCount;
 	const mag = 10 ** Math.floor(Math.log10(rough));
-	const nice = [1, 2, 5, 10].find((n) => n * mag >= rough)! * mag;
+	// 10 * mag >= rough always holds (mag = 10^floor(log10(rough))), so the
+	// fallback below is unreachable — it just satisfies the type checker.
+	const nice = ([1, 2, 5, 10].find((n) => n * mag >= rough) ?? 10) * mag;
 	const lo = Math.floor(min / nice) * nice;
 	const hi = Math.ceil(max / nice) * nice;
 	const ticks: number[] = [];
@@ -88,6 +86,8 @@ export function ModelScatterPlot({ models }: ModelScatterPlotProps) {
 			viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
 			className="w-full"
 			style={{ maxHeight: 400 }}
+			role="img"
+			aria-label="Scatter plot of model download size (MB) versus parameter count (millions)"
 		>
 			{/* Grid lines */}
 			{xAxis.ticks.map((t) => (
@@ -227,63 +227,67 @@ export function ModelScatterPlot({ models }: ModelScatterPlotProps) {
 			})}
 
 			{/* Tooltip */}
-			{hoveredModel && (() => {
-				const tx = toX(hoveredModel.sizeMb);
-				const ty = toY(hoveredModel.paramsMillions);
-				const tooltipW = 160;
-				const tooltipH = 58;
-				// Flip tooltip if too close to edges
-				const flipX = tx + tooltipW + 15 > VIEW_W;
-				const flipY = ty - tooltipH - 10 < 0;
-				const ttx = flipX ? tx - tooltipW - 10 : tx + 10;
-				const tty = flipY ? ty + 10 : ty - tooltipH - 5;
+			{hoveredModel &&
+				(() => {
+					const tx = toX(hoveredModel.sizeMb);
+					const ty = toY(hoveredModel.paramsMillions);
+					const tooltipW = 160;
+					const tooltipH = 58;
+					// Flip tooltip if too close to edges
+					const flipX = tx + tooltipW + 15 > VIEW_W;
+					const flipY = ty - tooltipH - 10 < 0;
+					const ttx = flipX ? tx - tooltipW - 10 : tx + 10;
+					const tty = flipY ? ty + 10 : ty - tooltipH - 5;
 
-				return (
-					<g pointerEvents="none">
-						<rect
-							x={ttx}
-							y={tty}
-							width={tooltipW}
-							height={tooltipH}
-							rx={6}
-							className="fill-card stroke-border"
-							strokeWidth={1}
-						/>
-						<text
-							x={ttx + 10}
-							y={tty + 18}
-							className="fill-foreground"
-							fontSize={12}
-							fontWeight={600}
-						>
-							{hoveredModel.name.length > 22
-								? `${hoveredModel.name.slice(0, 20)}...`
-								: hoveredModel.name}
-						</text>
-						<text
-							x={ttx + 10}
-							y={tty + 34}
-							className="fill-muted-foreground"
-							fontSize={11}
-						>
-							Size: {hoveredModel.sizeMb >= 1024
-								? `${(hoveredModel.sizeMb / 1024).toFixed(1)} GB`
-								: `${hoveredModel.sizeMb} MB`}
-						</text>
-						<text
-							x={ttx + 10}
-							y={tty + 49}
-							className="fill-muted-foreground"
-							fontSize={11}
-						>
-							Params: {hoveredModel.paramsMillions}M
-						</text>
-					</g>
-				);
-			})()}
+					return (
+						<g pointerEvents="none">
+							<rect
+								x={ttx}
+								y={tty}
+								width={tooltipW}
+								height={tooltipH}
+								rx={6}
+								className="fill-card stroke-border"
+								strokeWidth={1}
+							/>
+							<text
+								x={ttx + 10}
+								y={tty + 18}
+								className="fill-foreground"
+								fontSize={12}
+								fontWeight={600}
+							>
+								{hoveredModel.name.length > 22
+									? `${hoveredModel.name.slice(0, 20)}...`
+									: hoveredModel.name}
+							</text>
+							<text
+								x={ttx + 10}
+								y={tty + 34}
+								className="fill-muted-foreground"
+								fontSize={11}
+							>
+								Size:{" "}
+								{hoveredModel.sizeMb >= 1024
+									? `${(hoveredModel.sizeMb / 1024).toFixed(1)} GB`
+									: `${hoveredModel.sizeMb} MB`}
+							</text>
+							<text
+								x={ttx + 10}
+								y={tty + 49}
+								className="fill-muted-foreground"
+								fontSize={11}
+							>
+								Params: {hoveredModel.paramsMillions}M
+							</text>
+						</g>
+					);
+				})()}
 
 			{/* Legend */}
-			<g transform={`translate(${PADDING.left + PLOT_W - 195}, ${PADDING.top + 5})`}>
+			<g
+				transform={`translate(${PADDING.left + PLOT_W - 195}, ${PADDING.top + 5})`}
+			>
 				<rect
 					x={0}
 					y={0}
@@ -294,22 +298,46 @@ export function ModelScatterPlot({ models }: ModelScatterPlotProps) {
 					strokeWidth={0.5}
 				/>
 				{/* TTS */}
-				<circle cx={16} cy={16} r={5} fill="var(--color-primary)" opacity={0.85} />
+				<circle
+					cx={16}
+					cy={16}
+					r={5}
+					fill="var(--color-primary)"
+					opacity={0.85}
+				/>
 				<text x={28} y={20} className="fill-muted-foreground" fontSize={11}>
 					TTS
 				</text>
 				{/* STT */}
-				<circle cx={70} cy={16} r={5} fill="oklch(0.65 0.2 295)" opacity={0.85} />
+				<circle
+					cx={70}
+					cy={16}
+					r={5}
+					fill="oklch(0.65 0.2 295)"
+					opacity={0.85}
+				/>
 				<text x={82} y={20} className="fill-muted-foreground" fontSize={11}>
 					STT
 				</text>
 				{/* Supported */}
-				<circle cx={16} cy={36} r={5} className="fill-muted-foreground" opacity={0.85} />
+				<circle
+					cx={16}
+					cy={36}
+					r={5}
+					className="fill-muted-foreground"
+					opacity={0.85}
+				/>
 				<text x={28} y={40} className="fill-muted-foreground" fontSize={11}>
 					Supported
 				</text>
 				{/* Unsupported */}
-				<circle cx={16} cy={54} r={5} className="fill-muted-foreground" opacity={0.4} />
+				<circle
+					cx={16}
+					cy={54}
+					r={5}
+					className="fill-muted-foreground"
+					opacity={0.4}
+				/>
 				<text x={28} y={58} className="fill-muted-foreground" fontSize={11}>
 					Planned / Unsupported
 				</text>
@@ -331,7 +359,9 @@ export function ModelScatterPlotSection({ models }: ModelScatterPlotProps) {
 		<Card>
 			<CardHeader className="pb-2">
 				<div className="flex items-center justify-between">
-					<h2 className="text-lg font-semibold leading-none tracking-tight">Model Landscape</h2>
+					<h2 className="text-lg font-semibold leading-none tracking-tight">
+						Model Landscape
+					</h2>
 					<Button
 						variant="ghost"
 						size="sm"

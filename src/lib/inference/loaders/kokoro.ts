@@ -26,7 +26,7 @@ export class KokoroLoader implements ModelLoader {
 
 	async load(options: LoadOptions): Promise<ModelSession> {
 		const kokoroModule = await import("kokoro-js");
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		// biome-ignore lint/suspicious/noExplicitAny: TextSplitterStream is missing from kokoro-js type surface
 		this.TextSplitterStream = (kokoroModule as any).TextSplitterStream;
 		const { KokoroTTS } = kokoroModule;
 
@@ -90,12 +90,13 @@ export class KokoroLoader implements ModelLoader {
 		if (!this.tts) throw new Error("Model not loaded");
 
 		const resolvedVoice =
-			voice === "default" ? this.getVoices()[0]?.id ?? "af_heart" : voice;
+			voice === "default" ? (this.getVoices()[0]?.id ?? "af_heart") : voice;
 
 		// kokoro-js's tts.stream(string) creates a TextSplitterStream internally
 		// but never calls close(), so the last sentence hangs forever.
 		// Fix: create our own TextSplitterStream, push + close(), then pass
 		// the stream instance directly — tts.stream() accepts it as first arg.
+		// biome-ignore lint/style/noNonNullAssertion: set unconditionally during load() — synth() cannot run before load()
 		const splitter = new this.TextSplitterStream!();
 		splitter.push(text);
 		splitter.close();
@@ -120,12 +121,16 @@ export class KokoroLoader implements ModelLoader {
 		}
 	}
 
-	async synthesize(text: string, voice: string, options?: { speed?: number }): Promise<AudioResult> {
+	async synthesize(
+		text: string,
+		voice: string,
+		options?: { speed?: number },
+	): Promise<AudioResult> {
 		if (!this.tts) throw new Error("Model not loaded");
 
 		// Resolve "default" to the first available voice
 		const resolvedVoice =
-			voice === "default" ? this.getVoices()[0]?.id ?? "af_heart" : voice;
+			voice === "default" ? (this.getVoices()[0]?.id ?? "af_heart") : voice;
 
 		const tts = this.tts as {
 			generate: (
@@ -134,11 +139,16 @@ export class KokoroLoader implements ModelLoader {
 			) => Promise<{ audio: Float32Array; sampling_rate: number }>;
 		};
 		const start = performance.now();
-		const result = await tts.generate(text, { voice: resolvedVoice, speed: options?.speed });
+		const result = await tts.generate(text, {
+			voice: resolvedVoice,
+			speed: options?.speed,
+		});
 		const totalMs = performance.now() - start;
 
 		if (!result.audio || result.audio.length === 0) {
-			throw new Error("Model returned empty audio data. Try reloading the model.");
+			throw new Error(
+				"Model returned empty audio data. Try reloading the model.",
+			);
 		}
 
 		const duration = result.audio.length / result.sampling_rate;

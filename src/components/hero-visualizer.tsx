@@ -55,8 +55,7 @@ export function HeroVisualizer({ analyser, isActive }: HeroVisualizerProps) {
 			style.getPropertyValue("--gradient-from").trim() ||
 			"oklch(0.60 0.25 280)";
 		const colorTo =
-			style.getPropertyValue("--gradient-to").trim() ||
-			"oklch(0.65 0.20 230)";
+			style.getPropertyValue("--gradient-to").trim() || "oklch(0.65 0.20 230)";
 
 		// Reduced motion: draw static bars once, redraw only on resize
 		if (reducedMotion) {
@@ -70,7 +69,8 @@ export function HeroVisualizer({ analyser, isActive }: HeroVisualizerProps) {
 				const arcSpan = Math.PI;
 				const angleStep = arcSpan / BAR_COUNT;
 				const bw = R * angleStep * 1.1;
-				const staticHeight = MIN_BAR_HEIGHT + 0.15 * (Math.min(R * 0.5, 90) - MIN_BAR_HEIGHT);
+				const staticHeight =
+					MIN_BAR_HEIGHT + 0.15 * (Math.min(R * 0.5, 90) - MIN_BAR_HEIGHT);
 
 				for (let i = 0; i < BAR_COUNT; i++) {
 					const angle = Math.PI + (i + 0.5) * angleStep;
@@ -110,8 +110,7 @@ export function HeroVisualizer({ analyser, isActive }: HeroVisualizerProps) {
 			const target = analyser && isActiveRef.current ? 1 : 0;
 			const speed = target > fadeRef.current ? 0.08 : 0.03;
 			fadeRef.current += (target - fadeRef.current) * speed;
-			if (Math.abs(fadeRef.current - target) < 0.001)
-				fadeRef.current = target;
+			if (Math.abs(fadeRef.current - target) < 0.001) fadeRef.current = target;
 
 			// Get frequency data when active
 			if (analyser && dataArray) {
@@ -138,14 +137,9 @@ export function HeroVisualizer({ analyser, isActive }: HeroVisualizerProps) {
 				let value = 0;
 				if (dataArray && fadeRef.current > 0.01) {
 					const half = BAR_COUNT / 2;
-					const distFromCenter =
-						Math.abs(i - half + 0.5) / half;
+					const distFromCenter = Math.abs(i - half + 0.5) / half;
 					const binIdx = Math.min(
-						Math.floor(
-							Math.pow(distFromCenter, 1.5) *
-								dataArray.length *
-								0.8,
-						),
+						Math.floor(distFromCenter ** 1.5 * dataArray.length * 0.8),
 						dataArray.length - 1,
 					);
 					value = (dataArray[binIdx] / 255) * fadeRef.current;
@@ -160,8 +154,7 @@ export function HeroVisualizer({ analyser, isActive }: HeroVisualizerProps) {
 
 				const totalValue = Math.max(value, ambient);
 				const barHeight =
-					MIN_BAR_HEIGHT +
-					totalValue * (maxBarHeight - MIN_BAR_HEIGHT);
+					MIN_BAR_HEIGHT + totalValue * (maxBarHeight - MIN_BAR_HEIGHT);
 
 				// Color: brighter at peaks
 				const color = totalValue > 0.45 ? colorTo : colorFrom;
@@ -182,13 +175,7 @@ export function HeroVisualizer({ analyser, isActive }: HeroVisualizerProps) {
 				const reflHeight = barHeight * 0.5;
 				ctx.globalAlpha = alpha * 0.25;
 				ctx.beginPath();
-				ctx.roundRect(
-					R - reflHeight,
-					-barWidth / 2,
-					reflHeight,
-					barWidth,
-					2,
-				);
+				ctx.roundRect(R - reflHeight, -barWidth / 2, reflHeight, barWidth, 2);
 				ctx.fill();
 
 				ctx.restore();
@@ -203,15 +190,14 @@ export function HeroVisualizer({ analyser, isActive }: HeroVisualizerProps) {
 			cancelAnimationFrame(rafRef.current);
 			observer.disconnect();
 		};
-	// Only re-run when analyser instance changes (isActive read from ref)
-	// eslint-disable-next-line react-hooks/exhaustive-deps
+		// Only re-run when analyser instance changes (isActive read from ref)
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [analyser]);
 
 	return (
 		<canvas
 			ref={canvasRef}
 			className="pointer-events-none absolute inset-0 z-[1] h-full w-full"
-			aria-hidden="true"
 			style={{ opacity: 0.3 }}
 		/>
 	);

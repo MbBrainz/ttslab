@@ -30,7 +30,12 @@ export function trackSTTTranscription(
 	audioDurationMs: number,
 	transcriptionMs: number,
 ) {
-	track("stt_transcription", { model, backend, audioDurationMs, transcriptionMs });
+	track("stt_transcription", {
+		model,
+		backend,
+		audioDurationMs,
+		transcriptionMs,
+	});
 }
 
 export function trackModelUpvote(model: string) {

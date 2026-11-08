@@ -1,5 +1,5 @@
-import { unstable_cache } from "next/cache";
 import { eq, or } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import { db } from "..";
 import { comparisons, models } from "../schema";
 import type { ComparisonWithModels } from "../types";
@@ -89,10 +89,7 @@ export const getAllComparisonsWithModels = unstable_cache(
 async function _getPopularComparisons(
 	limit: number,
 ): Promise<ComparisonWithModels[]> {
-	const limitedComparisons = await db
-		.select()
-		.from(comparisons)
-		.limit(limit);
+	const limitedComparisons = await db.select().from(comparisons).limit(limit);
 
 	if (limitedComparisons.length === 0) return [];
 

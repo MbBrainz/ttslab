@@ -23,6 +23,8 @@ export const NAV_LINKS = [
 	{ href: "/compare", label: "Compare" },
 	{ href: "/benchmark", label: "Benchmark" },
 	{ href: "/voice-agent", label: "Voice Agent" },
+	{ href: "/limits", label: "Limits" },
+	{ href: "/faq", label: "FAQ" },
 	{ href: "/contribute", label: "Contribute" },
 	{ href: "/about", label: "About" },
 ] as const;

@@ -1,5 +1,6 @@
 import { Github } from "lucide-react";
 import type { Metadata } from "next";
+import { SubscribeForm } from "@/components/subscribe-form";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -10,7 +11,6 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { SubscribeForm } from "@/components/subscribe-form";
 import { APP_NAME } from "@/lib/constants";
 
 export const metadata: Metadata = {
@@ -100,8 +100,9 @@ export default function ContributePage() {
 						</CardHeader>
 						<CardContent>
 							<CardDescription>
-								We automatically test that your model loads and runs correctly in
-								the browser. Once validated, it appears in the model directory.
+								We automatically test that your model loads and runs correctly
+								in the browser. Once validated, it appears in the model
+								directory.
 							</CardDescription>
 						</CardContent>
 					</Card>

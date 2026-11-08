@@ -117,7 +117,12 @@ function NotLoadedState({
 				)}
 			</div>
 			{onDownload && (
-				<Button variant="outline" size="sm" className="min-h-11" onClick={onDownload}>
+				<Button
+					variant="outline"
+					size="sm"
+					className="min-h-11"
+					onClick={onDownload}
+				>
 					<Download className="h-4 w-4" />
 					Download
 				</Button>
@@ -369,9 +374,7 @@ function StreamingState({
 				</div>
 				<div className="flex items-center gap-3 text-xs tabular-nums text-muted-foreground">
 					{ttfaMs != null && (
-						<span title="Time to first audio">
-							TTFA {formatMs(ttfaMs)}
-						</span>
+						<span title="Time to first audio">TTFA {formatMs(ttfaMs)}</span>
 					)}
 					<span>{formatMs(elapsed)}</span>
 				</div>

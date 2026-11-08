@@ -8,8 +8,20 @@ import type {
 const MODEL_ID = "onnx-community/cohere-transcribe-03-2026-ONNX";
 
 const LANGUAGES = [
-	"en", "fr", "de", "es", "it", "pt",
-	"nl", "pl", "el", "ar", "ja", "zh", "vi", "ko",
+	"en",
+	"fr",
+	"de",
+	"es",
+	"it",
+	"pt",
+	"nl",
+	"pl",
+	"el",
+	"ar",
+	"ja",
+	"zh",
+	"vi",
+	"ko",
 ];
 
 export class CohereTranscribeLoader implements ModelLoader {

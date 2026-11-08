@@ -8,9 +8,9 @@ import type {
 	TranscribeResult,
 } from "./types";
 import {
-	WorkerTransport,
 	type LoadedResult,
 	type StreamCallbacks,
+	WorkerTransport,
 } from "./worker-transport";
 
 // Re-export for consumers

@@ -1,19 +1,51 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AudioQueue } from "@/lib/inference/audio-queue";
-import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
+import type { ModelState } from "@/components/model-status";
 import { useLlmWorker } from "@/lib/hooks/use-llm-worker";
 import { useVad } from "@/lib/hooks/use-vad";
-import type { ChatMessage, LlmModel } from "@/lib/inference/llm-types";
+import { AudioQueue } from "@/lib/inference/audio-queue";
 import { createDownloadTracker } from "@/lib/inference/download-tracker";
+import { fitMessagesToContext } from "@/lib/inference/llm-history";
+import type { ChatMessage, LlmModel } from "@/lib/inference/llm-types";
 import type { DownloadProgress } from "@/lib/inference/types";
-import type { ModelState } from "@/components/model-status";
+import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
 
 /** Strip emoji characters so TTS doesn't attempt to speak them. */
 function stripEmojis(text: string): string {
-	return text.replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, "").replace(/  +/g, " ");
+	return text
+		.replace(/\p{Extended_Pictographic}|\u{FE0F}|\u{200D}/gu, "")
+		.replace(/ {2,}/g, " ");
 }
+
+/**
+ * Extract a TTS-ready clause from the buffer. Fires on sentence ends (.!?)
+ * and clause boundaries (,;:—) to reduce time-to-first-audio.
+ */
+const extractClause = (
+	buffer: string,
+): { clause: string; rest: string } | null => {
+	// Sentence-ending punctuation (highest priority)
+	const sentenceMatch = buffer.match(/([.!?])\s/);
+	if (sentenceMatch) {
+		const idx = buffer.indexOf(sentenceMatch[0]) + 1;
+		return {
+			clause: buffer.slice(0, idx).trim(),
+			rest: buffer.slice(idx).trim(),
+		};
+	}
+	// Clause-level punctuation — only fire if we have enough words (>=4)
+	// to avoid tiny audio fragments
+	const clauseMatch = buffer.match(/([,;:\u2014])\s/);
+	if (clauseMatch) {
+		const idx = buffer.indexOf(clauseMatch[0]) + 1;
+		const candidate = buffer.slice(0, idx).trim();
+		if (candidate.split(/\s+/).length >= 4) {
+			return { clause: candidate, rest: buffer.slice(idx).trim() };
+		}
+	}
+	return null;
+};
 
 export type AgentPhase =
 	| "idle"
@@ -65,13 +97,23 @@ export function useVoiceAgent({
 	});
 
 	// Model states for UI
-	const [sttState, setSttState] = useState<ModelState>({ status: "not_loaded" });
-	const [llmState, setLlmState] = useState<ModelState>({ status: "not_loaded" });
-	const [ttsState, setTtsState] = useState<ModelState>({ status: "not_loaded" });
+	const [sttState, setSttState] = useState<ModelState>({
+		status: "not_loaded",
+	});
+	const [llmState, setLlmState] = useState<ModelState>({
+		status: "not_loaded",
+	});
+	const [ttsState, setTtsState] = useState<ModelState>({
+		status: "not_loaded",
+	});
 
 	const sttWorker = useInferenceWorker();
 	const ttsWorker = useInferenceWorker();
-	const { loadModel: llmLoad, generate: llmGenerate, cancel: llmCancel } = useLlmWorker();
+	const {
+		loadModel: llmLoad,
+		generate: llmGenerate,
+		cancel: llmCancel,
+	} = useLlmWorker();
 
 	const queueRef = useRef<AudioQueue | null>(null);
 	const conversationRef = useRef<ChatMessage[]>([]);
@@ -109,7 +151,11 @@ export function useVoiceAgent({
 						onProgress?.(p);
 					},
 				});
-				setSttState({ status: "ready", backend: result.backend, loadTime: result.loadTime });
+				setSttState({
+					status: "ready",
+					backend: result.backend,
+					loadTime: result.loadTime,
+				});
 				return result;
 			} catch (err) {
 				setSttState({
@@ -129,7 +175,7 @@ export function useVoiceAgent({
 			setLlmState({ status: "initializing" });
 			const tracker = createDownloadTracker();
 			try {
-				const result = await llmLoad(llmModel.id, llmModel.hfId, {
+				const result = await llmLoad(llmModel, {
 					backend: "auto",
 					onProgress: (p) => {
 						const state = tracker.process(p);
@@ -138,11 +184,16 @@ export function useVoiceAgent({
 					},
 				});
 				loadedLlmIdRef.current = llmModel.id;
-				setLlmState({ status: "ready", backend: result.backend, loadTime: result.loadTime });
+				setLlmState({
+					status: "ready",
+					backend: result.backend,
+					loadTime: result.loadTime,
+				});
 				return result;
 			} catch (err) {
 				// Ignore cancellation from model-switch (transport rejects the old command)
-				if (err instanceof Error && err.message === "Cancelled by new command") return;
+				if (err instanceof Error && err.message === "Cancelled by new command")
+					return;
 				setLlmState({
 					status: "error",
 					code: "LOAD_FAILED",
@@ -168,7 +219,11 @@ export function useVoiceAgent({
 						onProgress?.(p);
 					},
 				});
-				setTtsState({ status: "ready", backend: result.backend, loadTime: result.loadTime });
+				setTtsState({
+					status: "ready",
+					backend: result.backend,
+					loadTime: result.loadTime,
+				});
 				return result;
 			} catch (err) {
 				setTtsState({
@@ -214,7 +269,13 @@ export function useVoiceAgent({
 				if (abortRef.current) return;
 				try {
 					const ttsStart = performance.now();
-					const result = await ttsWorker.synthesize(ttsModel, sentence, ttsVoice, undefined, TTS_SPEED);
+					const result = await ttsWorker.synthesize(
+						ttsModel,
+						sentence,
+						ttsVoice,
+						undefined,
+						TTS_SPEED,
+					);
 					const ttsMs = performance.now() - ttsStart;
 					const duration = result.audio.length / result.sampleRate;
 					const rtf = duration > 0 ? ttsMs / 1000 / duration : null;
@@ -232,30 +293,10 @@ export function useVoiceAgent({
 		[ttsWorker, ttsModel, ttsVoice],
 	);
 
-	// Extract a TTS-ready clause from the buffer. Fires on sentence ends (.!?)
-	// and clause boundaries (,;:—) to reduce time-to-first-audio.
-	const extractClause = (buffer: string): { clause: string; rest: string } | null => {
-		// Sentence-ending punctuation (highest priority)
-		const sentenceMatch = buffer.match(/([.!?])\s/);
-		if (sentenceMatch) {
-			const idx = buffer.indexOf(sentenceMatch[0]) + 1;
-			return { clause: buffer.slice(0, idx).trim(), rest: buffer.slice(idx).trim() };
-		}
-		// Clause-level punctuation — only fire if we have enough words (>=4)
-		// to avoid tiny audio fragments
-		const clauseMatch = buffer.match(/([,;:\u2014])\s/);
-		if (clauseMatch) {
-			const idx = buffer.indexOf(clauseMatch[0]) + 1;
-			const candidate = buffer.slice(0, idx).trim();
-			if (candidate.split(/\s+/).length >= 4) {
-				return { clause: candidate, rest: buffer.slice(idx).trim() };
-			}
-		}
-		return null;
-	};
-
 	const runLocalLlm = useCallback(
-		(messages: ChatMessage[]): Promise<{ fullText: string; llmMs: number; tokensPerSec: number }> => {
+		(
+			messages: ChatMessage[],
+		): Promise<{ fullText: string; llmMs: number; tokensPerSec: number }> => {
 			return new Promise((resolve, reject) => {
 				let sentenceBuffer = "";
 				let fullText = "";
@@ -320,7 +361,7 @@ export function useVoiceAgent({
 			try {
 				const result = await sttWorker.transcribe(sttModel, audio, 16000);
 				transcript = result.text.trim();
-			} catch (err) {
+			} catch {
 				setPhase("listening");
 				return;
 			}
@@ -355,12 +396,21 @@ export function useVoiceAgent({
 			let llmMs: number;
 			let tokensPerSec: number | null = null;
 
+			// Cap the history sent to the LLM at the advertised context window
+			// (newest turns win). The worker enforces the same pin as a backstop;
+			// conversationRef keeps the full history for display and future turns.
+			const { kept } = fitMessagesToContext(
+				conversationRef.current,
+				llmModel.contextTokens,
+				{ maxNewTokens: 256 },
+			);
+
 			try {
-				const result = await runLocalLlm(conversationRef.current);
+				const result = await runLocalLlm(kept);
 				fullText = result.fullText;
 				llmMs = result.llmMs;
 				tokensPerSec = result.tokensPerSec;
-			} catch (err) {
+			} catch {
 				queueRef.current?.stop();
 				queueRef.current = null;
 				setPhase("listening");
@@ -411,7 +461,7 @@ export function useVoiceAgent({
 				setPhase("listening");
 			}
 		},
-		[sttWorker, sttModel, runLocalLlm],
+		[sttWorker, sttModel, runLocalLlm, llmModel.contextTokens],
 	);
 
 	// --- VAD ---
@@ -432,14 +482,20 @@ export function useVoiceAgent({
 
 				// Add truncated assistant turn to context (if any text was spoken)
 				if (spokenText) {
-					conversationRef.current.push({ role: "assistant", content: spokenText });
-					setConversation(prev => [...prev, {
-						id: crypto.randomUUID(),
-						role: "assistant" as const,
+					conversationRef.current.push({
+						role: "assistant",
 						content: spokenText,
-						timestamp: Date.now(),
-						interrupted: true,
-					}]);
+					});
+					setConversation((prev) => [
+						...prev,
+						{
+							id: crypto.randomUUID(),
+							role: "assistant" as const,
+							content: spokenText,
+							timestamp: Date.now(),
+							interrupted: true,
+						},
+					]);
 				}
 
 				// Stop everything

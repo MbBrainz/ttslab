@@ -1,23 +1,13 @@
-import {
-	ArrowRight,
-	Download,
-	Shield,
-	Zap,
-} from "lucide-react";
+import { ArrowRight, Download, Shield, Zap } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { HeroSection } from "@/components/hero-section";
 import { ModelCard } from "@/components/model-card";
 import { SubscribeForm } from "@/components/subscribe-form";
-import { VerifiedDialog } from "@/components/verified-dialog";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import {
-	Card,
-	CardContent,
-	CardHeader,
-	CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { VerifiedDialog } from "@/components/verified-dialog";
 import { getAllModelsWithUpvotes } from "@/lib/db/queries";
 import type { ModelWithUpvotes } from "@/lib/db/types";
 
@@ -50,8 +40,8 @@ export default async function HomePage() {
 			<section className="mx-auto max-w-xl text-center">
 				<h2 className="text-xl font-semibold">Stay in the loop</h2>
 				<p className="mt-2 text-sm text-muted-foreground">
-					Subscribe for the latest news on voice AI and text-to-speech
-					— new models, features, and benchmarks.
+					Subscribe for the latest news on voice AI and text-to-speech — new
+					models, features, and benchmarks.
 				</p>
 				<div className="mt-4 mx-auto max-w-sm">
 					<SubscribeForm />
@@ -108,7 +98,9 @@ export default async function HomePage() {
 
 			{/* Text-to-Speech in the Browser */}
 			<section className="space-y-4">
-				<h2 className="text-2xl font-semibold">Text-to-Speech in the Browser</h2>
+				<h2 className="text-2xl font-semibold">
+					Text-to-Speech in the Browser
+				</h2>
 				<div className="max-w-3xl space-y-3 text-muted-foreground">
 					<p>
 						TTSLab lets you run text-to-speech models directly in your browser
@@ -127,7 +119,9 @@ export default async function HomePage() {
 
 			{/* Why Privacy Matters */}
 			<section className="space-y-4">
-				<h2 className="text-2xl font-semibold">Why On-Device Speech AI Matters</h2>
+				<h2 className="text-2xl font-semibold">
+					Why On-Device Speech AI Matters
+				</h2>
 				<div className="max-w-3xl space-y-3 text-muted-foreground">
 					<p>
 						Cloud-based TTS services require sending your text to external

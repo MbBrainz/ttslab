@@ -15,9 +15,9 @@ export class GraniteSpeechLoader implements ModelLoader {
 	type = "stt" as const;
 	framework = "transformers-js" as const;
 
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	// biome-ignore lint/suspicious/noExplicitAny: transformers.js model/processor surface is untyped at this boundary
 	private model: any = null;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	// biome-ignore lint/suspicious/noExplicitAny: transformers.js model/processor surface is untyped at this boundary
 	private processor: any = null;
 	private session: ModelSession | null = null;
 	private loadedBackend: "webgpu" | "wasm" = "wasm";
@@ -26,7 +26,7 @@ export class GraniteSpeechLoader implements ModelLoader {
 		const backend = options.backend === "webgpu" ? "webgpu" : "wasm";
 		this.loadedBackend = backend;
 
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		// biome-ignore lint/suspicious/noExplicitAny: transformers.js model/processor surface is untyped at this boundary
 		const transformers: any = await import("@huggingface/transformers");
 		const { configureOnnxWasmPaths } = await import("../onnx-config");
 		configureOnnxWasmPaths(transformers.env);
@@ -67,18 +67,14 @@ export class GraniteSpeechLoader implements ModelLoader {
 			this.model = model;
 			this.processor = processor;
 
-			console.log(
-				`[granite-speech] Model loaded successfully on ${backend}`,
-			);
+			console.log(`[granite-speech] Model loaded successfully on ${backend}`);
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
 			console.error(
 				`[granite-speech] Load failed (backend: ${backend}):`,
 				message,
 			);
-			throw new Error(
-				`Granite Speech ${backend} load failed: ${message}`,
-			);
+			throw new Error(`Granite Speech ${backend} load failed: ${message}`);
 		}
 
 		this.session = {

@@ -29,7 +29,6 @@ export default async function OGImage({
 	let modelAName = "Model A";
 	let modelBName = "Model B";
 	let modelAType = "MODEL";
-	let modelBType = "MODEL";
 
 	if (comparison) {
 		const [modelA, modelB] = await Promise.all([
@@ -42,7 +41,6 @@ export default async function OGImage({
 		}
 		if (modelB) {
 			modelBName = modelB.name;
-			modelBType = modelB.type.toUpperCase();
 		}
 	}
 

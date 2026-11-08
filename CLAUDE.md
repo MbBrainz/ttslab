@@ -69,6 +69,21 @@ You are testing the TTS Lab web app at http://localhost:3001. Perform an end-to-
 | Kokoro 82M | PASS (249s load, 2.4s gen) | Not tested | Baseline reference |
 | Chatterbox Turbo | PASS (181s load, 6.3s gen) | BLOCKED — WASM-only | Browser JSEP WebGPU EP has no INT64 Cast kernel; ONNX spec requires INT64 for Shape/Unsqueeze. Unsolvable by model patching. |
 
+### Verified Model Behavior (2026-11-08) — new integrations, browser pass (kitten VERIFIED; distil render-only; LLM engines PENDING)
+
+The 2026-11-08 upgrade (transformers.js 4.3.2 + ORT 1.31.1, kitten-tts-nano, woof-tts, distil-whisper-small-en, the 3-engine LLM tier — see the Runtime pins / LLM sections at the bottom of this file) is **compile-verified (`tsc` clean) and unit-tested (vitest, 242 tests)**. Browser runs that DID happen (2026-11-08, headed Chromium against `next start`): the Kitten TTS Nano synthesis path, the Underdog Woof synthesis path, and the Woof WebGPU backend (`__woofVerify()` corr 0.9999998, 31x over CPU — see the table below). What did NOT happen: distil-whisper STT inference (page render + zero console errors only) and the webllm/wllama LLM engines — do not cite those as "verified working".
+
+| Model | WASM | WebGPU | Notes |
+|-------|------|--------|-------|
+| Kitten TTS Nano | **PASS — browser-verified 2026-11-08** (load 9s incl. q8 ONNX + eSpeak worker + voice bin; synthesis 661 ms for 5.37 s audio, RTF 0.123x, 16-bit peak ~24k, zero console errors; deterministic across two runs) | N/A — WASM-only | 15M params, ~24 MB q8, 8 voices `expr-voice-{2..5}-{f,m}`, 24 kHz. The repo (onnx-community/kitten-tts-nano-0.1-ONNX) ships a single q8 ONNX file — **no fp32 exists**, so there is no WebGPU variant at all. NOT loadable via the standard `pipeline("text-to-speech")`; `loaders/kitten-tts.ts` ports the webml-community/KittenTTS-web custom pipeline: eSpeak NG phonemization via vendored `public/espeak/espeakng.worker.js` (pinned to xenova/phonemizer.js@6835144b), `StyleTextToSpeech2Model` with 256-dim style + speed tensors, 2000-sample edge trim, sentence chunking at 512 phoneme tokens. **Load bug fixed 2026-11-08:** the vendored eSpeak file ends in `export default Module`, so importing gives a sealed ES-module namespace — assigning `onRuntimeInitialized` on the namespace threw `Cannot add property onRuntimeInitialized`. The loader now unwraps `.default` (with a plain-module fallback) before hooking. |
+| Underdog Woof | **PASS — browser-verified 2026-11-08** (load 6s for the 40 MB npz; 10.1s for 5.00 s audio from the hand-ported typed-array path, peak ~11k, zero console errors; UI re-verified 2026-11-08: backend forced to WASM renders audio via the demo, metric label "wasm", zero console errors) | **PASS — browser-verified 2026-11-08** (`__woofVerify()` in headed Chromium: hand-written 22-kernel WGSL set (`Object.keys(WOOF_KERNELS).length` = 22; Underdog's reference bundle ships 19) vs the typed-array CPU path, same sentence / voice juno / seed 0 → **Pearson corr 0.9999998** (target 0.9999), 78 frames both backends, **CPU 6094 ms vs GPU 194 ms ≈ 31x**; adapter apple metal-3; UI path backend "auto" selects webgpu and renders audio in 191 ms; no WGSL compile errors, no device-lost, no OOM). Four real bugs were found and fixed during verification: a wrong grouped-scale validation in `gpuGrouped`, `queue.submit()` given a bare command buffer instead of an array, `rope_t` never reading its `pos` binding (stripped from the auto layout → invalid bind groups), a SEANet residual add aliasing one buffer read-only + read-write (now a dedicated `acc` kernel), and the cond head missing its RMS-norm (plus `ada` consuming pre-silu cond in decode frames) — all covered by the 242-test gate. | NC license: presets and seed copy carry the "Voice by Underdog Woof" credit; demo text is spelled-out prose (number normalizer not ported — see `loaders/woof.ts`). |
+| DistilWhisper Small (en) | page renders clean (h1 + demo, zero console errors, 2026-11-08); **STT inference pass pending** (~172 MB q8) | compile+unit verified; **browser pass pending** (~665 MB fp32) | English-only, 166M params. Runs through the existing `WhisperLoader` — repo `onnx-community/distil-small.en_timestamped` has the standard file layout (q8/int8 + q4 for WASM, fp32 for WebGPU). |
+
+Two more roster facts from this round:
+
+- **Supertonic 3 was evaluated and skipped**: no official full ONNX export exists — only `text_encoder` and `duration_predictor` are published. Do not re-attempt without a full export.
+- The DB roster is now **28 models / 164 comparisons** (queried 2026-11-08: 25 supported — 8 TTS + 17 STT — plus 2 unsupported TTS and 1 planned TTS; C(8,2) + C(17,2) = 164 supported same-type pairs). The old *planned* `kitten-tts` row was replaced by the *supported* `kitten-tts-nano`; `woof-tts` joined the supported TTS tier; **`chatterbox` stays supported** (WASM works; its WebGPU INT64 block is core to the limits story). `seed-models.ts` only inserts comparisons, so `scripts/cleanup-models.ts` also prunes rows whose models lost `supported` status — run it before re-seeding when a model's status changes (it removed 5 stale `chatterbox-multilingual-vs-*` rows on 2026-11-08).
+
 ## STT demo: the capture claim, and the frozen-UI trade (2026-08-04)
 
 `stt-demo.tsx` has two capture paths — the one-shot recorder and live
@@ -325,7 +340,7 @@ Within *one* model the rate spans 2.05–3.16 w/s — a **1.54× spread, log2 0.
 
 ### Verifying a change to the harness
 
-`pnpm test` (vitest, 170 tests). Prove scoring changes with real before/after numbers — drive the real `runQualityTests()` against a fake `InferenceWorkerAPI` and the committed WAVs, not a reimplementation. "It compiles" is not evidence; that failure mode is exactly why this harness exists.
+`pnpm test` (vitest, 253 tests across 22 files as of 2026-11-08). Prove scoring changes with real before/after numbers — drive the real `runQualityTests()` against a fake `InferenceWorkerAPI` and the committed WAVs, not a reimplementation. "It compiles" is not evidence; that failure mode is exactly why this harness exists.
 
 Calibrate thresholds against **real** output, not synthetic fixtures alone. Every threshold that turned out wrong here was wrong because it had only been checked against synthetic signals: the cepstral 50, the absolute silence gate, and the duration 0.4 all survived synthetic testing and failed on real audio.
 
@@ -339,3 +354,76 @@ When a model fails on WebGPU:
 3. Check console for "unsupported operator" or "execution provider" errors
 4. Verify the model repo has WebGPU-compatible ONNX files (no INT64 ops)
 5. Test on WASM first to isolate whether the issue is WebGPU-specific
+
+## Runtime pins: transformers.js 4.3.2 + ONNX Runtime Web 1.31.1 (2026-11-08)
+
+- `@huggingface/transformers` is pinned **exact 4.3.2** (no `^`), up from 4.1.0.
+- The `onnxruntime-web` override moved **1.25.0-dev.20260212 → 1.31.1 stable**. It is declared in TWO places, and both matter:
+  - `pnpm-workspace.yaml` `overrides:` — the one pnpm 11 actually honors (it ignores package.json `pnpm.overrides`);
+  - a direct `onnxruntime-web: "1.31.1"` dependency in package.json.
+- **Why 1.31.1 specifically:** transformers 4.3.2 declares an onnxruntime-web `1.31.0-dev` branch as its dependency; **1.31.1 stable is the closest released pairing**. The pin must preserve two invariants:
+  1. the `onnxruntime-web-use-extern-wasm` export condition (first entry of `conditionNames` in `next.config.ts`) — selects the non-bundled entry so the `wasmPaths` override stays authoritative;
+  2. the six `ort-wasm-simd-threaded*` files `scripts/copy-onnx-wasm.mjs` copies to `public/onnx/` — ORT requires the JS glue and the `.wasm` binary to be the same version, and one binary set serves all nested ORT consumers (transformers.js, kokoro-js, vits-web, vad-web).
+- **The Qwen revision pin is kept:** `HF_REVISIONS` in `llm-worker.ts` still pins `onnx-community/Qwen3.5-0.8B-Text-ONNX` to `c76a8add…`. Newer ORT only *adds* kernels, so the pre-re-export graph stays safe — a runtime bump is not a reason to drop a weights pin.
+- `tsconfig.json` target bumped **ES2017 → ES2020**: `@wllama/wllama` ships TypeScript with BigInt literals, which ES2017 cannot parse.
+- **Self-hosted WASM assets (both wired into `postinstall`, in order):**
+  - `scripts/copy-onnx-wasm.mjs` → `public/onnx/` (pre-existing);
+  - `scripts/copy-wllama-wasm.mjs` → `public/wllama/` — wllama must fetch its `.wasm` same-origin (cross-origin worker fetches SecurityError, same as ONNX). Also copies the `@wllama/wllama-compat` Asyncify build so Safari needs no CDN at runtime.
+- `public/espeak/espeakng.worker.js` is **vendored** (from xenova/phonemizer.js, pinned `6835144b`) for kitten-tts phonemization — see the README inside that folder.
+
+## LLM: 3-engine tier system (2026-11-08)
+
+`src/lib/inference/llm-types.ts` is now a discriminated union on `engine` with three tiers of the same Qwen3.5 family:
+
+| id | engine | weights | download | VRAM | backend |
+|---|---|---|---|---|---|
+| `qwen3.5-0.8b` | transformersjs (default) | onnx-community/Qwen3.5-0.8B-Text-ONNX — q4f16 on WebGPU, q4 on WASM | ~490 MB | — | WebGPU or WASM |
+| `qwen3.5-2b-webllm` | webllm | `Qwen3.5-2B-q4f16_1-MLC` via @mlc-ai/web-llm 0.2.87 | ~1.08 GB | ~2.2 GB | WebGPU + shader-f16 only |
+| `qwen3.5-4b-webllm` | webllm | `Qwen3.5-4B-q4f16_1-MLC` | ~2.39 GB | ~3.9 GB | WebGPU + shader-f16 only |
+| `qwen3.5-0.8b-wllama` | wllama | unsloth/Qwen3.5-0.8B-GGUF `Q4_K_M` via @wllama/wllama 3.8.1 (+ wllama-compat for Safari) | ~533 MB | — | pure CPU/WASM |
+
+Facts that must stay true when touching this code:
+
+- **All engines are context-pinned to 4096 tokens** (`LLM_CONTEXT_TOKENS`). That is the honest limit — KV-cache memory and real-time voice latency, not the model. **Never advertise the 262k window** the models nominally support.
+- **webllm** runs inside a dedicated worker (`webllm-worker.ts`, `WebWorkerMLCEngineHandler`); generation cancellation goes through `interruptGenerate`. Capability gating (WebGPU adapter **+ shader-f16**) is `probeLlmCapability()` in `llm-engine-select.ts` — entries with `requiresWebGPU`/`requiresShaderF16` are hidden or flagged when the probe fails.
+- **wllama** forces `n_gpu_layers: 0` — it exists deliberately as the no-WebGPU exhibit. **Multi-thread is deliberately NOT enabled** — and the rationale for that is NOT COOP/COEP (that reasoning is backwards): the site already sets COOP `same-origin` + COEP `credentialless` site-wide in `next.config.ts`, so SharedArrayBuffer is available. The real reason is the build choice — `scripts/copy-wllama-wasm.mjs` vendors the package's **single-threaded** `wllama.wasm` (plus the Asyncify compat build for Safari), and the tier is the deterministic pure-CPU contrast exhibit, so the multi-thread speedup is out of scope by design.
+- **Engine-shared behavior:** every tier gets the same system prompt via `buildVoiceMessages`/`SYSTEM_PROMPT` (`llm-prompt.ts`) and the same streaming `<think>` stripping via `ThinkTagFilter` (`think-filter.ts`), so switching tiers changes quality/size, not conduct.
+- Browser runtime verification for the webllm and wllama engines is still pending (see the 2026-11-08 verified-behavior table above).
+
+## Security headers (2026-11-08)
+
+`next.config.ts` sets site-wide, on top of the unchanged COOP/COEP pair (`same-origin` / `credentialless`):
+
+- `X-Content-Type-Options: nosniff`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy: camera=(), geolocation=(), microphone=(self), interest-cohort=()` — the mic is same-origin-only because the STT demos need it; camera and geolocation are denied outright
+- `Strict-Transport-Security: max-age=63072000; includeSubDomains`
+- `/internal/:path*` additionally gets `X-Robots-Tag: noindex, nofollow`
+
+## API rate limiting (2026-11-08)
+
+`src/lib/rate-limit.ts` — dependency-free in-memory fixed-window limiter (`RateLimiter.check(key, now?)`, injectable clock, unit-tested with a fake clock). Wired into three routes:
+
+| Route | Buckets | Response when blocked |
+|---|---|---|
+| `POST /api/upvote` | per-IP 30/min **then** per-fingerprint 10/min (fingerprint is client-supplied and spoofable — the IP bucket is the backstop) | 429 + `Retry-After` (seconds) |
+| `POST /api/subscribe` | per-IP 5/min **and** 3/hour (the hourly bucket is the real email-bomb cap on the Resend send; 3 < 5 so it always binds first) | 429 + `Retry-After` |
+| `GET /api/subscribe/verify` | per-IP 3/hour (gates token guessing; a 5/min bucket here would be dead code under the 3/hour cap, so it is deliberately absent) | 429 + `Retry-After` |
+
+**Honest limitation:** state is a per-process `Map`. On serverless each instance counts independently (effective ceiling = limit x instances) and a cold start resets every window. This is a spam brake for the launch threat model (one client, one instance), not a hard quota — a durable limiter (Redis/Upstash) is the follow-up if abuse outgrows it. Upvote GET (status read) and 400/404 paths are intentionally unthrottled.
+
+**Audit-only findings from the 2026-11-08 hardening pass (no code change):**
+- **Safari MediaRecorder mime** — already fixed, not a residual blocker: `pickRecordingMimeType()` (`src/lib/recording-mime.ts`) feature-detects and falls through `audio/webm` to `audio/mp4`; wired into both `stt-demo.tsx` and `voice-clone-upload.tsx`. Residual: the 2026-11-08 browser pass was Chromium-only, so the Safari recording path itself remains unexercised end-to-end.
+- **`WorkerTransport` single-slot hazard** — known and deliberately managed, see the 2026-08-04 STT section above: UI-level synchronous claim (`captureClaimRef`) enforces mutual exclusion instead of changing the transport; the tracked-but-not-implemented follow-up is a timeout around the unbounded `recorder.onstop` await (a stuck `onstop` strands the claim and freezes both capture buttons until reload).
+
+## Pages & SEO surface (2026-11-08)
+
+- **`/limits`** — the WebGPU/WASM limits thesis as a dated (Nov 2026), externally cited report.
+- **`/faq`** — 12 FAQs + `FAQPage` JSON-LD.
+- **`/benchmark`** — reworked to external, cited measurements only; no self-measured leaderboard.
+- **`public/llms.txt` + `public/llms-full.txt`** — GEO content for LLM crawlers. They name individual models, sizes, and the LLM tier system; keep them in sync when the roster or engine table changes.
+- **Structured data:** `serializeJsonLd` helper (`src/lib/jsonld.ts`, script-tag-safe serialization), `BreadcrumbList` JSON-LD on model and compare pages, `src/app/icon.svg`, and `src/app/manifest.ts` (PWA manifest).
+
+Upgrade-wide verification status: `tsc` clean, 253 vitest tests passing (22 files, includes the rate-limit suites added 2026-11-08). Browser passes completed 2026-11-08: **kitten-tts synthesis** (after the eSpeak `.default` loader fix), **woof-tts synthesis**, and **woof-tts WebGPU backend** (`__woofVerify()` corr 0.9999998 vs CPU, GPU 194 ms vs CPU 6094 ms; UI demo renders audio with backend auto→webgpu and forced wasm); still **pending a manual/E2E browser pass**: webllm/wllama LLM engines and distil-whisper STT inference — everything above that cites a runtime number measured before 2026-11-08 was measured in a real browser; the LLM/STT integrations were not.
+
+**Local-build cache trap (hit on 2026-11-08):** `unstable_cache` entries persist in `.next/cache/fetch-cache` across local builds, and DB writes (seed, cleanup, SQL) do not bust the tags. A build after re-seeding therefore prerendered the OLD roster (26 model pages, 156 compare pages, no `woof-tts.html`/`chatterbox.html`) from stale cached slug lists. After any DB mutation, `rm -rf .next/cache` before `next build`, and verify the route table (or count `.next/server/app/models/*.html`) before shipping.

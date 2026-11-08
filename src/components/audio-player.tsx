@@ -137,6 +137,7 @@ export function AudioPlayer({ audioUrl, duration }: AudioPlayerProps) {
 
 	return (
 		<div className="flex items-center gap-3 rounded-lg border border-border bg-secondary/30 px-4 py-3">
+			{/* biome-ignore lint/a11y/useMediaCaption: TTS output played via a custom player — the source text is rendered alongside */}
 			{audioUrl && <audio ref={audioRef} src={audioUrl} preload="metadata" />}
 
 			<Button

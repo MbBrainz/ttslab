@@ -11,6 +11,16 @@ loaders.set("kokoro-82m", async () => {
 	return new KokoroLoader();
 });
 
+loaders.set("kitten-tts-nano", async () => {
+	const { KittenTtsLoader } = await import("./loaders/kitten-tts");
+	return new KittenTtsLoader();
+});
+
+loaders.set("woof-tts", async () => {
+	const { WoofTtsLoader } = await import("./loaders/woof");
+	return new WoofTtsLoader();
+});
+
 loaders.set("supertonic-2", async () => {
 	const { SupertonicLoader } = await import("./loaders/supertonic");
 	return new SupertonicLoader();
@@ -46,7 +56,31 @@ loaders.set("chatterbox-multilingual", async () => {
 		"chatterbox-multilingual",
 		"onnx-community/chatterbox-multilingual-ONNX",
 		false,
-		["ar", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "it", "ja", "ko", "ms", "nl", "no", "pl", "pt", "ru", "sv", "sw", "tr", "zh"],
+		[
+			"ar",
+			"da",
+			"de",
+			"el",
+			"en",
+			"es",
+			"fi",
+			"fr",
+			"he",
+			"hi",
+			"it",
+			"ja",
+			"ko",
+			"ms",
+			"nl",
+			"no",
+			"pl",
+			"pt",
+			"ru",
+			"sv",
+			"sw",
+			"tr",
+			"zh",
+		],
 	);
 });
 
@@ -70,6 +104,17 @@ loaders.set("whisper-base", async () => {
 loaders.set("whisper-small", async () => {
 	const { WhisperLoader } = await import("./loaders/whisper");
 	return new WhisperLoader("whisper-small", "onnx-community/whisper-small");
+});
+
+// English-only DistilWhisper — same loader as the whisper variants; the repo
+// (onnx-community/distil-small.en_timestamped) has the standard file layout
+// with q8/int8 + q4 variants for WASM and fp32 for WebGPU.
+loaders.set("distil-whisper-small-en", async () => {
+	const { WhisperLoader } = await import("./loaders/whisper");
+	return new WhisperLoader(
+		"distil-whisper-small-en",
+		"onnx-community/distil-small.en_timestamped",
+	);
 });
 
 loaders.set("whisper-large-v3-turbo", async () => {
@@ -159,7 +204,9 @@ loaders.set("moonshine-base-zh", async () => {
 });
 
 loaders.set("cohere-transcribe", async () => {
-	const { CohereTranscribeLoader } = await import("./loaders/cohere-transcribe");
+	const { CohereTranscribeLoader } = await import(
+		"./loaders/cohere-transcribe"
+	);
 	return new CohereTranscribeLoader();
 });
 

@@ -1,7 +1,5 @@
 import type {
-	AudioResult,
 	DownloadProgress,
-	TranscribeResult,
 	Voice,
 	WorkerCommand,
 	WorkerResponse,
@@ -177,9 +175,7 @@ export class WorkerTransport {
 		this.streamCallbacks = cbs;
 	}
 
-	setProgressCallback(
-		cb: ((progress: DownloadProgress) => void) | null,
-	): void {
+	setProgressCallback(cb: ((progress: DownloadProgress) => void) | null): void {
 		this.progressCallback = cb;
 	}
 

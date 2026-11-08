@@ -3,7 +3,14 @@ import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import { comparisons, models, type NewModel } from "../src/lib/db/schema";
 
-const sql = neon(process.env.DATABASE_URL!);
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+	throw new Error(
+		"DATABASE_URL is not set. Add it to .env.local to seed the database.",
+	);
+}
+
+const sql = neon(databaseUrl);
 const db = drizzle({ client: sql });
 
 const modelData: NewModel[] = [
@@ -149,6 +156,29 @@ const modelData: NewModel[] = [
 			"OpenAI's Whisper Small model. 100 languages. Best quality-to-size ratio for browser-based STT.",
 		websiteUrl: "https://huggingface.co/openai/whisper-small",
 		paperUrl: "https://arxiv.org/abs/2212.04356",
+		license: "MIT",
+	},
+	{
+		slug: "distil-whisper-small-en",
+		name: "DistilWhisper Small (English)",
+		type: "stt",
+		status: "supported",
+		sizeMb: 172,
+		paramsMillions: 166,
+		architecture: "Whisper (distilled encoder-decoder)",
+		languages: ["en"],
+		hfModelId: "onnx-community/distil-small.en_timestamped",
+		loaderConfig: {
+			framework: "transformers-js",
+			pipeline: "automatic-speech-recognition",
+		},
+		supportsStreaming: true,
+		supportsWebgpu: true,
+		supportsWasm: true,
+		description:
+			"Distilled English-only Whisper Small — smallest Distil-Whisper checkpoint at 166M params with 4 decoder layers. Within 3% WER of Whisper Large v2 and 5.6x faster (relative latency vs Large v2), per the Distil-Whisper project's own evals. English-only alternative that trades multilingual coverage for accuracy on the language most demos use.",
+		websiteUrl: "https://huggingface.co/distil-whisper/distil-small.en",
+		paperUrl: "https://arxiv.org/abs/2311.00430",
 		license: "MIT",
 	},
 	{
@@ -352,7 +382,8 @@ const modelData: NewModel[] = [
 		supportsWasm: true,
 		description:
 			"41% smaller encoder than Whisper Large v3 Turbo via LiteASR low-rank approximation. 99 languages. Fills the gap between Whisper Small and Large v3 Turbo.",
-		websiteUrl: "https://huggingface.co/onnx-community/lite-whisper-large-v3-turbo-ONNX",
+		websiteUrl:
+			"https://huggingface.co/onnx-community/lite-whisper-large-v3-turbo-ONNX",
 		paperUrl: "https://arxiv.org/abs/2502.20583",
 		license: "Apache-2.0",
 	},
@@ -430,7 +461,22 @@ const modelData: NewModel[] = [
 		sizeMb: 2130,
 		paramsMillions: 2000,
 		architecture: "Conformer (encoder-decoder)",
-		languages: ["en", "fr", "de", "es", "it", "pt", "nl", "pl", "el", "ar", "ja", "zh", "vi", "ko"],
+		languages: [
+			"en",
+			"fr",
+			"de",
+			"es",
+			"it",
+			"pt",
+			"nl",
+			"pl",
+			"el",
+			"ar",
+			"ja",
+			"zh",
+			"vi",
+			"ko",
+		],
 		hfModelId: "onnx-community/cohere-transcribe-03-2026-ONNX",
 		loaderConfig: {
 			framework: "transformers-js",
@@ -453,7 +499,31 @@ const modelData: NewModel[] = [
 		sizeMb: 5000,
 		paramsMillions: 500,
 		architecture: "Chatterbox (Llama backbone)",
-		languages: ["ar", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "it", "ja", "ko", "ms", "nl", "no", "pl", "pt", "ru", "sv", "sw", "tr", "zh"],
+		languages: [
+			"ar",
+			"da",
+			"de",
+			"el",
+			"en",
+			"es",
+			"fi",
+			"fr",
+			"he",
+			"hi",
+			"it",
+			"ja",
+			"ko",
+			"ms",
+			"nl",
+			"no",
+			"pl",
+			"pt",
+			"ru",
+			"sv",
+			"sw",
+			"tr",
+			"zh",
+		],
 		voices: 1,
 		hfModelId: "onnx-community/chatterbox-multilingual-ONNX",
 		loaderConfig: {
@@ -495,28 +565,52 @@ const modelData: NewModel[] = [
 		websiteUrl: "https://huggingface.co/ibm-granite/granite-4.0-1b-speech",
 		license: "Apache-2.0",
 	},
-	// Planned / unsupported models
 	{
-		slug: "kitten-tts",
+		slug: "kitten-tts-nano",
 		name: "Kitten TTS Nano",
 		type: "tts",
-		status: "planned",
+		status: "supported",
 		sizeMb: 24,
 		paramsMillions: 15,
-		architecture: "Kitten TTS",
+		architecture: "StyleTTS2 variant",
 		languages: ["en"],
 		voices: 8,
-		hfModelId: "KittenML/kitten-tts-nano-0.1",
+		hfModelId: "onnx-community/kitten-tts-nano-0.1-ONNX",
 		loaderConfig: {
-			framework: "onnx-runtime",
+			framework: "transformers-js",
+			defaultVoice: "expr-voice-5-m",
+			defaultQuantization: "q8",
 		},
 		supportsStreaming: false,
 		supportsWebgpu: false,
 		supportsWasm: true,
 		description:
-			"Ultra-lightweight 15M param TTS. Only 24MB download. Requires phonemization via eSpeak WASM — browser integration in progress.",
+			"Ultra-lightweight 15M-param English TTS — only a 24MB quantized download, the smallest and fastest-loading model in the lab. 8 voices phonemized via eSpeak NG WASM. WASM-only: the repo ships a single q8 ONNX file with no fp32/WebGPU variant.",
 		websiteUrl: "https://huggingface.co/KittenML/kitten-tts-nano-0.1",
 		license: "Apache-2.0",
+	},
+	{
+		slug: "woof-tts",
+		name: "Underdog Woof",
+		type: "tts",
+		status: "supported",
+		sizeMb: 41,
+		paramsMillions: 38.2,
+		architecture: "Flow-matching transformer + Mimi-style decoder (char-level)",
+		languages: ["en"],
+		voices: 2,
+		hfModelId: "ConwayResearch/Underdog-Woof",
+		loaderConfig: {
+			framework: "custom-js",
+			defaultVoice: "juno",
+		},
+		supportsStreaming: false,
+		supportsWebgpu: true,
+		supportsWasm: true,
+		description:
+			"Underdog AI's tiny English TTS (38.2M params, 40.6 MB, two voices) — the second-smallest download in the lab after Kitten Nano, with far fewer errors on numbers, dates and codes (1.42-2.06% WER on hard sentences vs Nano's 9.81%, per Underdog's evals). The repo ships a numpy runtime instead of ONNX, so inference runs here via a hand-ported typed-array JS path — no ONNX, no WASM engine — verified against the reference implementation to float32 precision. Two real backends: a hand-written WGSL WebGPU compute-kernel path (22 kernels) and the typed-array CPU path, drawing the same seeded noise stream so a fixed seed gives the same audio on either. WASM-class only; the text normalizer is not ported, so feed spelled-out text ('twenty-five dollars', not '$25'). Underdog Non-Commercial License 1.0: free for non-commercial use with credit ('Voice by Underdog Woof'); commercial use needs a license. Both backends verified in a real browser (2026-11-08: CPU vs GPU Pearson corr 0.9999998 on a fixed seed, ~6.1 s CPU vs ~0.19 s GPU per sentence).",
+		websiteUrl: "https://underdog.ai/woof",
+		license: "Underdog-NC-1.0",
 	},
 	{
 		slug: "chatterbox",

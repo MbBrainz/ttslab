@@ -68,7 +68,7 @@ async function until(
 		const result = await page
 			.evaluate(fn, arg)
 			.catch((e) => ({ error: e.message }));
-		if (result && result.done) return result;
+		if (result?.done) return result;
 		if (Date.now() - start > timeout) {
 			const state = await pageState(page).catch(() => "unavailable");
 			throw new Error(

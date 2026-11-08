@@ -1,14 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { encodeWavBase64 } from "@/lib/audio-qa/wav";
 import { useInferenceWorker } from "@/lib/inference/use-inference-worker";
 import {
+	type InferenceWorkerAPI,
+	type ProgressUpdate,
 	runQualityTests,
 	SUPPORTED_TTS_MODELS,
-	type ProgressUpdate,
-	type InferenceWorkerAPI,
 } from "@/lib/testing/tts-quality-runner";
-import { encodeWavBase64 } from "@/lib/audio-qa/wav";
 import type {
 	QualityReport,
 	TestConfig,
@@ -457,6 +457,7 @@ export default function TtsQualityPage() {
 					Streaming
 				</label>
 				<button
+					type="button"
 					data-testid="run-all-btn"
 					onClick={handleRun}
 					disabled={status === "running"}

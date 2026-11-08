@@ -68,7 +68,9 @@ async function loadSpeakerModel(
 ): Promise<{ model: unknown; processor: unknown }> {
 	if (cachedModel) return cachedModel;
 
-	const { AutoModel, AutoProcessor } = await import("@huggingface/transformers");
+	const { AutoModel, AutoProcessor } = await import(
+		"@huggingface/transformers"
+	);
 	const progress_callback = onProgress
 		? (event: HubProgress) => {
 				const mapped = toDownloadProgress(event);
@@ -99,7 +101,12 @@ export async function extractEmbeddingFromPCM(
 
 	const loaded = await loadSpeakerModel(onProgress);
 
-	onProgress?.({ status: "ready", file: SPEAKER_MODEL_ID, loaded: 0, total: 0 });
+	onProgress?.({
+		status: "ready",
+		file: SPEAKER_MODEL_ID,
+		loaded: 0,
+		total: 0,
+	});
 
 	// Truncate to 10s max — speaker identity doesn't need more, and longer
 	// audio causes WASM OOM (std::bad_alloc) in the ONNX runtime.
@@ -110,13 +117,13 @@ export async function extractEmbeddingFromPCM(
 
 	// Process audio through the feature extractor
 	// AutoProcessor may be callable directly or expose .feature_extractor
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	// biome-ignore lint/suspicious/noExplicitAny: transformers.js AutoProcessor/AutoModel outputs are untyped
 	const proc = loaded.processor as any;
 	const extractor = proc.feature_extractor ?? proc;
 	const inputs = await extractor(truncated);
 
 	// Run model inference
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	// biome-ignore lint/suspicious/noExplicitAny: transformers.js AutoProcessor/AutoModel outputs are untyped
 	const model = loaded.model as any;
 	const output = await model({ input_values: inputs.input_values });
 

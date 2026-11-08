@@ -33,7 +33,8 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 				// Resolve backend in the worker (WebGPU is available in workers)
 				const supported = loader.getSupportedBackends?.() ?? ["wasm"];
 				const preferred = loader.getPreferredBackend?.() ?? "auto";
-				const effectivePreference = cmd.options.backend === "auto" ? preferred : cmd.options.backend;
+				const effectivePreference =
+					cmd.options.backend === "auto" ? preferred : cmd.options.backend;
 				const backend = await selectBackend(
 					supported.includes("webgpu"),
 					supported.includes("wasm"),
@@ -84,11 +85,19 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 				}
 
 				// Forward speaker embedding URL to SpeechT5 loader
-				if (cmd.speakerEmbeddingUrl !== undefined && "setSpeakerEmbedding" in loader) {
-					(loader as { setSpeakerEmbedding: (url: string | null) => void }).setSpeakerEmbedding(cmd.speakerEmbeddingUrl);
+				if (
+					cmd.speakerEmbeddingUrl !== undefined &&
+					"setSpeakerEmbedding" in loader
+				) {
+					(
+						loader as { setSpeakerEmbedding: (url: string | null) => void }
+					).setSpeakerEmbedding(cmd.speakerEmbeddingUrl);
 				}
 
-				const result = await loader.synthesize(cmd.text, cmd.voice, { speed: cmd.speed, language: cmd.language });
+				const result = await loader.synthesize(cmd.text, cmd.voice, {
+					speed: cmd.speed,
+					language: cmd.language,
+				});
 				post({ type: "audio", data: result }, [result.audio.buffer]);
 				break;
 			}
@@ -121,8 +130,13 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 				}
 
 				// Forward speaker embedding URL to SpeechT5 loader
-				if (cmd.speakerEmbeddingUrl !== undefined && "setSpeakerEmbedding" in loader) {
-					(loader as { setSpeakerEmbedding: (url: string | null) => void }).setSpeakerEmbedding(cmd.speakerEmbeddingUrl);
+				if (
+					cmd.speakerEmbeddingUrl !== undefined &&
+					"setSpeakerEmbedding" in loader
+				) {
+					(
+						loader as { setSpeakerEmbedding: (url: string | null) => void }
+					).setSpeakerEmbedding(cmd.speakerEmbeddingUrl);
 				}
 
 				streamCancelled = false;
@@ -139,7 +153,10 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 						totalChunks = 1;
 					}
 
-					for await (const chunk of loader.synthesizeStream(cmd.text, cmd.voice)) {
+					for await (const chunk of loader.synthesizeStream(
+						cmd.text,
+						cmd.voice,
+					)) {
 						if (streamCancelled) {
 							post({ type: "stream-cancelled" });
 							return;
@@ -169,7 +186,9 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 							post({ type: "stream-cancelled" });
 							return;
 						}
-						const result = await loader.synthesize(sentence, cmd.voice, { language: cmd.language });
+						const result = await loader.synthesize(sentence, cmd.voice, {
+							language: cmd.language,
+						});
 						post(
 							{
 								type: "audio-chunk",
@@ -201,9 +220,7 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 			}
 
 			case "extract-embedding": {
-				const { extractEmbeddingFromPCM } = await import(
-					"./speaker-embedding"
-				);
+				const { extractEmbeddingFromPCM } = await import("./speaker-embedding");
 				const url = await extractEmbeddingFromPCM(
 					cmd.audio,
 					cmd.sampleRate,
@@ -234,7 +251,15 @@ self.onmessage = async (e: MessageEvent<WorkerCommand>) => {
 		if (stack) console.error("[inference-worker] Stack:", stack);
 
 		// Detect WebGPU-specific errors for better UI messaging
-		const webgpuKeywords = ["webgpu", "int64", "wgsl", "shader", "gpudevice", "gpu adapter", "requestadapter"];
+		const webgpuKeywords = [
+			"webgpu",
+			"int64",
+			"wgsl",
+			"shader",
+			"gpudevice",
+			"gpu adapter",
+			"requestadapter",
+		];
 		const isWebGPUError = webgpuKeywords.some((kw) =>
 			message.toLowerCase().includes(kw),
 		);

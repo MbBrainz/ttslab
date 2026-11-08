@@ -24,7 +24,10 @@
 - **In-browser inference** — models run entirely on your device via WebGPU or WASM
 - **Zero data collection** — your text and audio never leave your browser
 - **Side-by-side comparisons** — compare TTS and STT models head to head
-- **Model directory** — browse, search, and upvote models
+- **Model directory** — browse, search, and upvote 28 models (TTS, STT, and a voice-agent LLM)
+- **Three-tier local LLM** — Qwen3.5 0.8B (~490 MB, runs on any backend), Qwen3.5 2B (~1.1 GB) and 4B (~2.4 GB) via WebLLM on WebGPU, plus a CPU-only WASM tier (0.8B GGUF via wllama) that needs no GPU at all
+- **New model additions** — Kitten TTS Nano (15M params, ~24 MB, WASM-only), Underdog Woof (38.2M params, ~41 MB, hand-ported JS runtime, non-commercial license) and DistilWhisper Small (English-only, 166M params)
+- **Documented limits** — a dated, cited report on WebGPU/WASM platform limits ([/limits](https://ttslab.dev/limits)), an attributed external benchmark table ([/benchmark](https://ttslab.dev/benchmark)), and an FAQ ([/faq](https://ttslab.dev/faq))
 - **Instant caching** — model weights are cached locally after first download
 
 ## Tech Stack
@@ -34,7 +37,7 @@
 | Framework | [Next.js 16](https://nextjs.org) |
 | Styling | [Tailwind CSS v4](https://tailwindcss.com) |
 | Database | [Neon Postgres](https://neon.tech) + [Drizzle ORM](https://orm.drizzle.team) |
-| Inference | [ONNX Runtime Web](https://onnxruntime.ai), [kokoro-js](https://github.com/niconielsen32/kokoro-js), [@xenova/transformers](https://github.com/xenova/transformers.js) |
+| Inference | [ONNX Runtime Web 1.31.1](https://onnxruntime.ai), [@huggingface/transformers 4.3.2](https://github.com/huggingface/transformers.js), [kokoro-js](https://github.com/niconielsen32/kokoro-js), [@mlc-ai/web-llm 0.2.87](https://github.com/mlc-ai/web-llm), [@wllama/wllama 3.8.1](https://github.com/ngxson/wllama) |
 | Analytics | [Vercel Analytics](https://vercel.com/analytics) |
 | Linter | [Biome](https://biomejs.dev) |
 
@@ -45,14 +48,15 @@
 git clone https://github.com/MbBrainz/ttslab.git
 cd ttslab
 
-# Install dependencies
+# Install dependencies (postinstall copies the ONNX + wllama WASM files into public/)
 pnpm install
 
 # Set up environment
 cp .env.example .env.local
-# Fill in DATABASE_URL and other variables
+# Fill in DATABASE_URL (and RESEND_API_KEY if you want the subscribe flows)
 
-# Push DB schema & seed
+# DB commands read process.env directly — source .env.local first:
+set -a; source .env.local; set +a
 pnpm db:push
 pnpm db:seed
 
@@ -69,22 +73,30 @@ src/
 ├── app/                  # Next.js App Router pages & API routes
 │   ├── models/           # Model directory & detail pages
 │   ├── compare/          # Comparison pages
+│   ├── limits/           # WebGPU/WASM limits report (dated, cited)
+│   ├── faq/              # FAQ (FAQPage JSON-LD)
 │   ├── api/              # API routes (upvotes, subscriptions)
 │   └── opengraph-image.tsx
 ├── components/           # React components
 │   ├── tts-demo.tsx      # TTS playground UI
 │   ├── stt-demo.tsx      # STT playground UI
+│   ├── voice-agent/      # Speech-to-speech voice agent UI
 │   ├── audio-player.tsx  # Reusable audio player
 │   └── ui/               # Shared UI primitives
 ├── lib/
 │   ├── db/               # Drizzle schema, queries, types
 │   ├── inference/        # Model loaders & registry
 │   │   ├── loaders/      # Per-model loader implementations
+│   │   ├── llm-types.ts  # 3-engine LLM tier definitions
 │   │   └── registry.ts   # Lazy loader registry
 │   ├── analytics.ts      # Vercel Analytics event wrappers
 │   └── constants.ts      # App-wide constants
-└── public/
-    └── audio-samples/    # Pre-generated audio samples
+
+public/                   # Sibling of src/, served at the site root
+├── audio-samples/        # Pre-generated audio samples
+├── onnx/                 # Self-hosted ONNX Runtime WASM (copied by postinstall)
+├── wllama/               # Self-hosted wllama WASM (copied by postinstall)
+└── espeak/               # Vendored eSpeak NG phonemizer worker (kitten-tts)
 ```
 
 ## Contributing

@@ -13,7 +13,7 @@
 
 let configured = false;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: transformers.js env.backends.onnx is untyped
 export function configureOnnxWasmPaths(env: { backends: { onnx: any } }) {
 	if (configured) return;
 	configured = true;

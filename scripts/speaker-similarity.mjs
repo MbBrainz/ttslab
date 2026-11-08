@@ -29,8 +29,8 @@
  */
 
 import { createWriteStream, existsSync, readFileSync } from "node:fs";
-import { pipeline } from "node:stream/promises";
 import { dirname, resolve } from "node:path";
+import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -231,7 +231,9 @@ export async function embed(path) {
 	const { pcm, sampleRate } = decodeWav(new Uint8Array(readFileSync(path)));
 	const feats = fbank(to16k(pcm, sampleRate));
 	const flat = new Float32Array(feats.length * MEL_BINS);
-	feats.forEach((r, i) => flat.set(r, i * MEL_BINS));
+	feats.forEach((r, i) => {
+		flat.set(r, i * MEL_BINS);
+	});
 	const out = await session.run({
 		feats: new ort.Tensor("float32", flat, [1, feats.length, MEL_BINS]),
 	});

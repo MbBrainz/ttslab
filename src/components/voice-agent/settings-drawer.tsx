@@ -2,10 +2,27 @@
 
 import { X } from "lucide-react";
 import { Select, SelectOption } from "@/components/ui/select";
-import { LLM_MODELS, type LlmModel } from "@/lib/inference/llm-types";
-import type { Voice } from "@/lib/inference/types";
 import type { ConversationTurn } from "@/lib/hooks/use-voice-agent";
+import type { LlmCapability } from "@/lib/inference/llm-engine-select";
+import type { LlmEngine, LlmModel } from "@/lib/inference/llm-types";
+import type { Voice } from "@/lib/inference/types";
 import { cn } from "@/lib/utils";
+
+const ENGINE_LABELS: Record<LlmEngine, string> = {
+	transformersjs: "transformers.js",
+	webllm: "WebLLM",
+	wllama: "wllama",
+};
+
+/** Honest picker label: model · engine · download size (· VRAM when GPU-only). */
+function modelLabel(m: LlmModel): string {
+	const size =
+		m.sizeMb >= 1000 ? `${(m.sizeMb / 1000).toFixed(1)}GB` : `${m.sizeMb}MB`;
+	const vram = m.vramMb
+		? ` · ${m.vramMb >= 1000 ? `${(m.vramMb / 1000).toFixed(1)}GB` : `${m.vramMb}MB`} VRAM`
+		: "";
+	return `${m.name} · ${ENGINE_LABELS[m.engine]} · ${size}${vram}`;
+}
 
 interface SettingsDrawerProps {
 	open: boolean;
@@ -14,7 +31,9 @@ interface SettingsDrawerProps {
 	voices: Voice[];
 	selectedVoice: string;
 	onVoiceChange: (voice: string) => void;
-	// LLM
+	// LLM — list is pre-gated by client capability
+	models: LlmModel[];
+	capability: LlmCapability | null;
 	selectedLlm: LlmModel;
 	onLlmChange: (model: LlmModel) => void;
 	// Conversation
@@ -29,6 +48,8 @@ export function SettingsDrawer({
 	voices,
 	selectedVoice,
 	onVoiceChange,
+	models,
+	capability,
 	selectedLlm,
 	onLlmChange,
 	turns,
@@ -66,16 +87,17 @@ export function SettingsDrawer({
 				{/* Voice & LLM selectors */}
 				<div className="space-y-4">
 					<div className="space-y-2">
-						<label htmlFor="voice-select" className="text-sm font-medium text-muted-foreground">
+						<label
+							htmlFor="voice-select"
+							className="text-sm font-medium text-muted-foreground"
+						>
 							Voice
 						</label>
 						<Select
 							id="voice-select"
 							value={selectedVoice}
 							onChange={(e) =>
-								onVoiceChange(
-									(e.target as HTMLSelectElement).value,
-								)
+								onVoiceChange((e.target as HTMLSelectElement).value)
 							}
 							disabled={disabled}
 						>
@@ -88,28 +110,46 @@ export function SettingsDrawer({
 					</div>
 
 					<div className="space-y-2">
-						<label htmlFor="llm-model-select" className="text-sm font-medium text-muted-foreground">
+						<label
+							htmlFor="llm-model-select"
+							className="text-sm font-medium text-muted-foreground"
+						>
 							LLM Model
 						</label>
 						<Select
 							id="llm-model-select"
 							value={selectedLlm.id}
 							onChange={(e) => {
-								const model = LLM_MODELS.find(
-									(m) =>
-										m.id ===
-										(e.target as HTMLSelectElement).value,
+								const model = models.find(
+									(m) => m.id === (e.target as HTMLSelectElement).value,
 								);
 								if (model) onLlmChange(model);
 							}}
 							disabled={disabled}
 						>
-							{LLM_MODELS.map((m) => (
+							{models.map((m) => (
 								<SelectOption key={m.id} value={m.id}>
-									{m.name}
+									{modelLabel(m)}
 								</SelectOption>
 							))}
 						</Select>
+						{/* Honest tier note + capability summary */}
+						<p className="text-xs text-muted-foreground/70">
+							{selectedLlm.note}
+						</p>
+						<p className="text-xs text-muted-foreground/70">
+							{capability?.probed
+								? `WebGPU: ${capability.webgpu ? "available" : "not available"}${
+										capability.webgpu
+											? ` · shader-f16: ${capability.shaderF16 ? "yes" : "no"}${capability.vendor ? ` · ${capability.vendor}` : ""}`
+											: ""
+									}`
+								: "Probing GPU capability…"}
+						</p>
+						<p className="text-xs text-muted-foreground/70">
+							Context pinned at {selectedLlm.contextTokens} tokens for all
+							engines.
+						</p>
 					</div>
 				</div>
 
@@ -127,13 +167,9 @@ export function SettingsDrawer({
 							turns.map((turn) => (
 								<div key={turn.id}>
 									<span className="text-xs font-medium text-muted-foreground">
-										{turn.role === "user"
-											? "You"
-											: "Agent"}
+										{turn.role === "user" ? "You" : "Agent"}
 									</span>
-									<p className="text-sm text-foreground/80">
-										{turn.content}
-									</p>
+									<p className="text-sm text-foreground/80">{turn.content}</p>
 								</div>
 							))
 						)}
