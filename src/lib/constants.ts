@@ -22,10 +22,12 @@ export const NAV_LINKS = [
 	{ href: "/models", label: "Models" },
 	{ href: "/compare", label: "Compare" },
 	{ href: "/benchmark", label: "Benchmark" },
+	{ href: "/finetune", label: "Finetune" },
 	{ href: "/voice-agent", label: "Voice Agent" },
 	{ href: "/limits", label: "Limits" },
 	{ href: "/faq", label: "FAQ" },
 	{ href: "/contribute", label: "Contribute" },
+	{ href: "/blog", label: "Blog" },
 	{ href: "/about", label: "About" },
 ] as const;
 

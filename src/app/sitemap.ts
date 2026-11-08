@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { BLOG_POSTS } from "@/lib/blog-posts";
 import { APP_URL } from "@/lib/constants";
 import { getAllComparisons, getAllModels } from "@/lib/db/queries";
 
@@ -58,12 +59,34 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 			priority: 0.6,
 		},
 		{
+			url: `${APP_URL}/blog`,
+			lastModified: new Date(),
+			changeFrequency: "monthly",
+			priority: 0.6,
+		},
+		{
 			url: `${APP_URL}/contribute`,
 			lastModified: new Date(),
 			changeFrequency: "monthly",
 			priority: 0.5,
 		},
+		{
+			url: `${APP_URL}/finetune`,
+			lastModified: new Date(),
+			changeFrequency: "monthly",
+			priority: 0.6,
+		},
 	];
+
+	// Blog posts: derived from BLOG_POSTS so the sitemap can never drift from
+	// the content module. lastModified is the post's real modified date, not
+	// "now" — a dated article's lastmod should not churn every build.
+	const blogPostPages: MetadataRoute.Sitemap = BLOG_POSTS.map((post) => ({
+		url: `${APP_URL}/blog/${post.slug}`,
+		lastModified: new Date(`${post.dateModified}T00:00:00Z`),
+		changeFrequency: "monthly" as const,
+		priority: 0.6,
+	}));
 
 	const modelPages: MetadataRoute.Sitemap = allModels.map((model) => ({
 		url: `${APP_URL}/models/${model.slug}`,
@@ -81,5 +104,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 		}),
 	);
 
-	return [...staticPages, ...modelPages, ...comparisonPages];
+	return [...staticPages, ...blogPostPages, ...modelPages, ...comparisonPages];
 }
