@@ -1,6 +1,7 @@
 import { neon } from "@neondatabase/serverless";
 import type { NeonHttpDatabase } from "drizzle-orm/neon-http";
 import { drizzle } from "drizzle-orm/neon-http";
+import { wrapNeonClient } from "./retry";
 import * as schema from "./schema";
 
 let _db: NeonHttpDatabase<typeof schema> | null = null;
@@ -14,7 +15,10 @@ function getDb(): NeonHttpDatabase<typeof schema> {
 		);
 	}
 
-	const sql = neon(process.env.DATABASE_URL);
+	// Every query through drizzle funnels into this client, so connection-
+	// class failures (fetch failed / ETIMEDOUT) that flake Vercel prerender
+	// get retried here. Data errors (SQLSTATE 23xxx/42xxx) still throw.
+	const sql = wrapNeonClient(neon(process.env.DATABASE_URL));
 	_db = drizzle({ client: sql, schema });
 	return _db;
 }
